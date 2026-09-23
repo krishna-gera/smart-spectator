@@ -1,0 +1,153 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL ────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: smart-spectator-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smart_spectator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smart_spectator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis ─────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: smart-spectator-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend API ───────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart-spectator-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev_password_change_me}@postgres:5432/smart_spectator
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ─── AI Worker (Celery) ────────────────────────────────────────
+  ai-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: smart-spectator-ai-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev_password_change_me}@postgres:5432/smart_spectator
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./ai:/ai
+      - model_cache:/root/.cache
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=vision,default --concurrency=2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ─── Celery Beat (Scheduler) ───────────────────────────────────
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: smart-spectator-celery-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-dev_password_change_me}@postgres:5432/smart_spectator
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.celery_app beat --loglevel=info
+
+  # ─── Flower (Celery Monitoring) ────────────────────────────────
+  flower:
+    image: mher/flower:2.0
+    container_name: smart-spectator-flower
+    restart: unless-stopped
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    profiles:
+      - dev
+
+  # ─── Nginx (Reverse Proxy) ─────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: smart-spectator-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - backend
+    profiles:
+      - prod
+
+volumes:
+  postgres_data:
+  redis_data:
+  model_cache:
+
+networks:
+  default:
+    name: smart-spectator-network
