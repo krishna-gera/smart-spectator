@@ -1,0 +1,104 @@
+name: smart_spectator
+description: Smart Spectator — Intelligent visual monitoring platform.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^14.2.7
+
+  # Network
+  dio: ^5.6.0
+  web_socket_channel: ^3.0.1
+
+  # Local Storage
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.2
+  sqflite: ^2.3.3+1
+  crypto: ^3.0.5
+
+  # Camera
+  camera: ^0.11.0+2
+
+  # QR Code
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+
+  # Image processing
+  image: ^4.2.0
+
+  # UI
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  percent_indicator: ^4.2.4
+  fl_chart: ^0.69.0
+  lottie: ^3.1.2
+  animate_do: ^3.3.4
+
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.4.2
+  logger: ^2.4.0
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  collection: ^1.18.0
+  path: ^1.9.0
+  path_provider: ^2.1.4
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Push Notifications (Firebase)
+  firebase_core: ^3.4.0
+  firebase_messaging: ^15.1.0
+  flutter_local_notifications: ^17.2.2
+
+  # Wake lock
+  wakelock_plus: ^1.2.8
+
+  # Device Info
+  device_info_plus: ^10.1.2
+  battery_plus: ^6.0.3
+  connectivity_plus: ^6.0.5
+
+  # Cupertino icons
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.12
+  riverpod_generator: ^2.4.3
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  mockito: ^5.4.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/
+    - assets/icons/
+  # fonts:
+  #   - family: Inter
+  #     fonts:
+  #       - asset: assets/fonts/Inter-Regular.ttf
+  #       - asset: assets/fonts/Inter-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Inter-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Inter-Bold.ttf
+  #         weight: 700
