@@ -39,6 +39,7 @@ htmlcov/
 # Node & Next.js
 node_modules/
 .next/
+.vercel
 out/
 next-env.d.ts
 npm-debug.log*
