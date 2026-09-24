@@ -86,3 +86,6 @@ logs/
 # Docker
 docker-data/
 .env*
+*.apk
+releases/
+
