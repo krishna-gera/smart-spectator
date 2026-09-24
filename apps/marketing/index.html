@@ -3,391 +3,243 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Spectator — AI-Powered Visual Observer & Edge Server</title>
-  <meta name="description" content="Turn any spare smartphone into an autonomous AI camera observer and local server. Zero cloud lock-in, complete privacy, direct P2P streaming.">
-  
-  <!-- Open Graph -->
-  <meta property="og:title" content="Smart Spectator — Edge AI Visual Observer">
-  <meta property="og:description" content="Turn any spare smartphone into an autonomous AI camera server with local computer vision and direct P2P streaming.">
-  <meta property="og:type" content="website">
+  <title>Smart Spectator — Edge Camera Server</title>
+  <meta name="description" content="Turn any spare smartphone into an autonomous local camera server and viewer. Local-first, private, and subscription-free.">
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  
+  <!-- Apple System Font Stack -->
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'><circle cx='12' cy='12' r='10' fill='%230f172a'/><circle cx='12' cy='12' r='4' fill='%236366f1'/><circle cx='12' cy='12' r='8' fill='none' stroke='%2338bdf8' stroke-width='1.5' stroke-dasharray='4 2'/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230071e3'><circle cx='12' cy='12' r='10'/></svg>">
 </head>
 <body>
-  <!-- Ambient background glow elements -->
-  <div class="ambient-glow glow-top"></div>
-  <div class="ambient-glow glow-bottom"></div>
-  <div class="ambient-grid"></div>
-
-  <!-- Navigation -->
-  <header class="navbar">
-    <div class="nav-container">
-      <a href="#" class="brand">
-        <div class="brand-logo">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="9" stroke="url(#logo-grad)"/>
-            <circle cx="12" cy="12" r="4" fill="url(#logo-grad)"/>
-            <path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="currentColor" stroke-opacity="0.4"/>
-            <defs>
-              <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38bdf8" />
-                <stop offset="100%" stop-color="#818cf8" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <span class="brand-name">Smart Spectator</span>
-      </a>
-
-      <div class="nav-badges">
-        <div class="status-pill">
-          <span class="status-dot"></span>
-          <span class="status-text">Edge Core v0.1.0</span>
-        </div>
-        <a href="https://github.com/krishna-gera/smart-spectator" target="_blank" rel="noopener noreferrer" class="nav-gh-link" title="GitHub Repository">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-          </svg>
-          <span class="gh-text">GitHub</span>
-        </a>
-      </div>
+  <!-- Navigation Header (Apple Style) -->
+  <header class="nav-bar">
+    <div class="nav-content">
+      <a href="#" class="nav-brand">Smart Spectator</a>
+      <nav class="nav-links">
+        <a href="#downloads" class="nav-link">Downloads</a>
+        <a href="#architecture" class="nav-link">Architecture</a>
+        <a href="https://github.com/krishna-gera/smart-spectator" target="_blank" rel="noopener noreferrer" class="nav-link">GitHub</a>
+      </nav>
     </div>
   </header>
 
   <!-- Hero Section -->
-  <main class="hero-section">
-    <div class="container hero-container">
-      <div class="hero-badge">
-        <span class="badge-sparkle">✨</span>
-        <span>Local-First Intelligent Vision</span>
+  <main class="page-container">
+    <section class="hero-section">
+      <div class="hero-content">
+        <p class="section-label">Smart Spectator</p>
+        <h1 class="hero-headline">Autonomous edge camera server.</h1>
+        <p class="hero-subhead">
+          Repurpose an unused smartphone into a dedicated visual observer. It hosts its own local server, evaluates vision rules on-device, and streams directly across your network with zero subscriptions.
+        </p>
+
+        <!-- The 4 Application Actions (Apple HIG compliant) -->
+        <div class="actions-group" id="downloads">
+          <!-- 1. Android APK Download (Primary) -->
+          <div class="action-item">
+            <div class="action-info">
+              <span class="action-title">Android Application</span>
+              <span class="action-meta">Version 0.1.0 • 67 MB • Direct APK</span>
+            </div>
+            <a 
+              href="https://github.com/krishna-gera/smart-spectator/releases/download/v0.1.0/smart-spectator.apk" 
+              class="apple-btn apple-btn-primary"
+              download="smart-spectator.apk"
+            >
+              Download APK
+            </a>
+          </div>
+
+          <!-- 2. Mobile Web App -->
+          <div class="action-item">
+            <div class="action-info">
+              <span class="action-title">Mobile Web Viewer</span>
+              <span class="action-meta">Optimized for iOS Safari & Android mobile browsers</span>
+            </div>
+            <div class="action-controls">
+              <a 
+                href="https://web-mobile-nine-weld.vercel.app" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                class="apple-btn apple-btn-secondary"
+              >
+                Open Mobile Web
+              </a>
+              <button class="apple-btn-icon" id="qr-toggle-btn" aria-label="Show QR Code for iPhone">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm-5 0h2v3h-2v-3zm3 3h2v2h-2v-2zm-3 2h2v3h-2v-3zm3 0h3v2h-3v-2zm2-2h3v2h-3v-2z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Desktop Web Dashboard -->
+          <div class="action-item">
+            <div class="action-info">
+              <span class="action-title">Desktop Dashboard</span>
+              <span class="action-meta">Widescreen multi-camera control and event viewer</span>
+            </div>
+            <a 
+              href="https://web-dashboard-two-pied.vercel.app" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              class="apple-btn apple-btn-secondary"
+            >
+              Launch Dashboard
+            </a>
+          </div>
+
+          <!-- 4. iOS App -->
+          <div class="action-item action-item-disabled">
+            <div class="action-info">
+              <span class="action-title">iOS Native App</span>
+              <span class="action-meta">In development for TestFlight</span>
+            </div>
+            <button class="apple-btn apple-btn-disabled" disabled>
+              Coming Soon
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture & Features (Restrained, Editorial Apple Style) -->
+    <section class="section" id="architecture">
+      <div class="section-header">
+        <p class="section-label">Architecture</p>
+        <h2 class="section-headline">Engineered for data sovereignty.</h2>
+        <p class="section-description">
+          Smart Spectator inverts the traditional cloud camera model. Your device is the host, database, and inference engine.
+        </p>
       </div>
 
-      <h1 class="hero-title">
-        Turn any spare phone into an <span class="gradient-text">AI camera server</span>.
-      </h1>
-
-      <p class="hero-subtitle">
-        Zero subscription lock-in. Real-time edge computer vision, local SQLite persistence, and ultra-fast direct P2P streaming right from your device.
-      </p>
-
-      <!-- The 4 Core App Access Cards -->
-      <section class="access-hub" id="apps">
-        <div class="hub-header">
-          <h2 class="hub-title">Access & Deploy</h2>
-          <p class="hub-subtitle">Choose your platform to get started in seconds.</p>
-        </div>
-
-        <div class="action-grid">
-          <!-- 1. Android APK Download -->
-          <div class="action-card card-featured">
-            <div class="card-badge">Primary Engine</div>
-            <div class="card-icon-wrapper android-icon">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 16v-5a7 7 0 0 1 14 0v5" stroke-linecap="round"/>
-                <path d="M8 8l-2-3M16 8l2-3" stroke-linecap="round"/>
-                <circle cx="9" cy="12" r="1" fill="currentColor"/>
-                <circle cx="15" cy="12" r="1" fill="currentColor"/>
-                <rect x="4" y="16" width="16" height="5" rx="2" stroke-linecap="round"/>
-              </svg>
-            </div>
-            
-            <div class="card-content">
-              <div class="card-header-row">
-                <h3 class="card-title">Android App</h3>
-                <span class="version-tag">v0.1.0 • 67 MB</span>
-              </div>
-              <p class="card-desc">
-                Full standalone application: transforms your phone into an edge <strong>CAM CODER</strong> server or low-latency <strong>VIEW ACCESS</strong> client.
-              </p>
-            </div>
-
-            <div class="card-actions">
-              <a href="https://github.com/krishna-gera/smart-spectator/releases/download/v0.1.0/smart-spectator.apk" class="btn btn-primary" download="smart-spectator.apk" id="download-apk-btn">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                <span>Download APK</span>
-              </a>
-              <a href="https://github.com/krishna-gera/smart-spectator/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer" class="btn-subtle" title="Release Notes">
-                Notes
-              </a>
-            </div>
-          </div>
-
-          <!-- 2. Mobile Web App URL -->
-          <div class="action-card">
-            <div class="card-icon-wrapper mobile-icon">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="5" y="2" width="14" height="20" rx="3" ry="3"/>
-                <line x1="12" y1="18" x2="12.01" y2="18" stroke-width="3" stroke-linecap="round"/>
-              </svg>
-            </div>
-
-            <div class="card-content">
-              <div class="card-header-row">
-                <h3 class="card-title">Mobile Web App</h3>
-                <span class="live-pill">Live PWA</span>
-              </div>
-              <p class="card-desc">
-                Instant browser viewer built for phones and tablets. Connects over WebRTC without installing native software.
-              </p>
-            </div>
-
-            <div class="card-actions">
-              <a href="https://web-mobile-nine-weld.vercel.app" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
-                <span>Launch Mobile Web</span>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </a>
-              <button class="btn-icon" id="qr-modal-btn" title="Show QR Code for Phone">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="7" height="7"/>
-                  <rect x="14" y="3" width="7" height="7"/>
-                  <rect x="14" y="14" width="7" height="7"/>
-                  <rect x="3" y="14" width="7" height="7"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- 3. Desktop Web App URL -->
-          <div class="action-card">
-            <div class="card-icon-wrapper desktop-icon">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <line x1="8" y1="21" x2="16" y2="21"/>
-                <line x1="12" y1="17" x2="12" y2="21"/>
-              </svg>
-            </div>
-
-            <div class="card-content">
-              <div class="card-header-row">
-                <h3 class="card-title">Desktop Web App</h3>
-                <span class="live-pill">Dashboard</span>
-              </div>
-              <p class="card-desc">
-                Multi-camera grid, AI detection timeline, historical snapshots, and comprehensive remote device settings.
-              </p>
-            </div>
-
-            <div class="card-actions">
-              <a href="https://web-dashboard-two-pied.vercel.app" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
-                <span>Launch Dashboard</span>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </a>
-              <button class="btn-icon copy-btn" data-url="https://web-dashboard-two-pied.vercel.app" title="Copy URL">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- 4. iOS App (Coming Soon) -->
-          <div class="action-card card-dimmed">
-            <div class="card-icon-wrapper apple-icon">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
-                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 1.01-2.87-.96.04-2.09.65-2.73 1.4-.56.64-.99 1.7-1.01 2.76 1.07.08 2.14-.56 2.73-1.29z"/>
-              </svg>
-            </div>
-
-            <div class="card-content">
-              <div class="card-header-row">
-                <h3 class="card-title">iOS Native App</h3>
-                <span class="coming-soon-pill">Coming Soon</span>
-              </div>
-              <p class="card-desc">
-                Native iOS CAM CODER and View client built with Swift & Flutter. Currently in internal TestFlight verification.
-              </p>
-            </div>
-
-            <div class="card-actions">
-              <button class="btn btn-disabled" id="ios-notify-btn">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-                </svg>
-                <span>Notify Me</span>
-              </button>
-              <span class="status-subtext">TestFlight Q4</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Live Edge Observer Interactive Terminal / Demo -->
-      <section class="demo-section">
-        <div class="terminal-window">
-          <div class="terminal-bar">
-            <div class="terminal-dots">
-              <span class="dot dot-red"></span>
-              <span class="dot dot-yellow"></span>
-              <span class="dot dot-green"></span>
-            </div>
-            <div class="terminal-title">
-              <span class="pulse-indicator"></span>
-              CAM_CODER_01 • 0.0.0.0:8080 • Direct LAN
-            </div>
-            <div class="terminal-actions">
-              <button class="terminal-btn" id="simulate-trigger-btn">
-                ⚡ Simulate Detection
-              </button>
-            </div>
-          </div>
-
-          <div class="terminal-body">
-            <div class="hud-stream">
-              <div class="hud-overlay">
-                <div class="hud-top-info">
-                  <span class="hud-tag">LIVE EDGE CV</span>
-                  <span class="hud-fps" id="fps-counter">30.0 FPS</span>
-                </div>
-                
-                <div class="detection-box" id="active-bbox">
-                  <div class="box-label" id="box-label">Person 97.4%</div>
-                </div>
-
-                <div class="hud-bottom-info">
-                  <span class="hud-ip">sqflite // seq: #1049</span>
-                  <span class="hud-conn">P2P: WEBRTC_ACTIVE</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="terminal-log-pane">
-              <div class="log-header">Local Server Event Stream</div>
-              <div class="log-entries" id="log-entries">
-                <div class="log-line"><span class="log-ts">13:14:02</span> <span class="log-badge badge-sys">SYS</span> Embedded server bound on 0.0.0.0:8080</div>
-                <div class="log-line"><span class="log-ts">13:14:03</span> <span class="log-badge badge-p2p">P2P</span> Advertised mDNS _smart-spectator._tcp</div>
-                <div class="log-line"><span class="log-ts">13:14:05</span> <span class="log-badge badge-ai">AI</span> Object detected: <span class="hl">person (0.97)</span> in frame #1048</div>
-                <div class="log-line"><span class="log-ts">13:14:06</span> <span class="log-badge badge-db">DB</span> Monotonic state reconciled. seq=1049</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Architecture Pillars (Minimal 3 points) -->
-      <section class="pillars-section">
-        <div class="pillar-card">
-          <div class="pillar-icon">🔒</div>
-          <h3 class="pillar-title">100% Privacy by Design</h3>
-          <p class="pillar-desc">
-            Video streams and detection metadata are processed on-device. No company servers watching your space.
+      <div class="spec-grid">
+        <div class="spec-cell">
+          <h3 class="spec-title">Device as Server</h3>
+          <p class="spec-text">
+            Runs an embedded HTTP and WebSocket server directly on the camera hardware. Serves live feeds and logs over local Wi-Fi without internet access.
           </p>
         </div>
 
-        <div class="pillar-card">
-          <div class="pillar-icon">⚡</div>
-          <h3 class="pillar-title">Direct P2P & Offline</h3>
-          <p class="pillar-desc">
-            Connect directly over LAN or encrypted WebRTC STUN. Functions without cloud or internet connectivity.
+        <div class="spec-cell">
+          <h3 class="spec-title">Direct P2P Streaming</h3>
+          <p class="spec-text">
+            Connects viewer devices using direct LAN HTTP, WebRTC STUN peer-to-peer traversal, or optional secure relay fallback only when direct links fail.
           </p>
         </div>
 
-        <div class="pillar-card">
-          <div class="pillar-icon">📱</div>
-          <h3 class="pillar-title">Repurpose Any Hardware</h3>
-          <p class="pillar-desc">
-            Breathe new life into older devices with high-res cameras, built-in battery backup, and dedicated optics.
+        <div class="spec-cell">
+          <h3 class="spec-title">On-Device Persistence</h3>
+          <p class="spec-text">
+            All configuration, session history, and event timestamps remain stored in local SQLite storage. No remote servers hold your video footage.
           </p>
         </div>
-      </section>
-    </div>
+
+        <div class="spec-cell">
+          <h3 class="spec-title">Hardware Conservation</h3>
+          <p class="spec-text">
+            Transforms capable older phones into dedicated, reliable sensors with built-in optical sensors, battery backup, and wireless connectivity.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Technical Overview Table -->
+    <section class="section">
+      <div class="section-header">
+        <p class="section-label">Specifications</p>
+        <h2 class="section-headline">Platform details.</h2>
+      </div>
+
+      <div class="specs-table">
+        <div class="table-row">
+          <span class="row-label">Roles</span>
+          <span class="row-value">CAM CODER (Host) / VIEW ACCESS (Viewer)</span>
+        </div>
+        <div class="table-row">
+          <span class="row-label">Local Host Port</span>
+          <span class="row-value">0.0.0.0:8080 (mDNS _smart-spectator._tcp)</span>
+        </div>
+        <div class="table-row">
+          <span class="row-label">Storage Engine</span>
+          <span class="row-value">Local SQLite with monotonic sequence reconciliation</span>
+        </div>
+        <div class="table-row">
+          <span class="row-label">Supported Platforms</span>
+          <span class="row-value">Android (Native APK), Web (Mobile & Desktop), iOS (Upcoming)</span>
+        </div>
+        <div class="table-row">
+          <span class="row-label">License</span>
+          <span class="row-value">Open source under MIT</span>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <!-- QR Code Modal for Mobile Web -->
-  <div class="modal-backdrop" id="qr-modal">
-    <div class="modal-card">
-      <button class="modal-close" id="qr-close-btn">&times;</button>
-      <h3 class="modal-title">Scan with Phone Camera</h3>
-      <p class="modal-desc">Point your smartphone camera to immediately open the Web Mobile Viewer.</p>
+  <!-- Clean Apple-Style Sheet Modal for QR Code -->
+  <div class="modal-backdrop" id="qr-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 class="modal-title">Open on Mobile Device</h3>
+        <button class="modal-close" id="qr-close-btn" aria-label="Close dialog">&times;</button>
+      </div>
+      <p class="modal-body">Scan this code using your iPhone or Android camera to open the Web Mobile application directly.</p>
       
-      <div class="qr-placeholder">
-        <!-- SVG Generated QR code for https://web-mobile-nine-weld.vercel.app -->
-        <svg class="qr-svg" viewBox="0 0 200 200" width="180" height="180">
-          <rect width="200" height="200" fill="#ffffff" rx="12"/>
-          <!-- Position Detection Patterns -->
-          <!-- Top Left -->
-          <rect x="20" y="20" width="50" height="50" fill="#0f172a" rx="4"/>
-          <rect x="28" y="28" width="34" height="34" fill="#ffffff" rx="2"/>
-          <rect x="36" y="36" width="18" height="18" fill="#0f172a" rx="1"/>
+      <div class="qr-container">
+        <svg class="qr-code" viewBox="0 0 200 200" width="160" height="160" aria-label="QR Code for Mobile Web App">
+          <rect width="200" height="200" fill="#ffffff" rx="8"/>
+          <!-- Position Marks -->
+          <rect x="20" y="20" width="50" height="50" fill="#000000"/>
+          <rect x="28" y="28" width="34" height="34" fill="#ffffff"/>
+          <rect x="36" y="36" width="18" height="18" fill="#000000"/>
 
-          <!-- Top Right -->
-          <rect x="130" y="20" width="50" height="50" fill="#0f172a" rx="4"/>
-          <rect x="138" y="28" width="34" height="34" fill="#ffffff" rx="2"/>
-          <rect x="146" y="36" width="18" height="18" fill="#0f172a" rx="1"/>
+          <rect x="130" y="20" width="50" height="50" fill="#000000"/>
+          <rect x="138" y="28" width="34" height="34" fill="#ffffff"/>
+          <rect x="146" y="36" width="18" height="18" fill="#000000"/>
 
-          <!-- Bottom Left -->
-          <rect x="20" y="130" width="50" height="50" fill="#0f172a" rx="4"/>
-          <rect x="28" y="138" width="34" height="34" fill="#ffffff" rx="2"/>
-          <rect x="36" y="146" width="18" height="18" fill="#0f172a" rx="1"/>
+          <rect x="20" y="130" width="50" height="50" fill="#000000"/>
+          <rect x="28" y="138" width="34" height="34" fill="#ffffff"/>
+          <rect x="36" y="146" width="18" height="18" fill="#000000"/>
 
-          <!-- Grid data modules representation -->
-          <rect x="80" y="24" width="8" height="8" fill="#0f172a"/>
-          <rect x="96" y="24" width="16" height="8" fill="#0f172a"/>
-          <rect x="80" y="40" width="16" height="8" fill="#0f172a"/>
-          <rect x="104" y="48" width="8" height="16" fill="#0f172a"/>
-          <rect x="88" y="56" width="8" height="8" fill="#0f172a"/>
+          <!-- Clean modules -->
+          <rect x="80" y="24" width="8" height="8" fill="#000000"/>
+          <rect x="96" y="24" width="16" height="8" fill="#000000"/>
+          <rect x="80" y="40" width="16" height="8" fill="#000000"/>
+          <rect x="104" y="48" width="8" height="16" fill="#000000"/>
+          <rect x="88" y="56" width="8" height="8" fill="#000000"/>
 
-          <rect x="24" y="80" width="8" height="16" fill="#0f172a"/>
-          <rect x="40" y="88" width="16" height="8" fill="#0f172a"/>
-          <rect x="64" y="80" width="8" height="8" fill="#0f172a"/>
-          <rect x="80" y="80" width="40" height="8" fill="#0f172a"/>
-          <rect x="88" y="96" width="16" height="16" fill="#0f172a"/>
-          <rect x="128" y="80" width="8" height="24" fill="#0f172a"/>
-          <rect x="144" y="88" width="16" height="8" fill="#0f172a"/>
-          <rect x="168" y="80" width="8" height="16" fill="#0f172a"/>
+          <rect x="24" y="80" width="8" height="16" fill="#000000"/>
+          <rect x="40" y="88" width="16" height="8" fill="#000000"/>
+          <rect x="64" y="80" width="8" height="8" fill="#000000"/>
+          <rect x="80" y="80" width="40" height="8" fill="#000000"/>
+          <rect x="88" y="96" width="16" height="16" fill="#000000"/>
+          <rect x="128" y="80" width="8" height="24" fill="#000000"/>
+          <rect x="144" y="88" width="16" height="8" fill="#000000"/>
+          <rect x="168" y="80" width="8" height="16" fill="#000000"/>
 
-          <rect x="80" y="128" width="16" height="8" fill="#0f172a"/>
-          <rect x="104" y="128" width="8" height="16" fill="#0f172a"/>
-          <rect x="88" y="144" width="8" height="16" fill="#0f172a"/>
-          <rect x="104" y="152" width="24" height="8" fill="#0f172a"/>
-          <rect x="136" y="128" width="16" height="24" fill="#0f172a"/>
-          <rect x="160" y="136" width="16" height="8" fill="#0f172a"/>
-          <rect x="144" y="160" width="24" height="16" fill="#0f172a"/>
+          <rect x="80" y="128" width="16" height="8" fill="#000000"/>
+          <rect x="104" y="128" width="8" height="16" fill="#000000"/>
+          <rect x="88" y="144" width="8" height="16" fill="#000000"/>
+          <rect x="104" y="152" width="24" height="8" fill="#000000"/>
+          <rect x="136" y="128" width="16" height="24" fill="#000000"/>
+          <rect x="160" y="136" width="16" height="8" fill="#000000"/>
+          <rect x="144" y="160" width="24" height="16" fill="#000000"/>
         </svg>
       </div>
 
       <div class="modal-url">
-        <code>https://web-mobile-nine-weld.vercel.app</code>
+        https://web-mobile-nine-weld.vercel.app
       </div>
-      <button class="btn btn-secondary copy-btn" data-url="https://web-mobile-nine-weld.vercel.app">
-        Copy Link
-      </button>
     </div>
   </div>
 
-  <!-- Notification Toast -->
-  <div class="toast" id="toast">Link copied to clipboard!</div>
-
   <!-- Footer -->
-  <footer class="footer">
-    <div class="footer-container">
-      <div class="footer-left">
-        <span class="footer-brand">Smart Spectator</span>
-        <span class="footer-copy">© 2026. Open source under MIT.</span>
-      </div>
-      <div class="footer-links">
-        <a href="https://github.com/krishna-gera/smart-spectator" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="https://github.com/krishna-gera/smart-spectator/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer">Releases</a>
-        <a href="https://github.com/krishna-gera/smart-spectator/blob/main/README.md" target="_blank" rel="noopener noreferrer">Docs</a>
+  <footer class="page-footer">
+    <div class="footer-content">
+      <p class="footer-note">Smart Spectator is open source software released under the MIT License.</p>
+      <div class="footer-nav">
+        <a href="https://github.com/krishna-gera/smart-spectator" target="_blank" rel="noopener noreferrer">Source Code</a>
+        <a href="https://github.com/krishna-gera/smart-spectator/releases" target="_blank" rel="noopener noreferrer">Releases</a>
       </div>
     </div>
   </footer>
