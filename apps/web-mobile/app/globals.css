@@ -54,3 +54,16 @@ body {
 .pulse-live {
   animation: pulse-ring 2s infinite ease-in-out;
 }
+
+@media (min-width: 768px) {
+  .desktop-blocker-overlay {
+    display: flex !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .desktop-blocker-overlay {
+    display: none !important;
+  }
+}
+

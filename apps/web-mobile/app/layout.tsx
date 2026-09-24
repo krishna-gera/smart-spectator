@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import DesktopBlocker from "./components/DesktopBlocker";
 
 export const metadata: Metadata = {
   title: "Smart Spectator Mobile",
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-[#0A0D14] text-[#F9FAFB] min-h-screen antialiased select-none">
+        <DesktopBlocker />
         {children}
       </body>
     </html>
