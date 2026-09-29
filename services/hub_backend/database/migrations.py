@@ -265,3 +265,17 @@ def apply_migrations(conn: sqlite3.Connection) -> int:
                 raise RuntimeError(f"Migration {version} ('{name}') failed: {e}") from e
 
     return applied_count
+
+
+class MigrationTracker:
+    """Convenience class providing object-oriented migration tracking."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+
+    def get_current_version(self) -> int:
+        return get_current_version(self.conn)
+
+    def run_migrations(self) -> int:
+        return apply_migrations(self.conn)
+

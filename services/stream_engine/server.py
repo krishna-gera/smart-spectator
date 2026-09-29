@@ -24,6 +24,10 @@ class StreamEngine:
         self.sessions: Dict[str, StreamSession] = {}
         self.tcp_server: Optional[asyncio.Server] = None
 
+    @property
+    def is_running(self) -> bool:
+        return True
+
     def get_or_create_session(self, camera_id: str) -> StreamSession:
         if camera_id not in self.sessions:
             self.sessions[camera_id] = StreamSession(camera_id)

@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Smart Spectator Desktop Hub",
     description="Local-first visual intelligence gateway and camera node manager.",
-    version="1.0.0",
+    version=settings.APP_VERSION,
     lifespan=lifespan
 )
 
@@ -92,6 +92,10 @@ app.include_router(rules.router, prefix=API_PREFIX)
 app.include_router(recordings.router, prefix=API_PREFIX)
 app.include_router(system.router, prefix=API_PREFIX)
 app.include_router(events_ws.router, prefix=API_PREFIX)
+
+# Also mount convenience routes for direct root access
+app.include_router(health.router)
+app.include_router(system.router)
 
 # Mount Client Static Assets
 if settings.CLIENT_DIR.exists():

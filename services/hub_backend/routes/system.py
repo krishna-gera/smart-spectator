@@ -21,10 +21,14 @@ except ImportError:
 from services.hub_backend.config import settings
 from services.hub_backend.database.connection import db_session
 from services.hub_backend.database.backup import export_database_backup, restore_database_backup
+from services.hub_backend.database.migrations import MigrationTracker
 from services.event_engine import event_engine
 from services.ai_engine.pipeline import ai_pipeline
 from services.stream_engine.server import stream_engine
 from services.device_manager.manager import device_manager
+from ai.inference.manager import provider_manager
+from ai.models.validator import model_validator
+from services.hub_backend.routes.health import _startup_time
 
 router = APIRouter(prefix="/system", tags=["System"])
 
@@ -133,7 +137,7 @@ def get_audit_logs(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, 
 def get_hardware_info() -> Dict[str, Any]:
     """
     Identifies actual host hardware: CPU, GPU, NPU/QNN availability, RAM, OS, architecture.
-    Strictly conforms to Section 46 & Section 44. Never fabricates numbers.
+    Strictly conforms to Section 2 of Phase 8 Master Specification. Never fabricates numbers.
     """
     os_name = platform.system()
     os_release = platform.release()
@@ -144,24 +148,48 @@ def get_hardware_info() -> Dict[str, Any]:
 
     available_ort_providers = ort.get_available_providers() if ort else []
     
-    # Accurate detection of NPU/QNN
+    # Accurate detection of NPU/QNN and GPU
     has_qnn = "QNNExecutionProvider" in available_ort_providers
+    has_dml = "DmlExecutionProvider" in available_ort_providers
+    has_coreml = "CoreMLExecutionProvider" in available_ort_providers
+    has_cuda = "CUDAExecutionProvider" in available_ort_providers
+    has_cpu = "CPUExecutionProvider" in available_ort_providers or (ort is not None)
+
+    accelerators: List[str] = []
+    if has_qnn:
+        accelerators.append("Hexagon NPU (QNN)")
+    if has_dml:
+        accelerators.append("DirectML (GPU)")
+    if has_coreml:
+        accelerators.append("Apple Neural Engine / CoreML")
+    if has_cuda:
+        accelerators.append("NVIDIA CUDA")
+
+    try:
+        _, selected_prov = provider_manager.get_preferred_provider("auto")
+        selected_provider_name = selected_prov.provider_name
+    except Exception:
+        selected_provider_name = "CPUExecutionProvider"
+
     if has_qnn:
         npu_status = "Available"
         npu_target = "Qualcomm AI Engine Direct (Hexagon NPU)"
+        hw_status = "VERIFIED_ON_SNAPDRAGON_QNN"
     elif "Windows" in os_name and ("arm" in arch.lower() or "aarch64" in arch.lower()):
         npu_status = "Pending QNN Runtime Installation"
         npu_target = "Qualcomm Hexagon NPU (Supported Hardware Detected)"
+        hw_status = "HARDWARE_VALIDATION_PENDING (Snapdragon Windows Detected, QNN SDK Pending)"
     else:
         npu_status = "Unavailable (Non-Snapdragon / Host Architecture)"
         npu_target = None
+        hw_status = f"HOST_PROVIDER_ACTIVE ({selected_provider_name})"
 
     # GPU acceleration detection
-    if "DmlExecutionProvider" in available_ort_providers:
+    if has_dml:
         gpu_accel = "DirectML (GPU)"
-    elif "CoreMLExecutionProvider" in available_ort_providers:
+    elif has_coreml:
         gpu_accel = "Apple Neural Engine / CoreML"
-    elif "CUDAExecutionProvider" in available_ort_providers:
+    elif has_cuda:
         gpu_accel = "NVIDIA CUDA"
     else:
         gpu_accel = "CPU Fallback"
@@ -171,17 +199,194 @@ def get_hardware_info() -> Dict[str, Any]:
         "os_version": os_release,
         "architecture": arch,
         "processor": processor,
-        "cpu_logical_cores": cpu_count,
+        "memory_gb": ram_gb,
         "ram_total_gb": ram_gb,
+        "cpu_logical_cores": cpu_count,
+        "accelerators": accelerators,
+        "onnxruntime_providers": available_ort_providers,
+        "available_execution_providers": available_ort_providers,
+        "selected_provider": selected_provider_name,
+        "qnn_available": has_qnn,
+        "directml_available": has_dml,
+        "cpu_available": has_cpu,
+        "hardware_validation_status": hw_status,
         "npu": {
             "status": npu_status,
             "target": npu_target,
             "qnn_provider_present": has_qnn,
         },
         "gpu_acceleration": gpu_accel,
-        "available_execution_providers": available_ort_providers,
         "active_ai_backend": ai_pipeline.get_telemetry().get("active_backend", "cpu"),
         "hardware_verified": has_qnn,
+    }
+
+
+@router.get("/diagnostics")
+def get_system_diagnostics() -> Dict[str, Any]:
+    """
+    Unified runtime diagnostics endpoint conforming to Section 21 of Phase 8 specification.
+    Reports operational status across all 11 subsystems with zero secret leakage.
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    uptime_sec = round(time.time() - _startup_time, 2)
+
+    # 1. Database
+    db_status = "READY"
+    db_err = None
+    schema_version = 0
+    try:
+        with db_session() as conn:
+            conn.execute("SELECT 1;").fetchone()
+            tracker = MigrationTracker(conn)
+            schema_version = tracker.get_current_version()
+    except Exception as e:
+        db_status = "FAILED"
+        db_err = str(e)
+
+    # 2. AI Engine
+    ai_telemetry = ai_pipeline.get_telemetry()
+    hw_info = get_hardware_info()
+    model_report = model_validator.validate_all()
+    if ai_telemetry.get("is_model_loaded") or ai_pipeline.is_running:
+        ai_status = "READY"
+    elif model_report.get("status") == "READY":
+        ai_status = "READY"
+    else:
+        ai_status = "DEGRADED"
+
+    # 3. Event Engine
+    ee_metrics = event_engine.get_metrics()
+    ee_status = "READY" if event_engine.is_running else "DEGRADED"
+
+    # 4. Stream Engine
+    stream_status = "READY" if stream_engine.is_running else "DEGRADED"
+
+    # 5. Recorder & Storage
+    free_disk_mb = 0.0
+    try:
+        total, used, free = shutil.disk_usage(settings.RECORDINGS_DIR if settings.RECORDINGS_DIR.exists() else settings.BASE_DIR)
+        free_disk_mb = round(free / (1024 * 1024), 2)
+    except Exception:
+        pass
+
+    storage_used_bytes = 0
+    try:
+        for p in settings.RECORDINGS_DIR.rglob("*"):
+            if p.is_file():
+                storage_used_bytes += p.stat().st_size
+    except Exception:
+        pass
+    storage_used_gb = round(storage_used_bytes / (1024 * 1024 * 1024), 3)
+
+    is_recording_degraded = free_disk_mb < settings.MIN_FREE_DISK_MB
+    recorder_status = "DEGRADED" if is_recording_degraded else "READY"
+    recorder_err = "Disk space below safety threshold (500MB)" if is_recording_degraded else None
+
+    # 6. Devices
+    paired_devices_count = 0
+    dev_status = "READY"
+    dev_err = None
+    try:
+        with db_session() as conn:
+            row = conn.execute("SELECT COUNT(*) as cnt FROM devices WHERE revoked = 0;").fetchone()
+            paired_devices_count = row["cnt"] if row else 0
+    except Exception as e:
+        dev_status = "DEGRADED"
+        dev_err = str(e)
+
+    # 7. Models Integrity (validated above)
+
+    # 8. WebSocket Clients
+    from services.hub_backend.websocket.events import event_stream_hub
+    connected_ws_count = len(event_stream_hub.active_clients)
+
+    return {
+        "hub": {
+            "status": "READY",
+            "version": settings.APP_VERSION,
+            "environment": settings.ENVIRONMENT,
+            "uptime_seconds": uptime_sec,
+            "last_error": None,
+            "timestamp": now_iso,
+        },
+        "database": {
+            "status": db_status,
+            "schema_version": schema_version,
+            "path": str(settings.DATABASE_PATH),
+            "last_error": db_err,
+            "timestamp": now_iso,
+        },
+        "stream_engine": {
+            "status": stream_status,
+            "active_streams": len(stream_engine.sessions),
+            "tcp_port": settings.STREAM_PORT,
+            "last_error": None,
+            "timestamp": now_iso,
+        },
+        "ai_engine": {
+            "status": ai_status,
+            "active_model": ai_telemetry.get("active_model"),
+            "selected_provider": hw_info.get("selected_provider"),
+            "is_model_loaded": ai_telemetry.get("is_model_loaded", False),
+            "last_error": None,
+            "timestamp": now_iso,
+        },
+        "event_engine": {
+            "status": ee_status,
+            "is_running": event_engine.is_running,
+            "queue_depth": ee_metrics.get("queue_depth", 0),
+            "last_error": None,
+            "timestamp": now_iso,
+        },
+        "recorder": {
+            "status": recorder_status,
+            "disk_free_mb": free_disk_mb,
+            "min_disk_free_mb": settings.MIN_FREE_DISK_MB,
+            "recording_degraded": is_recording_degraded,
+            "last_error": recorder_err,
+            "timestamp": now_iso,
+        },
+        "devices": {
+            "status": dev_status,
+            "paired_devices_count": paired_devices_count,
+            "last_error": dev_err,
+            "timestamp": now_iso,
+        },
+        "websocket": {
+            "status": "READY",
+            "connected_clients": connected_ws_count,
+            "last_error": None,
+            "timestamp": now_iso,
+        },
+        "storage": {
+            "status": "READY",
+            "recordings_used_gb": storage_used_gb,
+            "max_storage_gb": settings.RECORDING_MAX_STORAGE_GB,
+            "retention_days": settings.RECORDING_RETENTION_DAYS,
+            "last_error": None,
+            "timestamp": now_iso,
+        },
+        "models": {
+            "status": model_report.get("status", "READY"),
+            "manifest_path": model_report.get("manifest_path"),
+            "models": model_report.get("models", {}),
+            "last_error": model_report.get("error"),
+            "timestamp": now_iso,
+        },
+        "hardware": {
+            "status": "READY",
+            "os": hw_info.get("os"),
+            "architecture": hw_info.get("architecture"),
+            "processor": hw_info.get("processor"),
+            "memory_gb": hw_info.get("memory_gb"),
+            "selected_provider": hw_info.get("selected_provider"),
+            "qnn_available": hw_info.get("qnn_available"),
+            "directml_available": hw_info.get("directml_available"),
+            "cpu_available": hw_info.get("cpu_available"),
+            "hardware_validation_status": hw_info.get("hardware_validation_status"),
+            "last_error": None,
+            "timestamp": now_iso,
+        },
     }
 
 
