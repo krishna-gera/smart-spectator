@@ -19,7 +19,7 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
+class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   bool _isCameraInitialized = false;
@@ -33,8 +33,29 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initCamera();
     _initNetworking();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android lifecycle management (Section 6)
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      if (_cameraController != null && _cameraController!.value.isInitialized) {
+        _cameraController?.dispose();
+        _cameraController = null;
+        if (mounted) {
+          setState(() {
+            _isCameraInitialized = false;
+          });
+        }
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (!_isCameraInitialized) {
+        _initCamera();
+      }
+    }
   }
 
   Future<void> _initCamera() async {
@@ -111,6 +132,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _transportSub?.cancel();
     _mediaTransport?.dispose();
     _controlClient?.stop();

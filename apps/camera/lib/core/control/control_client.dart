@@ -73,7 +73,7 @@ class ControlClient {
         'metrics': {
           'battery_level_percent': batteryLevel.toDouble(),
           'is_charging': isCharging,
-          'battery_temperature_c': 34.5,
+          'battery_temperature_c': null, // Genuine thermal API null if unsupported (Section 9)
           'encoder_fps': 30.0,
           'uptime_seconds': timer.tick,
         }
