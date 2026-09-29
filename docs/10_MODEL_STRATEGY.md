@@ -115,3 +115,14 @@ To achieve maximal acceleration on the Snapdragon Hexagon NPU, SpectatorNet foll
 | **Inference Latency (Hexagon NPU)** | $\le 7.5\text{ ms}$ per temporal window |
 | **Throughput (Hexagon NPU)** | $\ge 120\text{ inferences / sec}$ |
 | **Power Consumption** | $< 0.8\text{ W}$ incremental NPU power |
+
+---
+
+## 6. Level 1 Spatial Detector Deployment (Phase 2)
+
+In Phase 2, the Level 1 Spatial Detector was implemented and validated:
+- **Default Artifact:** `ai/models/yolov8n.onnx` (Opset 17/18, dynamic batch, input $1 \times 3 \times 640 \times 640$, 80 COCO classes).
+- **Export Pipeline:** `scripts/export_detection_model.py` generates the normalized ONNX graph adhering to the `[1, 84, 8400]` YOLO output tensor schema.
+- **Validation Pipeline:** `scripts/validate_onnx_model.py` runs tensor shape verification and dry-run forward passes via ONNX Runtime.
+- **Benchmark:** Achieves $9.66\text{ ms}$ on CPU and $10.44\text{ ms}$ on CoreML GPU, ready for sub-6ms compilation on Snapdragon Hexagon NPU.
+

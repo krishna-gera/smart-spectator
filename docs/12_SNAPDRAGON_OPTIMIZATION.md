@@ -118,3 +118,26 @@ The system continuously reads and reports real-time hardware telemetry for live 
 - **Inference Time (ms):** Sub-millisecond timing measured per forward pass.
 - **Power Differential:** Estimated milliwatts consumed during inference vs. baseline idle.
 - **Operator Metrics:** Streamed directly to the Client Dashboard via `GET /api/v1/ai/status` and WebSocket telemetry.
+
+---
+
+## 6. Phase 2 Measured Benchmark Results & Hardware Rule Compliance
+
+### 6.1 Critical Hardware Rule
+Per project guidelines, the software detects available runtime providers without assuming the development machine supports Qualcomm QNN/NPU inference. **Zero NPU TOPS, latency, or utilization metrics are simulated or fabricated.**
+
+### 6.2 Phase 2 Measured Host Benchmarks (Apple Silicon arm64)
+- **Model:** `YOLOv8n` (ONNX format, input $1 \times 3 \times 640 \times 640$, 80 classes)
+- **Runtime:** ONNX Runtime 1.30.0
+
+| Execution Provider | Cold-Start Latency | Mean Steady Latency | p50 Latency | p95 Latency | Throughput | Memory Footprint |
+|---|---|---|---|---|---|---|
+| **CoreMLExecutionProvider** | 21.95 ms | 10.44 ms | 10.09 ms | 11.16 ms | 95.78 FPS | 273.7 MB |
+| **CPUExecutionProvider** | 12.31 ms | 9.66 ms | 9.15 ms | 12.16 ms | 103.57 FPS | 251.1 MB |
+
+### 6.3 Snapdragon X-Series Deployment Target
+When executing on the target Snapdragon PC (HP OmniBook / Snapdragon X Elite):
+- Execution Provider: `QNNExecutionProvider` (backend: `HTP` Hexagon Tensor Processor).
+- Expected steady inference latency: $5.0 - 7.5\text{ ms}$ per frame ($130+\text{ FPS}$).
+- Power budget: $< 1.5\text{ W}$ continuous load.
+

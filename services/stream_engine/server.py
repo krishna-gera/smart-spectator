@@ -60,7 +60,11 @@ class StreamEngine:
             session = self.get_or_create_session(camera_id)
             decoded = session.ingest_packet(header, payload)
             if decoded:
-                return decoded[-1]
+                latest = decoded[-1]
+                # Pass latest frame non-blockingly to the AI perception pipeline
+                from services.ai_engine.pipeline import ai_pipeline
+                ai_pipeline.submit_frame(camera_id, latest, session.frames_received, time.time())
+                return latest
         except ProtocolError as e:
             print(f"[StreamEngine] Protocol violation from '{camera_id}': {e}")
         except Exception as e:
@@ -68,15 +72,28 @@ class StreamEngine:
 
         return None
 
-    def get_latest_jpeg(self, camera_id: str) -> Optional[bytes]:
-        """Encodes latest decoded frame as JPEG bytes for REST snapshots or MJPEG live preview."""
+    def get_latest_jpeg(self, camera_id: str, with_ai_overlay: bool = True) -> Optional[bytes]:
+        """Encodes latest decoded frame as JPEG bytes, optionally rendering AI bounding boxes."""
         session = self.sessions.get(camera_id)
         if not session or session.latest_frame is None:
             return None
 
         try:
-            # OpenCV or PIL encoding
             bgr_frame = session.latest_frame
+            
+            # Optionally render AI perception overlay
+            if with_ai_overlay:
+                from services.ai_engine.pipeline import ai_pipeline
+                from services.ai_engine.visualizer import draw_debug_overlay
+                ctx = ai_pipeline.contexts.get(camera_id)
+                if ctx and ctx.latest_observation:
+                    bgr_frame = draw_debug_overlay(
+                        bgr_frame,
+                        ctx.latest_observation,
+                        fps=ctx.rolling_inference_fps,
+                        provider_name=ai_pipeline.detector.backend.value
+                    )
+
             # Convert BGR to RGB
             rgb_frame = bgr_frame[:, :, ::-1] if len(bgr_frame.shape) == 3 and bgr_frame.shape[2] == 3 else bgr_frame
             img = Image.fromarray(rgb_frame)

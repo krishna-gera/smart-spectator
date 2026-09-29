@@ -148,3 +148,15 @@ If $\sum_{\tau = t - T_{\text{dwell}}}^t \text{Inside}(\Omega, P_\tau) \ge T_{\t
 Compute the mean Laplacian variance of the incoming frame:
 $$\sigma^2_{\text{Lap}} = \text{Var}(\nabla^2 I)$$
 If $\sigma^2_{\text{Lap}} < \tau_{\text{blur}}$ and mean intensity $\mu_I < 10$ (covered) or $\mu_I > 245$ (glared) continuously for 3.0 seconds, emit `CAMERA_BLOCKED`.
+
+---
+
+## 5. Phase 2 Implementation Realization
+
+Phase 2 realizes Level 1 Spatial Object Detection and Level 2 Multi-Object Tracking as decoupled services:
+- **`services/ai_engine/frame_sampler.py`**: Monotonic 5 FPS decimation with $160 \times 90$ pixel delta motion gating.
+- **`services/ai_engine/detector.py`**: `YOLOObjectDetector` executing ONNX runtime graphs with letterbox preprocessing and $[0.0, 1.0]$ normalized bounding box conversions.
+- **`services/ai_engine/tracker.py`**: `ByteTrackTracker` implementing two-stage bipartite matching via `scipy.optimize.linear_sum_assignment`, preserving persistent track IDs, centroid trajectories, and normalized velocity vectors across occlusions.
+- **`services/ai_engine/observation_builder.py`**: Synthesizes detections, tracklets, and telemetry into the `Observation` schema (`shared/schemas/v1/models.py`).
+- **`services/ai_engine/pipeline.py`**: Non-blocking `AIPipeline` with bounded queue (`Queue(maxsize=2)`) and multi-camera context isolation.
+

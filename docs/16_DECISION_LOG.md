@@ -111,3 +111,31 @@
 - **Reason:** Operates in $< 2\text{ms}$ on CPU, does not require a heavy deep re-identification (Re-ID) neural network, and recovers occluded objects by matching low-confidence detection boxes.
 - **Alternatives Considered:** DeepSORT (requires heavy second-stage feature extraction), BoT-SORT (higher computational overhead).
 - **Consequences:** If an object is occluded for extended periods ($> 30\text{ seconds}$), track ID may switch unless spatial proximity heuristics are applied.
+
+---
+
+## ADR-013: Why Adaptive Frame Sampling & Motion Gating Decimation?
+- **Context:** Decoded video arrives at 30 FPS, but running deep neural object detectors at 30 FPS across multiple cameras consumes excessive power and compute on static scenes.
+- **Decision:** Implement a dual-stage frame sampler: decimate target detection frequency to 5.0 FPS, and evaluate a fast motion pre-filter ($160 \times 90$ grayscale absolute difference, $0.5\%$ threshold) to bypass static scenes.
+- **Reason:** Reduces NPU/CPU compute load by $80-95\%$ during stationary intervals while maintaining responsive tracking as soon as motion occurs.
+- **Alternatives Considered:** Continuous 30 FPS detection (wasteful, causes thermal throttling), fixed 1 FPS detection (misses fast-moving objects).
+- **Consequences:** Motion threshold must be configurable to prevent false negatives in low-contrast scenes.
+
+---
+
+## ADR-014: Why Asynchronous Bounded Queues with Eviction Drop Policy?
+- **Context:** Model inference latency may occasionally spike, risking unbounded queue growth and multi-second perception lag.
+- **Decision:** Decouple video ingestion from AI inference using a bounded queue (`Queue(maxsize=2)`) with an eviction drop policy: when the queue is full, the oldest frame is dropped to immediately process the newest frame.
+- **Reason:** Guarantees that AI inference always operates on the most recent frame, keeping perceptual latency under 100ms regardless of burst inference times.
+- **Alternatives Considered:** Unbounded queue (causes latency bloat), blocking the video ingestion thread (stalls H.264 decoder).
+- **Consequences:** Telemetry tracks `frames_dropped` to monitor backpressure.
+
+---
+
+## ADR-015: Why Strictly Normalized [0.0, 1.0] Coordinates for Bounding Boxes?
+- **Context:** Different cameras deliver diverse resolutions (1080p, 720p, 4K), and models require letterboxed fixed resolutions (e.g. $640 \times 640$).
+- **Decision:** Mandate normalized float coordinates `[x_min, y_min, x_max, y_max]` in $[0.0, 1.0]$ across all `Detection`, `TrackedObject`, and `Observation` contracts.
+- **Reason:** Completely decouples AI detection, tracking, and UI rendering from resolution changes, stream aspect ratio variations, or downsampling.
+- **Alternatives Considered:** Absolute pixel coordinates (requires continual rescaling across pipeline stages).
+- **Consequences:** Preprocessing and postprocessing must carefully invert letterbox offsets and scaling factors.
+

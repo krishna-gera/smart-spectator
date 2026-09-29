@@ -14,7 +14,8 @@ from .config import settings
 from .database.connection import init_database
 from services.device_manager.discovery import hub_advertiser, get_local_ip
 from services.stream_engine.server import stream_engine
-from .routes import health, devices, cameras, streams
+from services.ai_engine.pipeline import ai_pipeline
+from .routes import health, devices, cameras, streams, ai
 from .websocket import control
 
 
@@ -35,9 +36,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[Hub] Warning: TCP media receiver failed to bind: {e}")
 
+    # 4. Startup: Launch AI Perception Pipeline
+    print("[Hub] Launching AI Perception Pipeline...")
+    ai_pipeline.start()
+
     yield
 
-    # 4. Shutdown: Clean up resources
+    # 5. Shutdown: Clean up resources
+    print("[Hub] Shutting down AI Perception Pipeline...")
+    ai_pipeline.stop()
     print("[Hub] Shutting down mDNS advertiser...")
     await asyncio.to_thread(hub_advertiser.stop)
     if stream_engine.tcp_server:
@@ -69,6 +76,7 @@ app.include_router(devices.router, prefix=API_PREFIX)
 app.include_router(cameras.router, prefix=API_PREFIX)
 app.include_router(streams.router, prefix=API_PREFIX)
 app.include_router(control.router, prefix=API_PREFIX)
+app.include_router(ai.router, prefix=API_PREFIX)
 
 
 @app.get("/", response_class=HTMLResponse)

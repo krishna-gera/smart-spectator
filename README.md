@@ -31,7 +31,8 @@ Monitoring Client Dashboard & Real-Time Alerts
 
 - **Phase 0 (Architecture & Foundation):** ✅ **COMPLETED** (18 Master Specifications, Shared Protocols, Contracts)
 - **Phase 1 (Core Streaming & Pairing):** ✅ **COMPLETED** (FastAPI Core, SQLite WAL, mDNS Discovery, 6-Digit PIN Pairing, Binary Framing Protocol, Live Preview, Android Camera App)
-- **Phase 2 (AI Perception & Snapdragon NPU):** ⏳ *Next Milestone* (YOLOv8n on Hexagon NPU, ByteTrack, Circular Ring Buffer)
+- **Phase 2 (AI Perception & Hardware Acceleration):** ✅ **COMPLETED** (YOLOv8n ONNX, ByteTrack Multi-Object Tracking, Adaptive Frame Sampler, Motion Gating, Bounded Queue AI Pipeline, InferenceProvider Hierarchy, Observation Contract)
+- **Phase 3 (Custom Dataset & SpectatorNet Training):** ⏳ *Next Milestone* (6,000-clip dataset collection, BiGRU temporal sequence model, Qualcomm AI Hub DLC compilation)
 
 ---
 

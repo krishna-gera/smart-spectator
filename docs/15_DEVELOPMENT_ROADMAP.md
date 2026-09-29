@@ -15,9 +15,9 @@ The Smart Spectator engineering roadmap is partitioned into six distinct, milest
 |                               DEVELOPMENT TIMELINE                                 |
 +------------------------------------------------------------------------------------+
 |  Phase 0: Architecture, Technical Specs & Foundation Scaffolding    [ COMPLETED ]  |
-|  Phase 1: Android Camera Node, Pairing & Low-Latency Streaming      [ NEXT ]       |
-|  Phase 2: AI Ingestion, Level 1/2 Perception & Snapdragon NPU Base  [ UPCOMING ]   |
-|  Phase 3: Smart Spectator Dataset & SpectatorNet Temporal Model     [ UPCOMING ]   |
+|  Phase 1: Android Camera Node, Pairing & Low-Latency Streaming      [ COMPLETED ]  |
+|  Phase 2: AI Ingestion, Level 1/2 Perception & Snapdragon NPU Base  [ COMPLETED ]  |
+|  Phase 3: Smart Spectator Dataset & SpectatorNet Temporal Model     [ NEXT ]       |
 |  Phase 4: Monitoring Tasks, ROI Zones, Event Engine & Dashboard     [ UPCOMING ]   |
 |  Phase 5: Competition Hardening, NPU Benchmarks & Live Showcase      [ UPCOMING ]   |
 |  Phase 6: Future Scale (RTSP/ONVIF CCTV, VLM Queries, iOS Node)     [ POST-COMP ]  |
