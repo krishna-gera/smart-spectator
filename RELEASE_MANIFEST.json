@@ -1,8 +1,8 @@
 {
-  "version": "1.1.0",
-  "build_date": "2026-09-30T00:12:00Z",
-  "git_commit": "f6469033260797d3004babbf4c4a8f133bb34ded",
-  "schema_version": 3,
+  "version": "1.2.0",
+  "build_date": "2026-09-30T00:48:00Z",
+  "git_commit": "RELEASE_v1.2.0",
+  "schema_version": 4,
   "api_version": "v1",
   "protocol_version": 1,
   "supported_platforms": [
@@ -28,7 +28,11 @@
     "recorder",
     "device_manager",
     "monitoring_client",
-    "camera_app"
+    "camera_app",
+    "model_registry",
+    "ab_evaluator",
+    "retention_manager",
+    "config_manager"
   ],
   "airgap_validated": true,
   "cloud_dependencies": false

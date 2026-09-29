@@ -1,8 +1,8 @@
 # Smart Spectator — Three-Level Hierarchical AI Architecture & Inference Engine
 
 **Document ID:** SS-DOC-029  
-**Version:** 1.1.0  
-**Phase:** 8 (Real-Device Deployment, End-to-End Validation & Demo Readiness)  
+**Version:** 1.2.0  
+**Phase:** 9 (Polished Intelligent Local Monitoring Product)  
 **Status:** Certified Specification & Hardware Validation Report  
 
 ---

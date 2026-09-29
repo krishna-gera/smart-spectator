@@ -2,7 +2,7 @@
 
 > **A Local-First Visual Intelligence Ecosystem for Snapdragon-Powered PCs and Repurposed Edge Nodes.**  
 > Developed for the **Qualcomm Snapdragon AI Lab Build & Present Challenge**.  
-> **Release Version:** `1.1.0` | **Status:** Production Hardened & Challenge Ready | **Tests:** 100/100 PASSING
+> **Release Version:** `1.2.0` | **Status:** Production Hardened & Challenge Ready | **Tests:** 127/127 PASSING
 
 ---
 
@@ -19,11 +19,11 @@ Smart Spectator Desktop Hub (FastAPI + SQLite WAL / Port 8000)
        ↓ (Snapdragon Hexagon NPU / Qualcomm QNN / DirectML)
 Multi-Stage AI Perception (YOLOv8n → ByteTrack → SpectatorNet GRU)
        ↓
-Event & Decision Engine (ROI Polygon Zones / Temporal Rules)
+Event & Decision Engine (ROI Polygon Zones / Temporal Rules / Prioritization)
        ↓
-Local Storage (SQLite WAL + Circular Ring Buffer MP4 Recordings)
+Local Storage (SQLite WAL + Circular Ring Buffer MP4 Recordings + Retention Lock)
        ↓
-Monitoring Client Web Dashboard & WebSocket Real-Time Alert Feed
+Monitoring Client Web Dashboard & WebSocket Real-Time Alert Feed (Schema 1.2.0)
 ```
 
 ---
@@ -39,6 +39,7 @@ Monitoring Client Web Dashboard & WebSocket Real-Time Alert Feed
 - **Phase 6 (Production Hardening & Device Integration):** ✅ **COMPLETED** (Centralized configuration, rotating logs with secret sanitization, health diagnostics `/health/detailed`, SQLite versioned migrations, online hot backup/restore, 500MB disk guard, Android lifecycle handling and exponential backoff)
 - **Phase 7 (Snapdragon Optimization & Model Releases):** ✅ **COMPLETED** (Tiered inference fallback QNN -> DirectML/CoreML -> CPU, versioned model releases FP32/INT8 in `ai/models/releases/`, real hardware benchmarking suite, CI/CD pipeline, demo scenario runner, release packaging v1.0.0)
 - **Phase 8 (Real-Device Deployment, End-to-End Validation & Demo Readiness):** ✅ **COMPLETED** (Windows on Snapdragon deployment toolchain `install_windows.ps1`, Android production release auditing, unified 11-subsystem diagnostics endpoint `/api/v1/system/diagnostics`, model integrity SHA-256 validation, first-run doctor `scripts/doctor.py`, hardware runtime benchmark `scripts/validate_snapdragon_runtime.py`, deterministic demo runner `scripts/run_demo.py`, 100 automated unit & integration tests)
+- **Phase 9 (Polished Intelligent Local Monitoring Product):** ✅ **COMPLETED** (Modernized OLED client, causal timeline milestones, deterministic event prioritization CRITICAL/HIGH/MEDIUM/LOW, multi-tier notification cooldowns, retention lock defense, model registry, offline hardware A/B benchmarking, zero-secret safe config export/import, 127 total automated tests)
 
 ---
 

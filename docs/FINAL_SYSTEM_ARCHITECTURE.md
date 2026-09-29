@@ -1,8 +1,8 @@
 # Smart Spectator — Final System Architecture Specification
 
 **Document ID:** SS-DOC-032  
-**Version:** 1.1.0  
-**Phase:** 8 (Real-Device Deployment, End-to-End Validation & Demo Readiness)  
+**Version:** 1.2.0  
+**Phase:** 9 (Polished Intelligent Local Monitoring Product)  
 **Date:** 2026-09-30  
 **Status:** Certified Architecture Specification  
 
