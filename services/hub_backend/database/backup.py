@@ -62,15 +62,18 @@ def restore_database_backup(backup_path: Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Backup file not found at: {backup_path}")
 
     # Validate that backup is a readable SQLite database
-    test_conn = sqlite3.connect(f"file:{backup_path}?mode=ro", uri=True)
     try:
-        cursor = test_conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = {row[0] for row in cursor.fetchall()}
-        required_tables = {"cameras", "events", "zones", "event_rules"}
-        if not required_tables.issubset(tables):
-            raise ValueError(f"Backup file is corrupt or invalid. Missing tables: {required_tables - tables}")
-    finally:
-        test_conn.close()
+        test_conn = sqlite3.connect(f"file:{backup_path}?mode=ro", uri=True)
+        try:
+            cursor = test_conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = {row[0] for row in cursor.fetchall()}
+            required_tables = {"cameras", "events", "zones", "event_rules"}
+            if not required_tables.issubset(tables):
+                raise ValueError(f"Backup file is corrupted or not a valid SQLite database. Missing tables: {required_tables - tables}")
+        finally:
+            test_conn.close()
+    except (sqlite3.DatabaseError, sqlite3.OperationalError) as exc:
+        raise ValueError(f"Backup file is corrupted or not a valid SQLite database: {exc}") from exc
 
     # Create safety snapshot of current active DB
     active_db = settings.DATABASE_PATH
@@ -87,6 +90,7 @@ def restore_database_backup(backup_path: Path) -> Dict[str, Any]:
 
     return {
         "status": "restored",
+        "schema_version": settings.SCHEMA_VERSION,
         "restored_from": str(backup_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "verified_tables": list(tables),
