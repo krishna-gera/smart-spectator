@@ -37,9 +37,27 @@ class Settings(BaseModel):
     
     DEV_MODE: bool = os.getenv("DEV_MODE", "true").lower() in ("true", "1", "yes")
 
+    # Event Engine & Automation Defaults
+    EVENT_DEFAULT_MIN_CONFIDENCE: float = float(os.getenv("EVENT_MIN_CONFIDENCE", "0.70"))
+    EVENT_DEFAULT_CONFIRM_THRESHOLD: float = float(os.getenv("EVENT_CONFIRM_THRESHOLD", "0.80"))
+    EVENT_DEFAULT_CONSECUTIVE: int = int(os.getenv("EVENT_CONSECUTIVE", "2"))
+    EVENT_DEFAULT_COOLDOWN_SECONDS: int = int(os.getenv("EVENT_COOLDOWN_SECONDS", "15"))
+    EVENT_RESOLUTION_TIMEOUT_SECONDS: float = float(os.getenv("EVENT_RESOLUTION_TIMEOUT", "3.0"))
+    LOITERING_DEFAULT_DWELL_SECONDS: float = float(os.getenv("LOITERING_DWELL_SECONDS", "30.0"))
+
+    # Recording Engine
+    RECORDING_PRE_ROLL_SECONDS: float = float(os.getenv("RECORDING_PRE_ROLL", "10.0"))
+    RECORDING_POST_ROLL_SECONDS: float = float(os.getenv("RECORDING_POST_ROLL", "5.0"))
+    RECORDING_MAX_STORAGE_GB: float = float(os.getenv("RECORDING_MAX_STORAGE_GB", "10.0"))
+    RECORDING_RETENTION_DAYS: int = int(os.getenv("RECORDING_RETENTION_DAYS", "14"))
+
+    # Client App
+    CLIENT_DIR: Path = Path(__file__).resolve().parent.parent.parent / "apps" / "client"
+
 
 settings = Settings()
 
 # Ensure directories exist
 settings.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 settings.SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+settings.CLIENT_DIR.mkdir(parents=True, exist_ok=True)

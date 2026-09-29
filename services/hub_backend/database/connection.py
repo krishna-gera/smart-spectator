@@ -62,6 +62,27 @@ def init_database() -> None:
     """Executes database schema migration and enforces WAL mode."""
     with db_session() as conn:
         conn.executescript(CREATE_TABLES_SQL)
+
+        # Migrate events table columns if upgrading from Phase 1-3
+        cursor = conn.execute("PRAGMA table_info(events);")
+        existing_cols = {row["name"] for row in cursor.fetchall()}
+        migration_cols = {
+            "status": "TEXT NOT NULL DEFAULT 'detected'",
+            "start_time": "DATETIME",
+            "end_time": "DATETIME",
+            "created_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "zone_id": "TEXT",
+            "rule_id": "TEXT",
+            "explanation": "TEXT",
+        }
+        for col, col_def in migration_cols.items():
+            if col not in existing_cols:
+                try:
+                    conn.execute(f"ALTER TABLE events ADD COLUMN {col} {col_def};")
+                except Exception:
+                    pass
+
         # Verify WAL mode
         cursor = conn.execute("PRAGMA journal_mode;")
         row = cursor.fetchone()

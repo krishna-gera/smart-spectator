@@ -110,11 +110,19 @@ CREATE TABLE IF NOT EXISTS events (
     task_id TEXT,
     recording_id TEXT,
     event_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'detected' CHECK(status IN ('detected', 'confirmed', 'active', 'resolved', 'dismissed')),
     severity TEXT NOT NULL CHECK(severity IN ('info', 'low', 'medium', 'high', 'critical')),
     confidence REAL NOT NULL,
     summary TEXT NOT NULL,
     timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    start_time DATETIME,
+    end_time DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     involved_track_ids TEXT,
+    zone_id TEXT,
+    rule_id TEXT,
+    explanation TEXT,
     metadata_json TEXT,
     FOREIGN KEY(camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE,
     FOREIGN KEY(task_id) REFERENCES monitoring_tasks(task_id) ON DELETE SET NULL,
@@ -122,8 +130,92 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_camera_time ON events(camera_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
+CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 
--- 7. Model Metadata Table
+-- 7. Event Predictions History Table (Raw perception prediction auditing)
+CREATE TABLE IF NOT EXISTS event_predictions (
+    prediction_id TEXT PRIMARY KEY,
+    camera_id TEXT NOT NULL,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    event_type TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    affected_tracks TEXT,
+    model_version TEXT DEFAULT 'spectatornet_v1',
+    metadata_json TEXT,
+    FOREIGN KEY(camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_predictions_cam_time ON event_predictions(camera_id, timestamp DESC);
+
+-- 8. Zones Table
+CREATE TABLE IF NOT EXISTS zones (
+    zone_id TEXT PRIMARY KEY,
+    camera_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    polygon_json TEXT NOT NULL,
+    color TEXT DEFAULT '#38bdf8',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(camera_id) REFERENCES cameras(camera_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_zones_camera ON zones(camera_id);
+
+-- 9. Event Rules Table
+CREATE TABLE IF NOT EXISTS event_rules (
+    rule_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    conditions_json TEXT NOT NULL,
+    actions_json TEXT NOT NULL,
+    cooldown_seconds INTEGER NOT NULL DEFAULT 60,
+    severity_override TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_rules_enabled ON event_rules(enabled);
+
+-- 10. Event Actions Execution Table
+CREATE TABLE IF NOT EXISTS event_actions (
+    action_id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT,
+    executed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_actions_event ON event_actions(event_id);
+
+-- 11. Alert Delivery Log Table
+CREATE TABLE IF NOT EXISTS alert_delivery_log (
+    log_id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    status TEXT NOT NULL,
+    details TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
+);
+
+-- 12. Audit Logs Table
+CREATE TABLE IF NOT EXISTS audit_logs (
+    log_id TEXT PRIMARY KEY,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actor TEXT NOT NULL DEFAULT 'system',
+    action TEXT NOT NULL,
+    resource TEXT NOT NULL,
+    metadata_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON audit_logs(timestamp DESC);
+
+-- 13. Model Metadata Table
 CREATE TABLE IF NOT EXISTS model_metadata (
     model_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -139,14 +231,14 @@ CREATE TABLE IF NOT EXISTS model_metadata (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. System Settings Table
+-- 14. System Settings Table
 CREATE TABLE IF NOT EXISTS system_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 9. Active Pairing Requests (In-memory / Ephemeral table for PIN verification)
+-- 15. Active Pairing Requests (In-memory / Ephemeral table for PIN verification)
 CREATE TABLE IF NOT EXISTS pairing_requests (
     device_id TEXT PRIMARY KEY,
     device_name TEXT NOT NULL,

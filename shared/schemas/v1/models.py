@@ -43,6 +43,14 @@ class EventSeverity(str, Enum):
     CRITICAL = "critical"
 
 
+class EventStatus(str, Enum):
+    DETECTED = "detected"
+    CONFIRMED = "confirmed"
+    ACTIVE = "active"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
+
 class HardwareBackend(str, Enum):
     NPU_QNN = "npu_qnn"          # Snapdragon Hexagon NPU via Qualcomm AI Engine Direct
     GPU_DIRECTML = "gpu_directml" # Windows DirectML
@@ -148,13 +156,72 @@ class Event(BaseModel):
     camera_id: str
     task_id: Optional[str] = Field(None, description="Associated MonitoringTask if triggered by policy")
     event_type: str = Field(..., description="e.g. OBJECT_REMOVED, PERSON_ENTERED, CAMERA_BLOCKED")
+    status: EventStatus = Field(default=EventStatus.DETECTED, description="Lifecycle state")
     severity: EventSeverity = Field(default=EventSeverity.INFO)
     confidence: float = Field(..., description="Event classification score (0.0 to 1.0)")
     summary: str = Field(..., description="Human-readable event description")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
     trigger_observation_id: Optional[str] = None
     involved_track_ids: List[int] = Field(default_factory=list)
+    zone_id: Optional[str] = None
+    rule_id: Optional[str] = None
     recording_id: Optional[str] = Field(None, description="Associated clip ID if recorded")
+    explanation: Optional[str] = Field(None, description="Deterministic human-readable explanation")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Zone(BaseModel):
+    zone_id: str = Field(..., description="Unique zone identifier")
+    camera_id: str = Field(..., description="Camera identifier to which zone applies")
+    name: str = Field(..., description="Human readable zone name")
+    polygon: List[List[float]] = Field(..., description="List of [x, y] normalized vertices (0.0 to 1.0)")
+    color: str = Field(default="#38bdf8", description="Hex display color for overlay")
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class RuleCondition(BaseModel):
+    event_type: Optional[str] = None
+    camera_id: Optional[str] = None
+    zone_id: Optional[str] = None
+    minimum_confidence: Optional[float] = None
+    time_start: Optional[str] = None  # e.g. "22:00"
+    time_end: Optional[str] = None    # e.g. "06:00"
+    min_dwell_seconds: Optional[float] = None
+
+
+class EventRule(BaseModel):
+    rule_id: str = Field(..., description="Unique rule ID")
+    name: str = Field(..., description="Human readable rule name")
+    enabled: bool = Field(default=True)
+    conditions: Dict[str, Any] = Field(default_factory=dict, description="Structured filter conditions")
+    actions: List[str] = Field(default_factory=lambda: ["CREATE_EVENT", "CLIENT_NOTIFICATION"])
+    cooldown_seconds: int = Field(default=60, description="Minimum delay between re-triggers")
+    severity_override: Optional[EventSeverity] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class EventActionRecord(BaseModel):
+    action_id: str
+    event_id: str
+    action_type: str
+    status: str
+    error: Optional[str] = None
+    executed_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AuditLogEntry(BaseModel):
+    log_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    actor: str = "system"
+    action: str
+    resource: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
