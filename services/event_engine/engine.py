@@ -35,6 +35,8 @@ from .lifecycle import generate_event_explanation
 from .actions import ActionDispatcher, ActionContext
 from .recorder import RecordingManager
 from .cooldown import CooldownManager
+from .prioritization import calculate_event_priority
+from .timeline import build_event_timeline
 
 
 class EventEngine:
@@ -269,12 +271,32 @@ class EventEngine:
             metadata=prediction.metadata,
         )
 
+        priority = calculate_event_priority(
+            event_type=prediction.event_type,
+            confidence=prediction.confidence,
+            zone_name=prediction.metadata.get("zone_name"),
+            rule_name=rule_id,
+            metadata=prediction.metadata,
+        )
+
+        timeline = build_event_timeline(
+            event_type=prediction.event_type,
+            timestamp=now_dt,
+            start_time=start_time,
+            end_time=end_time,
+            affected_tracks=prediction.affected_tracks,
+            has_recording=bool("SAVE_CLIP" in actions_to_execute),
+            metadata=prediction.metadata,
+        )
+
         event = Event(
             event_id=event_id,
             camera_id=prediction.camera_id,
             event_type=prediction.event_type,
             status=EventStatus.CONFIRMED,
             severity=severity,
+            priority=priority,
+            timeline_milestones=timeline,
             confidence=prediction.confidence,
             summary=explanation,
             timestamp=now_dt,
@@ -549,12 +571,14 @@ class EventEngine:
         )
 
     def _event_to_dict(self, ev: Event) -> Dict[str, Any]:
+        priority_val = ev.priority.value if hasattr(ev.priority, "value") else str(ev.priority)
         return {
             "event_id": ev.event_id,
             "camera_id": ev.camera_id,
             "event_type": ev.event_type,
             "status": ev.status.value,
             "severity": ev.severity.value,
+            "priority": priority_val,
             "confidence": ev.confidence,
             "summary": ev.summary,
             "explanation": ev.explanation,
@@ -565,6 +589,7 @@ class EventEngine:
             "zone_id": ev.zone_id,
             "rule_id": ev.rule_id,
             "recording_id": ev.recording_id,
+            "timeline_milestones": getattr(ev, "timeline_milestones", []),
             "metadata": ev.metadata,
         }
 

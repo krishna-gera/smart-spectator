@@ -43,6 +43,19 @@ class EventSeverity(str, Enum):
     CRITICAL = "critical"
 
 
+class EventPriority(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class NotificationCategory(str, Enum):
+    CRITICAL = "Critical"
+    IMPORTANT = "Important"
+    INFORMATIONAL = "Informational"
+
+
 class EventStatus(str, Enum):
     DETECTED = "detected"
     CONFIRMED = "confirmed"
@@ -170,6 +183,8 @@ class Event(BaseModel):
     zone_id: Optional[str] = None
     rule_id: Optional[str] = None
     recording_id: Optional[str] = Field(None, description="Associated clip ID if recorded")
+    priority: EventPriority = Field(default=EventPriority.MEDIUM, description="Deterministic event priority level")
+    timeline_milestones: List[Dict[str, Any]] = Field(default_factory=list, description="Causal timeline milestones with real timestamps")
     explanation: Optional[str] = Field(None, description="Deterministic human-readable explanation")
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -261,6 +276,7 @@ class Recording(BaseModel):
     width: int
     height: int
     fps: float
+    is_locked: bool = Field(default=False, description="Retention protection lock flag")
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

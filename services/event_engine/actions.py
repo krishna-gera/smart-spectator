@@ -62,14 +62,18 @@ class CreateEventAction(Action):
                 """,
                 (event.camera_id, f"Camera {event.camera_id}"),
             )
+            priority_val = event.priority.value if hasattr(event.priority, "value") else str(event.priority)
+            milestones_json = json.dumps(event.timeline_milestones) if getattr(event, "timeline_milestones", None) else json.dumps([])
+
             conn.execute(
                 """
                 INSERT INTO events (
                     event_id, camera_id, task_id, recording_id, event_type,
                     status, severity, confidence, summary, timestamp,
                     start_time, end_time, created_at, updated_at,
-                    involved_track_ids, zone_id, rule_id, explanation, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    involved_track_ids, zone_id, rule_id, explanation, metadata_json,
+                    priority, timeline_milestones_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(event_id) DO UPDATE SET
                     status = excluded.status,
                     confidence = MAX(events.confidence, excluded.confidence),
@@ -78,7 +82,9 @@ class CreateEventAction(Action):
                     involved_track_ids = excluded.involved_track_ids,
                     recording_id = COALESCE(excluded.recording_id, events.recording_id),
                     explanation = excluded.explanation,
-                    metadata_json = excluded.metadata_json
+                    metadata_json = excluded.metadata_json,
+                    priority = excluded.priority,
+                    timeline_milestones_json = excluded.timeline_milestones_json
                 """,
                 (
                     event.event_id,
@@ -100,6 +106,8 @@ class CreateEventAction(Action):
                     event.rule_id,
                     event.explanation,
                     json.dumps(event.metadata),
+                    priority_val,
+                    milestones_json,
                 )
             )
         return True
@@ -132,13 +140,17 @@ class ClientNotificationAction(Action):
 
     def execute(self, context: ActionContext) -> bool:
         event = context.event
+        from .notifications import notification_dispatcher
         if context.websocket_broadcast_fn:
+            notification_dispatcher.set_broadcaster(context.websocket_broadcast_fn)
             try:
+                priority_str = event.priority.value if hasattr(event.priority, "value") else str(event.priority)
                 payload = {
                     "event_id": event.event_id,
                     "camera_id": event.camera_id,
                     "event_type": event.event_type,
                     "severity": event.severity.value,
+                    "priority": priority_str,
                     "status": event.status.value,
                     "confidence": event.confidence,
                     "summary": event.summary,
@@ -146,28 +158,14 @@ class ClientNotificationAction(Action):
                     "timestamp": event.timestamp.isoformat(),
                     "zone_id": event.zone_id,
                     "rule_id": event.rule_id,
+                    "recording_id": event.recording_id,
                 }
                 context.websocket_broadcast_fn("event_confirmed", payload)
             except Exception as e:
                 print(f"[ClientNotificationAction] WebSocket broadcast error: {e}")
 
-        # Log alert delivery
-        try:
-            with db_session() as conn:
-                conn.execute(
-                    "INSERT INTO alert_delivery_log (log_id, event_id, channel, status, details) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (
-                        str(uuid.uuid4()),
-                        event.event_id,
-                        "websocket",
-                        "delivered",
-                        f"Notified clients of {event.event_type}",
-                    )
-                )
-        except Exception:
-            pass
-
+        # Dispatch via notification dispatcher with anti-spam cooldowns
+        notification_dispatcher.dispatch(event)
         return True
 
 

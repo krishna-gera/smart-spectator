@@ -38,6 +38,42 @@ def _row_to_event_dict(r: Dict[str, Any]) -> Dict[str, Any]:
     if hasattr(stat, "value"):
         stat = stat.value
 
+    priority = r.get("priority", "MEDIUM")
+    if hasattr(priority, "value"):
+        priority = priority.value
+
+    milestones = []
+    if r.get("timeline_milestones_json"):
+        try:
+            milestones = json.loads(r["timeline_milestones_json"])
+        except Exception:
+            milestones = []
+
+    # If timeline milestones are missing, synthesize from real timestamps
+    if not milestones:
+        try:
+            from services.event_engine.timeline import build_event_timeline
+            ts = r["timestamp"]
+            if isinstance(ts, str):
+                ts = datetime.fromisoformat(ts)
+            st = r.get("start_time")
+            if isinstance(st, str):
+                st = datetime.fromisoformat(st)
+            et = r.get("end_time")
+            if isinstance(et, str):
+                et = datetime.fromisoformat(et)
+            milestones = build_event_timeline(
+                event_type=r["event_type"],
+                timestamp=ts,
+                start_time=st,
+                end_time=et,
+                affected_tracks=tracks,
+                has_recording=bool(r.get("recording_id")),
+                metadata=meta,
+            )
+        except Exception:
+            milestones = []
+
     return {
         "event_id": r["event_id"],
         "camera_id": r["camera_id"],
@@ -46,6 +82,7 @@ def _row_to_event_dict(r: Dict[str, Any]) -> Dict[str, Any]:
         "event_type": r["event_type"],
         "status": stat,
         "severity": sev,
+        "priority": priority,
         "confidence": r["confidence"],
         "summary": r["summary"],
         "timestamp": format_dt(r["timestamp"]),
@@ -57,8 +94,46 @@ def _row_to_event_dict(r: Dict[str, Any]) -> Dict[str, Any]:
         "zone_id": r.get("zone_id"),
         "rule_id": r.get("rule_id"),
         "explanation": r.get("explanation"),
+        "timeline_milestones": milestones,
         "metadata": meta,
     }
+
+
+@router.get("/stats", response_model=Dict[str, Any])
+def get_event_stats() -> Dict[str, Any]:
+    """Retrieves operational summary statistics for events."""
+    with db_session() as conn:
+        total = conn.execute("SELECT COUNT(*) as c FROM events").fetchone()["c"]
+        active = conn.execute("SELECT COUNT(*) as c FROM events WHERE status IN ('detected', 'confirmed', 'active')").fetchone()["c"]
+
+        # Counts by priority
+        p_rows = conn.execute("SELECT priority, COUNT(*) as c FROM events GROUP BY priority").fetchall()
+        by_priority = {r["priority"]: r["c"] for r in p_rows}
+
+        # Counts by type
+        t_rows = conn.execute("SELECT event_type, COUNT(*) as c FROM events GROUP BY event_type ORDER BY c DESC LIMIT 10").fetchall()
+        by_type = {r["event_type"]: r["c"] for r in t_rows}
+
+        # Counts by severity
+        s_rows = conn.execute("SELECT severity, COUNT(*) as c FROM events GROUP BY severity").fetchall()
+        by_severity = {r["severity"]: r["c"] for r in s_rows}
+
+        # Recent 24h count
+        recent = conn.execute("SELECT COUNT(*) as c FROM events WHERE timestamp >= datetime('now', '-24 hours')").fetchone()["c"]
+
+        return {
+            "total_events": total,
+            "active_events": active,
+            "events_last_24h": recent,
+            "by_priority": {
+                "CRITICAL": by_priority.get("CRITICAL", 0),
+                "HIGH": by_priority.get("HIGH", 0),
+                "MEDIUM": by_priority.get("MEDIUM", 0),
+                "LOW": by_priority.get("LOW", 0),
+            },
+            "by_severity": by_severity,
+            "by_type": by_type,
+        }
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -66,13 +141,19 @@ def list_events(
     camera_id: Optional[str] = Query(None),
     event_type: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    zone_id: Optional[str] = Query(None),
+    min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0),
+    has_recording: Optional[bool] = Query(None),
     start_time: Optional[datetime] = Query(None),
     end_time: Optional[datetime] = Query(None),
+    sort_by: str = Query("timestamp"),
+    sort_order: str = Query("desc"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    """Lists confirmed events with filtering and bounded pagination."""
+    """Lists confirmed events with advanced filtering, sorting, and bounded pagination."""
     query = "SELECT * FROM events WHERE 1=1"
     params = []
 
@@ -85,9 +166,23 @@ def list_events(
     if severity:
         query += " AND severity = ?"
         params.append(severity.lower())
+    if priority:
+        query += " AND priority = ?"
+        params.append(priority.upper())
     if status:
         query += " AND status = ?"
         params.append(status.lower())
+    if zone_id:
+        query += " AND zone_id = ?"
+        params.append(zone_id)
+    if min_confidence is not None:
+        query += " AND confidence >= ?"
+        params.append(min_confidence)
+    if has_recording is not None:
+        if has_recording:
+            query += " AND recording_id IS NOT NULL"
+        else:
+            query += " AND recording_id IS NULL"
     if start_time:
         query += " AND timestamp >= ?"
         params.append(start_time.isoformat())
@@ -95,7 +190,12 @@ def list_events(
         query += " AND timestamp <= ?"
         params.append(end_time.isoformat())
 
-    query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+    # Sorting
+    valid_sort_cols = {"timestamp": "timestamp", "confidence": "confidence", "priority": "priority"}
+    order_col = valid_sort_cols.get(sort_by.lower(), "timestamp")
+    order_dir = "ASC" if sort_order.lower() == "asc" else "DESC"
+
+    query += f" ORDER BY {order_col} {order_dir} LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     with db_session() as conn:
