@@ -21,5 +21,8 @@ apps/camera/.flutter-plugins
 apps/camera/.flutter-plugins-dependencies
 
 # OS
-.DS_Store
-Thumbs.db
+# Datasets & Checkpoints
+ai/datasets/smart_spectator/raw/
+ai/datasets/smart_spectator/processed/
+artifacts/runs/**/*.pt
+*.tmp

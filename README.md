@@ -32,7 +32,8 @@ Monitoring Client Dashboard & Real-Time Alerts
 - **Phase 0 (Architecture & Foundation):** ✅ **COMPLETED** (18 Master Specifications, Shared Protocols, Contracts)
 - **Phase 1 (Core Streaming & Pairing):** ✅ **COMPLETED** (FastAPI Core, SQLite WAL, mDNS Discovery, 6-Digit PIN Pairing, Binary Framing Protocol, Live Preview, Android Camera App)
 - **Phase 2 (AI Perception & Hardware Acceleration):** ✅ **COMPLETED** (YOLOv8n ONNX, ByteTrack Multi-Object Tracking, Adaptive Frame Sampler, Motion Gating, Bounded Queue AI Pipeline, InferenceProvider Hierarchy, Observation Contract)
-- **Phase 3 (Custom Dataset & SpectatorNet Training):** ⏳ *Next Milestone* (6,000-clip dataset collection, BiGRU temporal sequence model, Qualcomm AI Hub DLC compilation)
+- **Phase 3 (Custom Dataset & SpectatorNet Training):** ✅ **COMPLETED** (Observation sequence dataset pipeline, Feature Encoder, Session split with zero leakage, Dataset Validator, SpectatorNet BiGRU Attention Model, ONNX numerical export & validation, INT8 Quantization, Predictor Phase 4 contract)
+- **Phase 4 (Monitoring Tasks, Event Engine & User Dashboard):** ⏳ *Next Milestone* (User-defined monitoring policies, ROI Polygon evaluation, Circular Ring Buffer MP4 synthesis, WebSocket alerts, Desktop Hub UI)
 
 ---
 

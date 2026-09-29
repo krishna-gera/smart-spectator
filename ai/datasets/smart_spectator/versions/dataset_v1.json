@@ -1,0 +1,27 @@
+{
+  "dataset_name": "smart_spectator",
+  "dataset_version": "v1.0-synthetic",
+  "total_samples": 180,
+  "train_samples": 126,
+  "val_samples": 18,
+  "test_samples": 36,
+  "sequence_length": 30,
+  "fps": 5.0,
+  "feature_dim": 166,
+  "num_classes": 9,
+  "classes": [
+    "NORMAL_BACKGROUND",
+    "OBJECT_PRESENT",
+    "OBJECT_REMOVED",
+    "OBJECT_MOVED",
+    "PERSON_ENTERED",
+    "PERSON_LEFT",
+    "ZONE_LOITERING",
+    "CAMERA_BLOCKED",
+    "TASK_COMPLETED"
+  ],
+  "split_seed": 42,
+  "sources": {
+    "synthetic": 180
+  }
+}

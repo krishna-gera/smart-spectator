@@ -126,3 +126,16 @@ In Phase 2, the Level 1 Spatial Detector was implemented and validated:
 - **Validation Pipeline:** `scripts/validate_onnx_model.py` runs tensor shape verification and dry-run forward passes via ONNX Runtime.
 - **Benchmark:** Achieves $9.66\text{ ms}$ on CPU and $10.44\text{ ms}$ on CoreML GPU, ready for sub-6ms compilation on Snapdragon Hexagon NPU.
 
+---
+
+## 7. Level 3 Temporal Intelligence Deployment — SpectatorNet (Phase 3)
+
+In Phase 3, the Level 3 Temporal Model was trained, validated, exported, and benchmarked:
+- **Default Artifacts:** `ai/models/spectatornet.onnx` (FP32: 0.59 MB) and `ai/models/spectatornet_int8.onnx` (INT8: 0.52 MB).
+- **Architecture:** Feature Projection ($166 \to 64$) $\to$ 2-layer Bidirectional GRU (hidden size 64) $\to$ Temporal Attention Pooling $\to$ Classification Head ($128 \to 64 \to 9$).
+- **Parameters:** 152,393 parameters ($< 5\text{M}$ budget).
+- **Inference Latency:** **0.161 ms** on CPU, **0.226 ms** on CoreML GPU ($> 4,400\text{ FPS}$).
+- **Validation:** Numerically verified against PyTorch checkpoint with max absolute error $2.38 \times 10^{-7}$ ($< 10^{-4}$ tolerance).
+- **Phase 4 Integration:** Exposes `SpectatorNetPredictor` in `ai/models/predictor.py` emitting `EventPrediction` schemas.
+
+

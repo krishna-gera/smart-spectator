@@ -1,0 +1,27 @@
+{
+  "feature_dim": 166,
+  "max_objects": 16,
+  "ablation_mode": "full",
+  "object_slot_dim": 10,
+  "global_dim": 6,
+  "object_features": [
+    "class_id",
+    "confidence",
+    "center_x",
+    "center_y",
+    "width",
+    "height",
+    "velocity_x",
+    "velocity_y",
+    "speed",
+    "normalized_area"
+  ],
+  "global_features": [
+    "object_count",
+    "person_count",
+    "motion_score",
+    "disappeared_track_count",
+    "new_track_count",
+    "total_detections"
+  ]
+}

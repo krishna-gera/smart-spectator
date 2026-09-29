@@ -1,0 +1,24 @@
+{
+  "class_to_id": {
+    "NORMAL_BACKGROUND": 0,
+    "OBJECT_PRESENT": 1,
+    "OBJECT_REMOVED": 2,
+    "OBJECT_MOVED": 3,
+    "PERSON_ENTERED": 4,
+    "PERSON_LEFT": 5,
+    "ZONE_LOITERING": 6,
+    "CAMERA_BLOCKED": 7,
+    "TASK_COMPLETED": 8
+  },
+  "id_to_class": {
+    "0": "NORMAL_BACKGROUND",
+    "1": "OBJECT_PRESENT",
+    "2": "OBJECT_REMOVED",
+    "3": "OBJECT_MOVED",
+    "4": "PERSON_ENTERED",
+    "5": "PERSON_LEFT",
+    "6": "ZONE_LOITERING",
+    "7": "CAMERA_BLOCKED",
+    "8": "TASK_COMPLETED"
+  }
+}

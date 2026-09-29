@@ -120,6 +120,16 @@ Annotations are serialized in a standard JSON format linking temporal event wind
 }
 ```
 
-### 5.2 Version Control & Lineage
-Dataset artifacts, raw video archives, and JSON ground-truth manifests are version-controlled using **DVC (Data Version Control)** paired with local storage caches.
 - `ai/datasets/manifests/v1.0.0.json`: Canonical checksummed manifest for reproducible training runs.
+
+---
+
+## 6. Phase 3 Dataset Realization & Manifest Tooling
+
+In Phase 3, the complete data pipeline was implemented and validated:
+- **Dataset Structure:** `ai/datasets/smart_spectator/` with `raw/`, `processed/`, `manifests/`, `statistics/`, and `versions/`.
+- **Manifests:** Generated `train.jsonl` (126 samples), `val.jsonl` (18 samples), and `test.jsonl` (36 samples) with strict zero session leakage.
+- **Normalization:** `statistics/normalization.json` computed strictly from training split ($z = (x - \mu)/\sigma$).
+- **Integrity Validation:** `scripts/validate_dataset.py` continuously tests for coordinate normalization bounds, duplicate sample IDs, sequence length mismatches, and train/test leakage.
+- **Annotation Guidelines:** Full operational definitions and curation protocols published in `docs/DATASET_ANNOTATION_GUIDE.md`.
+

@@ -1,0 +1,17 @@
+{
+  "run_name": "spectatornet_gru_v1",
+  "dataset_dir": "ai/datasets/smart_spectator",
+  "artifacts_dir": "artifacts/runs",
+  "epochs": 20,
+  "batch_size": 16,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "early_stopping_patience": 8,
+  "hidden_dim": 64,
+  "num_layers": 2,
+  "dropout": 0.2,
+  "bidirectional": true,
+  "seed": 42,
+  "use_class_weights": true,
+  "device": "auto"
+}

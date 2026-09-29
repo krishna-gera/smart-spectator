@@ -158,6 +158,24 @@ class Event(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class EventPrediction(BaseModel):
+    """
+    Phase 3/4 Data Contract: Emitted by SpectatorNet temporal inference engine.
+    Consumable by Phase 4 Event Engine to evaluate monitoring policies.
+    """
+    schema_version: str = "1.0"
+    camera_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    event_type: str = Field(..., description="e.g. OBJECT_REMOVED, PERSON_ENTERED, NORMAL_BACKGROUND")
+    confidence: float = Field(..., description="Classification probability (0.0 to 1.0)")
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    affected_tracks: List[int] = Field(default_factory=list)
+    class_probabilities: Dict[str, float] = Field(default_factory=dict)
+    sequence_length: int = 30
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
 # ---------------------------------------------------------------------------
 # Recording & Storage Schemas
 # ---------------------------------------------------------------------------

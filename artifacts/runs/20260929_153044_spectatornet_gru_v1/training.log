@@ -1,0 +1,36 @@
+[2026-09-29T15:30:44.591308] Initialized SpectatorNetTrainer (Run ID: 20260929_153044_spectatornet_gru_v1, Device: mps)
+[2026-09-29T15:30:44.621749] Model parameters: 152393 (0.58 MB)
+[2026-09-29T15:30:45.060184] Starting training for 20 epochs (Patience: 8)...
+[2026-09-29T15:30:49.465875] Epoch 01/20 | Train Loss: 2.1013 Acc: 0.3571 F1: 0.3635 | Val Loss: 1.8623 Acc: 0.8889 F1: 0.8519 (4.4s)
+[2026-09-29T15:30:49.477945]   ⭐ New best validation Macro F1: 0.8519 (Saved best_checkpoint.pt)
+[2026-09-29T15:30:49.828269] Epoch 02/20 | Train Loss: 1.7383 Acc: 0.7063 F1: 0.6755 | Val Loss: 1.5027 Acc: 0.8889 F1: 0.8519 (0.4s)
+[2026-09-29T15:30:50.170882] Epoch 03/20 | Train Loss: 1.3635 Acc: 0.7143 F1: 0.7038 | Val Loss: 1.0968 Acc: 1.0000 F1: 1.0000 (0.3s)
+[2026-09-29T15:30:50.179381]   ⭐ New best validation Macro F1: 1.0000 (Saved best_checkpoint.pt)
+[2026-09-29T15:30:50.540812] Epoch 04/20 | Train Loss: 0.9523 Acc: 0.8968 F1: 0.8963 | Val Loss: 0.7696 Acc: 1.0000 F1: 1.0000 (0.4s)
+[2026-09-29T15:30:50.900517] Epoch 05/20 | Train Loss: 0.6661 Acc: 0.9286 F1: 0.9292 | Val Loss: 0.5363 Acc: 1.0000 F1: 1.0000 (0.4s)
+[2026-09-29T15:30:51.253627] Epoch 06/20 | Train Loss: 0.4366 Acc: 0.9683 F1: 0.9669 | Val Loss: 0.3415 Acc: 1.0000 F1: 1.0000 (0.4s)
+[2026-09-29T15:30:51.601185] Epoch 07/20 | Train Loss: 0.2809 Acc: 0.9762 F1: 0.9762 | Val Loss: 0.2366 Acc: 1.0000 F1: 1.0000 (0.3s)
+[2026-09-29T15:30:51.943168] Epoch 08/20 | Train Loss: 0.1795 Acc: 1.0000 F1: 1.0000 | Val Loss: 0.1621 Acc: 1.0000 F1: 1.0000 (0.3s)
+[2026-09-29T15:30:52.286473] Epoch 09/20 | Train Loss: 0.1553 Acc: 1.0000 F1: 1.0000 | Val Loss: 0.1200 Acc: 1.0000 F1: 1.0000 (0.3s)
+[2026-09-29T15:30:52.625155] Epoch 10/20 | Train Loss: 0.1079 Acc: 1.0000 F1: 1.0000 | Val Loss: 0.0895 Acc: 1.0000 F1: 1.0000 (0.3s)
+[2026-09-29T15:30:52.959961] Epoch 11/20 | Train Loss: 0.0870 Acc: 1.0000 F1: 1.0000 | Val Loss: 0.0730 Acc: 1.0000 F1: 1.0000 (0.3s)
+[2026-09-29T15:30:52.960053] Early stopping triggered after 11 epochs.
+[2026-09-29T15:30:52.968677] 
+Evaluating best checkpoint on held-out test split...
+[2026-09-29T15:30:53.255657] ✔ Final Test Accuracy:  1.0000
+[2026-09-29T15:30:53.255749] ✔ Final Test Macro F1:  1.0000
+[2026-09-29T15:30:53.255787] ✔ Final Test Weighted F1:1.0000
+[2026-09-29T15:30:53.255933] 
+Confusion Matrix on Held-Out Test Set:
+True \ Pred           NORMAL_B  OBJECT_P  OBJECT_R  OBJECT_M  PERSON_E  PERSON_L  ZONE_LOI  CAMERA_B  TASK_COM
+--------------------------------------------------------------------------------------------------------------
+NORMAL_BACKGROUND            4         0         0         0         0         0         0         0         0
+OBJECT_PRESENT               0         4         0         0         0         0         0         0         0
+OBJECT_REMOVED               0         0         4         0         0         0         0         0         0
+OBJECT_MOVED                 0         0         0         4         0         0         0         0         0
+PERSON_ENTERED               0         0         0         0         4         0         0         0         0
+PERSON_LEFT                  0         0         0         0         0         4         0         0         0
+ZONE_LOITERING               0         0         0         0         0         0         4         0         0
+CAMERA_BLOCKED               0         0         0         0         0         0         0         4         0
+TASK_COMPLETED               0         0         0         0         0         0         0         0         4
+[2026-09-29T15:30:53.256821] All run artifacts saved successfully in 'artifacts/runs/20260929_153044_spectatornet_gru_v1'
