@@ -208,3 +208,36 @@ The Smart Spectator Desktop Hub exposes a unified local REST and WebSocket API.
     "fallback_active": false
   }
   ```
+
+---
+
+## 8. Phase 4 & 5 Event Intelligence & Monitoring Endpoints
+
+### 8.1 Spatial Zones Endpoints
+- `GET /zones`: Query zones (optional `?camera_id=`).
+- `POST /zones`: Create or update polygon zone.
+- `DELETE /zones/{camera_id}/{zone_id}`: Remove polygon zone.
+
+### 8.2 Event Rules Endpoints
+- `GET /rules`: List all configured automation rules.
+- `POST /rules`: Create new automation rule.
+- `PUT /rules/{rule_id}`: Update rule configuration.
+- `PATCH /rules/{rule_id}/toggle`: Enable or disable rule without server restart.
+- `DELETE /rules/{rule_id}`: Delete rule.
+
+### 8.3 Events Lifecycle Endpoints
+- `GET /events`: Query confirmed events with filtering (`camera_id`, `status`, `event_type`, `severity`, `start_time`, `end_time`) and pagination (`limit`, `offset`).
+- `GET /events/{event_id}`: Retrieve detailed event object with explanation and recording metadata.
+- `POST /events/{event_id}/acknowledge`: Mark event acknowledged by operator.
+- `POST /events/{event_id}/dismiss`: Dismiss/ignore event.
+- `POST /events/{event_id}/resolve`: Mark active incident resolved.
+- `GET /events/{event_id}/predictions`: Inspect raw AI prediction sequence correlated with event.
+
+### 8.4 System Telemetry & Audit Logs
+- `GET /system/telemetry`: Real-time CPU, RAM, disk, and rolling buffer metrics.
+- `GET /system/audit-logs`: Query immutable system and operator action audit log.
+
+### 8.5 Real-Time WebSocket & Client Serving
+- `WS /api/v1/events/stream`: Real-time bidirectional WebSocket stream for event creation, updates, and telemetry heartbeats.
+- `GET /client`: Serves the Phase 5 responsive monitoring Single Page Application.
+

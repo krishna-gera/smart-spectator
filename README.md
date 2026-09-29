@@ -33,7 +33,8 @@ Monitoring Client Dashboard & Real-Time Alerts
 - **Phase 1 (Core Streaming & Pairing):** ✅ **COMPLETED** (FastAPI Core, SQLite WAL, mDNS Discovery, 6-Digit PIN Pairing, Binary Framing Protocol, Live Preview, Android Camera App)
 - **Phase 2 (AI Perception & Hardware Acceleration):** ✅ **COMPLETED** (YOLOv8n ONNX, ByteTrack Multi-Object Tracking, Adaptive Frame Sampler, Motion Gating, Bounded Queue AI Pipeline, InferenceProvider Hierarchy, Observation Contract)
 - **Phase 3 (Custom Dataset & SpectatorNet Training):** ✅ **COMPLETED** (Observation sequence dataset pipeline, Feature Encoder, Session split with zero leakage, Dataset Validator, SpectatorNet BiGRU Attention Model, ONNX numerical export & validation, INT8 Quantization, Predictor Phase 4 contract)
-- **Phase 4 (Monitoring Tasks, Event Engine & User Dashboard):** ⏳ *Next Milestone* (User-defined monitoring policies, ROI Polygon evaluation, Circular Ring Buffer MP4 synthesis, WebSocket alerts, Desktop Hub UI)
+- **Phase 4 (Event Engine, Automation & Recording):** ✅ **COMPLETED** (Event Engine, Confidence Filtering, Temporal Debouncing, State Machine, Ray-Casting Polygon Zones, JSON Rule Builder, Circular Rolling Buffer, Pre/Post-Roll MP4 Clip Encoding)
+- **Phase 5 (Monitoring Client Application):** ✅ **COMPLETED** (Operator-grade single page app, OLED dark theme, Multi-camera grid, Live view with bounding box overlays, Interactive polygon canvas, Rule manager, Event inspector, MP4 clip player, System telemetry)
 
 ---
 
@@ -91,15 +92,14 @@ bash scripts/setup_dev.sh
 ```bash
 python3 -m uvicorn services.hub_backend.main:app --host 0.0.0.0 --port 8000
 ```
-Open **`http://localhost:8000`** in your browser to view the **Live Hub Developer Dashboard**.
+- Open **`http://localhost:8000/client`** for the **Operator Monitoring Client (Phase 5 SPA)**.
+- Open **`http://localhost:8000/`** for the **Developer Dashboard**.
+- Open **`http://localhost:8000/docs`** for interactive Swagger REST API documentation.
 
 ### 3. Run Automated Verification Tests
 ```bash
-# Run 17 unit and integration tests
-python3 -m pytest -v tests/
-
-# Run end-to-end streaming simulation
-python3 scripts/test_stream_client.py
+# Run all 68 unit, integration, and end-to-end tests
+PYTHONPATH=. pytest -v tests/
 ```
 
 ### 4. Run Android Camera Node
