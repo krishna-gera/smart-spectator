@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Spectator — Visual Intelligence & Monitoring Client</title>
+    <link rel="stylesheet" href="/client/css/styles.css">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>Smart Spectator</h1>
+            <p>Local-First Visual Intelligence</p>
+        </div>
+
+        <ul class="nav-links">
+            <li><a href="#dashboard" class="nav-link active" data-screen="dashboard"><span>📊</span> Dashboard</a></li>
+            <li><a href="#cameras" class="nav-link" data-screen="cameras"><span>📹</span> Cameras</a></li>
+            <li><a href="#live_view" class="nav-link" data-screen="live_view"><span>👁️</span> Live View</a></li>
+            <li><a href="#events" class="nav-link" data-screen="events"><span>🚨</span> Events</a></li>
+            <li><a href="#recordings" class="nav-link" data-screen="recordings"><span>📼</span> Recordings</a></li>
+            <li><a href="#zones" class="nav-link" data-screen="zones"><span>📐</span> Zones</a></li>
+            <li><a href="#rules" class="nav-link" data-screen="rules"><span>⚡</span> Rules & Automations</a></li>
+            <li><a href="#devices" class="nav-link" data-screen="devices"><span>📱</span> Devices & Nodes</a></li>
+            <li><a href="#ai_status" class="nav-link" data-screen="ai_status"><span>🧠</span> AI & System Status</a></li>
+            <li><a href="#settings" class="nav-link" data-screen="settings"><span>⚙️</span> Settings</a></li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <span>Desktop Hub v1.0</span>
+            <span class="badge badge-info">Local Core</span>
+        </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="main-wrapper">
+        <div id="reconnect-banner"></div>
+
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <div class="status-indicator-box">
+                    <span id="hub-connection-badge" class="status-indicator status-connecting"></span>
+                    <span id="hub-connection-text">CONNECTING</span>
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <span style="font-size: 0.8rem; color: #9ca3af;" id="clock-display"></span>
+            </div>
+        </header>
+
+        <main id="main-content">
+            <!-- Rendered dynamically by app.js router -->
+        </main>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <script>
+        // Update top-bar clock
+        function updateClock() {
+            const el = document.getElementById('clock-display');
+            if (el) el.textContent = new Date().toLocaleTimeString();
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+    </script>
+    <script type="module" src="/client/js/app.js"></script>
+</body>
+</html>
