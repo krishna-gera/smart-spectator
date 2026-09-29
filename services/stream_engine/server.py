@@ -32,6 +32,11 @@ class StreamEngine:
                     "UPDATE cameras SET status = 'streaming' WHERE camera_id = ?",
                     (camera_id,)
                 )
+            try:
+                from services.event_engine import event_engine
+                event_engine.submit_system_event(camera_id, "CAMERA_CONNECTED")
+            except Exception:
+                pass
         return self.sessions[camera_id]
 
     def remove_session(self, camera_id: str) -> None:
@@ -44,6 +49,11 @@ class StreamEngine:
                     (camera_id,)
                 )
             print(f"[StreamEngine] Stream session closed for camera '{camera_id}'")
+            try:
+                from services.event_engine import event_engine
+                event_engine.submit_system_event(camera_id, "CAMERA_DISCONNECTED")
+            except Exception:
+                pass
 
     def process_binary_chunk(self, camera_id: str, raw_chunk: bytes) -> Optional[np.ndarray]:
         """
@@ -61,12 +71,21 @@ class StreamEngine:
             decoded = session.ingest_packet(header, payload)
             if decoded:
                 latest = decoded[-1]
+                now_ts = time.time()
                 # Pass latest frame non-blockingly to the AI perception pipeline
                 from services.ai_engine.pipeline import ai_pipeline
-                ai_pipeline.submit_frame(camera_id, latest, session.frames_received, time.time())
+                ai_pipeline.submit_frame(camera_id, latest, session.frames_received, now_ts)
+                # Feed frame into rolling media buffer for event-triggered clip recording
+                from services.event_engine import event_engine
+                event_engine.recording_mgr.ingest_frame(camera_id, latest, now_ts, session.frames_received)
                 return latest
         except ProtocolError as e:
             print(f"[StreamEngine] Protocol violation from '{camera_id}': {e}")
+            try:
+                from services.event_engine import event_engine
+                event_engine.submit_system_event(camera_id, "CAMERA_STREAM_ERROR", {"error": str(e)})
+            except Exception:
+                pass
         except Exception as e:
             print(f"[StreamEngine] Error parsing chunk from '{camera_id}': {e}")
 

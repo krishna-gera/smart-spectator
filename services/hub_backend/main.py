@@ -8,15 +8,17 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database.connection import init_database
 from services.device_manager.discovery import hub_advertiser, get_local_ip
 from services.stream_engine.server import stream_engine
 from services.ai_engine.pipeline import ai_pipeline
-from .routes import health, devices, cameras, streams, ai
-from .websocket import control
+from services.event_engine import event_engine_service
+from .routes import health, devices, cameras, streams, ai, events, zones, rules, recordings, system
+from .websocket import control, events as events_ws
 
 
 @asynccontextmanager
@@ -36,13 +38,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[Hub] Warning: TCP media receiver failed to bind: {e}")
 
-    # 4. Startup: Launch AI Perception Pipeline
+    # 4. Startup: Connect AI Pipeline observations to Event Engine and launch
     print("[Hub] Launching AI Perception Pipeline...")
+    ai_pipeline.register_callback(event_engine_service.on_observation)
     ai_pipeline.start()
+
+    # 5. Startup: Launch Event Engine & Recording Manager
+    print("[Hub] Launching Event Engine...")
+    event_engine_service.start()
 
     yield
 
-    # 5. Shutdown: Clean up resources
+    # 6. Shutdown: Clean up resources
+    print("[Hub] Shutting down Event Engine...")
+    event_engine_service.stop()
     print("[Hub] Shutting down AI Perception Pipeline...")
     ai_pipeline.stop()
     print("[Hub] Shutting down mDNS advertiser...")
@@ -77,11 +86,24 @@ app.include_router(cameras.router, prefix=API_PREFIX)
 app.include_router(streams.router, prefix=API_PREFIX)
 app.include_router(control.router, prefix=API_PREFIX)
 app.include_router(ai.router, prefix=API_PREFIX)
+app.include_router(events.router, prefix=API_PREFIX)
+app.include_router(zones.router, prefix=API_PREFIX)
+app.include_router(rules.router, prefix=API_PREFIX)
+app.include_router(recordings.router, prefix=API_PREFIX)
+app.include_router(system.router, prefix=API_PREFIX)
+app.include_router(events_ws.router, prefix=API_PREFIX)
+
+# Mount Client Static Assets
+if settings.CLIENT_DIR.exists():
+    app.mount("/client", StaticFiles(directory=str(settings.CLIENT_DIR)), name="client")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 def index_dashboard():
-    """Phase 1 Developer Hub Web Dashboard for instant verification."""
+    """Serves the Smart Spectator Client Dashboard."""
+    client_index = settings.CLIENT_DIR / "index.html"
+    if client_index.exists():
+        return FileResponse(client_index)
     local_ip = get_local_ip()
     return f"""<!DOCTYPE html>
 <html lang="en">
