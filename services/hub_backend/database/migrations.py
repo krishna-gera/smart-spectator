@@ -211,6 +211,43 @@ MIGRATIONS: List[Tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(timestamp DESC);
         """,
     ),
+    (
+        4,
+        "v4_phase9_productization",
+        """
+        -- Add priority and timeline_milestones_json to events
+        ALTER TABLE events ADD COLUMN priority TEXT NOT NULL DEFAULT 'MEDIUM';
+        ALTER TABLE events ADD COLUMN timeline_milestones_json TEXT;
+
+        -- Add is_locked to recordings for retention policy lock
+        ALTER TABLE recordings ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0;
+
+        -- Create notification_configs table
+        CREATE TABLE IF NOT EXISTS notification_configs (
+            config_id TEXT PRIMARY KEY,
+            event_type TEXT NOT NULL UNIQUE,
+            category TEXT NOT NULL CHECK(category IN ('Critical', 'Important', 'Informational')),
+            is_enabled INTEGER NOT NULL DEFAULT 1,
+            cooldown_seconds REAL NOT NULL DEFAULT 15.0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Create system_configs table for categorized configurations
+        CREATE TABLE IF NOT EXISTS system_configs (
+            category TEXT NOT NULL,
+            key TEXT NOT NULL,
+            value_json TEXT NOT NULL,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(category, key)
+        );
+
+        -- Additional search indexes
+        CREATE INDEX IF NOT EXISTS idx_events_priority ON events(priority);
+        CREATE INDEX IF NOT EXISTS idx_events_search ON events(camera_id, event_type, confidence, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_recordings_search ON recordings(camera_id, start_time DESC, duration_seconds, file_size_bytes);
+        """,
+    ),
 ]
 
 

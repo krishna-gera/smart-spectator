@@ -76,6 +76,8 @@ def init_database() -> None:
                 "zone_id": "TEXT",
                 "rule_id": "TEXT",
                 "explanation": "TEXT",
+                "priority": "TEXT NOT NULL DEFAULT 'MEDIUM'",
+                "timeline_milestones_json": "TEXT",
             }
             for col, col_def in migration_cols.items():
                 if col not in existing_cols:
@@ -83,6 +85,17 @@ def init_database() -> None:
                         conn.execute(f"ALTER TABLE events ADD COLUMN {col} {col_def};")
                     except Exception:
                         pass
+
+        # Check if recordings table exists and add is_locked if missing
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recordings'")
+        if cursor.fetchone():
+            cursor = conn.execute("PRAGMA table_info(recordings);")
+            rec_cols = {row["name"] for row in cursor.fetchall()}
+            if "is_locked" not in rec_cols:
+                try:
+                    conn.execute("ALTER TABLE recordings ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0;")
+                except Exception:
+                    pass
 
         conn.executescript(CREATE_TABLES_SQL)
         apply_migrations(conn)
