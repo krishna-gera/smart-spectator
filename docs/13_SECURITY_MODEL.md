@@ -44,3 +44,18 @@ Core security tenets:
 - **Zero Cloud Analytics:** The software contains zero third-party telemetry beacons (no Google Analytics, no Firebase, no Sentry).
 - **Local Storage Ownership:** All SQLite records and MP4 event recordings reside entirely within the user's chosen local directory.
 - **Immediate Data Wipe:** Complete system reset and data purge supported via single command or Hub settings UI.
+
+---
+
+## 5. Phase 6 Production Security Hardening
+
+In Phase 6, additional defense-in-depth protections were implemented and verified:
+1. **Automated Structured Log Scrubbing (`SensitiveDataFilter`)**:
+   - Console and rotating file handlers scrub all bearer tokens, `ss_tok_*` strings, and 6-digit PIN patterns into `[REDACTED]`.
+2. **Instant Active Stream Session Termination**:
+   - Revoking a device via `POST /devices/{id}/revoke` immediately tears down and disconnects active camera streaming WebSockets.
+3. **Storage Denial-of-Service Protection**:
+   - `ClipRecorder` enforces a minimum free disk threshold (`MIN_FREE_DISK_MB = 500MB`). If storage drops below this, video encoding gracefully degrades to protect system files and database integrity.
+4. **Header-Based Authentication**:
+   - Camera media transport and client channels accept credentials via `Authorization: Bearer <token>` and `X-Auth-Token` to eliminate sensitive query parameter exposure in network proxies or browser histories.
+

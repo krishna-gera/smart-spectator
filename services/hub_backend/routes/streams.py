@@ -25,11 +25,22 @@ async def websocket_media_ingest(
     Authenticated media ingestion WebSocket endpoint.
     Camera nodes transmit continuous binary frames adhering to SS-DOC-005.
     """
-    if not token:
+    # Support both Header-based and Query-based authentication (Sections 11 & 34)
+    auth_token = None
+    auth_header = websocket.headers.get("authorization") or websocket.headers.get("x-auth-token")
+    if auth_header:
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:].strip()
+        else:
+            auth_token = auth_header.strip()
+    elif token:
+        auth_token = token
+
+    if not auth_token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing authentication token")
         return
 
-    device = device_manager.authenticate_token(token)
+    device = device_manager.authenticate_token(auth_token)
     if not device:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or revoked token")
         return

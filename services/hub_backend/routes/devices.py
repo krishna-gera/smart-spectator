@@ -3,27 +3,29 @@ Smart Spectator - Device Management & Pairing Routes
 Implements docs/06_DEVICE_AUTHENTICATION.md and docs/07_API_SPECIFICATION.md
 """
 
+import re
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Request, status
 from pydantic import BaseModel, Field
 
 from services.device_manager.manager import device_manager
+from services.stream_engine.server import stream_engine
 from ..database.connection import db_session
 
 router = APIRouter(prefix="/devices", tags=["Devices & Pairing"])
 
 
 class PairingRequestBody(BaseModel):
-    device_id: str = Field(..., description="Unique node hardware UUID")
-    device_name: str = Field(..., description="Human-readable device label")
-    device_model: Optional[str] = Field(None, description="e.g. Pixel 7 Pro")
-    os_version: Optional[str] = Field(None, description="e.g. Android 14")
-    app_version: Optional[str] = Field(None, description="e.g. 1.0.0")
+    device_id: str = Field(..., min_length=3, max_length=128, pattern=r"^[a-zA-Z0-9_\-]+$", description="Unique node hardware UUID")
+    device_name: str = Field(..., min_length=1, max_length=128, description="Human-readable device label")
+    device_model: Optional[str] = Field(None, max_length=128, description="e.g. Pixel 7 Pro")
+    os_version: Optional[str] = Field(None, max_length=64, description="e.g. Android 14")
+    app_version: Optional[str] = Field(None, max_length=32, description="e.g. 1.0.0")
 
 
 class PairingVerifyBody(BaseModel):
-    device_id: str
-    verification_code: str = Field(..., description="6-digit numeric verification code")
+    device_id: str = Field(..., min_length=3, max_length=128, pattern=r"^[a-zA-Z0-9_\-]+$")
+    verification_code: str = Field(..., pattern=r"^[0-9]{6}$", description="6-digit numeric verification code")
 
 
 @router.post("/pair/request", status_code=status.HTTP_202_ACCEPTED)
@@ -87,7 +89,14 @@ def get_device(device_id: str):
 
 @router.delete("/{device_id}", status_code=status.HTTP_200_OK)
 def revoke_device(device_id: str):
-    """Instantly revokes authentication for a device."""
+    """Instantly revokes authentication for a device and halts its active streams."""
+    cam = device_manager.get_camera_for_device(device_id)
+    if cam:
+        cam_id = cam["camera_id"]
+        if cam_id in stream_engine.sessions:
+            stream_engine.sessions[cam_id].stop()
+            stream_engine.sessions.pop(cam_id, None)
+
     revoked = device_manager.revoke_device(device_id)
     if not revoked:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
