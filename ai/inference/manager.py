@@ -209,5 +209,40 @@ class InferenceProviderManager:
 
         return HardwareBackend.CPU, self.providers[HardwareBackend.CPU]
 
+    def load_model_with_fallback(
+        self,
+        model_id: str,
+        model_path: str,
+        requested: Optional[str] = "auto"
+    ) -> Tuple[HardwareBackend, InferenceProvider, bool]:
+        """
+        Loads a model with automatic graceful degradation across provider tiers (Section 62):
+        NPU (QNN) -> GPU (DirectML/CoreML) -> CPU.
+        Guarantees the system never crashes due to missing or incompatible accelerators.
+        """
+        fallback_order = [
+            HardwareBackend.NPU_QNN,
+            HardwareBackend.GPU_DIRECTML,
+            HardwareBackend.GPU_COREML,
+            HardwareBackend.CPU,
+        ]
+
+        if requested and requested.lower() == "cpu":
+            fallback_order = [HardwareBackend.CPU]
+        elif requested and requested.lower() == "gpu":
+            fallback_order = [HardwareBackend.GPU_DIRECTML, HardwareBackend.GPU_COREML, HardwareBackend.CPU]
+
+        detected = set(self.detect_available_backends())
+
+        for backend in fallback_order:
+            if backend in detected or backend == HardwareBackend.CPU:
+                prov = self.providers[backend]
+                success = prov.load_model(model_id, model_path, backend)
+                if success:
+                    print(f"[InferenceProviderManager] Successfully loaded model '{model_id}' on backend: {backend.value}")
+                    return backend, prov, True
+
+        return HardwareBackend.CPU, self.providers[HardwareBackend.CPU], False
+
 
 provider_manager = InferenceProviderManager()
