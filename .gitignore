@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+*.db
+*.db-shm
+*.db-wal
+recordings/
+snapshots/
+.env
+
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+apps/camera/.dart_tool/
+apps/camera/build/
+apps/camera/.flutter-plugins
+apps/camera/.flutter-plugins-dependencies
+
+# OS
+.DS_Store
+Thumbs.db
