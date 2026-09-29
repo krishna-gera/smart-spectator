@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-09-29T11:26:39Z",
+  "environment": {
+    "os": "Darwin",
+    "os_version": "Darwin Kernel Version 27.0.0: Tue Aug 11 21:02:57 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8132",
+    "os_release": "27.0.0",
+    "architecture": "arm64",
+    "processor": "arm",
+    "memory_total_gb": 16.0,
+    "cpu_cores": 10,
+    "is_windows_arm64": false,
+    "onnxruntime_version": "1.30.0",
+    "available_providers": [
+      "CoreMLExecutionProvider",
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qnn_available": false,
+    "directml_available": false,
+    "coreml_available": true,
+    "cpu_available": true,
+    "qualcomm_libraries_found": []
+  },
+  "selected_provider": "CoreMLExecutionProvider",
+  "results": {
+    "spectatornet_fp32": {
+      "status": "MEASURED",
+      "requested_provider": "CoreMLExecutionProvider",
+      "active_provider": "CoreMLExecutionProvider",
+      "init_time_ms": 71.16,
+      "warmup_ms": 1.8,
+      "iterations": 30,
+      "mean_ms": 0.22,
+      "p50_ms": 0.21,
+      "p95_ms": 0.28,
+      "throughput_fps": 4501.6
+    },
+    "spectatornet_int8": {
+      "status": "MEASURED",
+      "requested_provider": "CoreMLExecutionProvider",
+      "active_provider": "CoreMLExecutionProvider",
+      "init_time_ms": 33.09,
+      "warmup_ms": 0.76,
+      "iterations": 30,
+      "mean_ms": 0.26,
+      "p50_ms": 0.25,
+      "p95_ms": 0.32,
+      "throughput_fps": 3910.6
+    },
+    "yolov8n_detector": {
+      "status": "MEASURED",
+      "requested_provider": "CoreMLExecutionProvider",
+      "active_provider": "CoreMLExecutionProvider",
+      "init_time_ms": 269.35,
+      "warmup_ms": 7.14,
+      "iterations": 30,
+      "mean_ms": 3.49,
+      "p50_ms": 3.38,
+      "p95_ms": 4.22,
+      "throughput_fps": 286.9
+    }
+  }
+}
