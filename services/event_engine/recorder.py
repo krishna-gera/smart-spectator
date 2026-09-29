@@ -16,6 +16,7 @@ import uuid
 
 import cv2
 import numpy as np
+import psutil
 
 from shared.schemas.v1.models import Event, Recording
 from services.hub_backend.config import settings
@@ -202,6 +203,22 @@ class RecordingManager:
             # Calculate FPS from frame timestamps
             duration = max(0.5, frames[-1].timestamp - frames[0].timestamp)
             calc_fps = max(1.0, min(30.0, len(frames) / duration))
+
+            # Check disk free space to prevent disk-full system lockup (Section 21)
+            try:
+                free_mb = psutil.disk_usage(str(self.recordings_dir)).free / (1024 * 1024)
+                if free_mb < settings.MIN_FREE_DISK_MB:
+                    print(f"[RecordingManager] Low disk space ({free_mb:.1f} MB < {settings.MIN_FREE_DISK_MB} MB). Skipping clip write to preserve system stability.")
+                    event.metadata["recording_degraded"] = True
+                    event.metadata["recording_skipped_reason"] = "disk_full_threshold"
+                    with db_session() as conn:
+                        conn.execute(
+                            "UPDATE events SET metadata_json = ? WHERE event_id = ?",
+                            (json.dumps(event.metadata), event.event_id),
+                        )
+                    return None
+            except Exception as e:
+                print(f"[RecordingManager] Disk space check note: {e}")
 
             # Encode MP4 clip using OpenCV
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")

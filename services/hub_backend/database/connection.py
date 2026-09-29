@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from typing import Generator
 from ..config import settings
 from .schema import CREATE_TABLES_SQL
+from .migrations import apply_migrations
 
 
 _local = threading.local()
@@ -61,27 +62,30 @@ def db_session() -> Generator[sqlite3.Connection, None, None]:
 def init_database() -> None:
     """Executes database schema migration and enforces WAL mode."""
     with db_session() as conn:
-        conn.executescript(CREATE_TABLES_SQL)
+        # Check if events table exists; if upgrading from Phase 1-3, ensure columns exist before index creation
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='events'")
+        if cursor.fetchone():
+            cursor = conn.execute("PRAGMA table_info(events);")
+            existing_cols = {row["name"] for row in cursor.fetchall()}
+            migration_cols = {
+                "status": "TEXT NOT NULL DEFAULT 'detected'",
+                "start_time": "DATETIME",
+                "end_time": "DATETIME",
+                "created_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                "updated_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                "zone_id": "TEXT",
+                "rule_id": "TEXT",
+                "explanation": "TEXT",
+            }
+            for col, col_def in migration_cols.items():
+                if col not in existing_cols:
+                    try:
+                        conn.execute(f"ALTER TABLE events ADD COLUMN {col} {col_def};")
+                    except Exception:
+                        pass
 
-        # Migrate events table columns if upgrading from Phase 1-3
-        cursor = conn.execute("PRAGMA table_info(events);")
-        existing_cols = {row["name"] for row in cursor.fetchall()}
-        migration_cols = {
-            "status": "TEXT NOT NULL DEFAULT 'detected'",
-            "start_time": "DATETIME",
-            "end_time": "DATETIME",
-            "created_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-            "updated_at": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-            "zone_id": "TEXT",
-            "rule_id": "TEXT",
-            "explanation": "TEXT",
-        }
-        for col, col_def in migration_cols.items():
-            if col not in existing_cols:
-                try:
-                    conn.execute(f"ALTER TABLE events ADD COLUMN {col} {col_def};")
-                except Exception:
-                    pass
+        conn.executescript(CREATE_TABLES_SQL)
+        apply_migrations(conn)
 
         # Verify WAL mode
         cursor = conn.execute("PRAGMA journal_mode;")

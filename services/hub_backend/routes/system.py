@@ -3,16 +3,24 @@ Smart Spectator - REST API: System Telemetry, Metrics & Audit Logging
 Conforms to Sections 67, 90, 95 of Phase 4 & Phase 5 specifications.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
+import platform
 import shutil
 import time
-from typing import Dict, Any, List
-from fastapi import APIRouter, Query
+from typing import Dict, Any, List, Optional
+from fastapi import APIRouter, Query, HTTPException, Body
+import psutil
+try:
+    import onnxruntime as ort
+except ImportError:
+    ort = None
 
 from services.hub_backend.config import settings
 from services.hub_backend.database.connection import db_session
+from services.hub_backend.database.backup import export_database_backup, restore_database_backup
 from services.event_engine import event_engine
 from services.ai_engine.pipeline import ai_pipeline
 from services.stream_engine.server import stream_engine
@@ -119,3 +127,95 @@ def get_audit_logs(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, 
             }
             for r in rows
         ]
+
+
+@router.get("/hardware")
+def get_hardware_info() -> Dict[str, Any]:
+    """
+    Identifies actual host hardware: CPU, GPU, NPU/QNN availability, RAM, OS, architecture.
+    Strictly conforms to Section 46 & Section 44. Never fabricates numbers.
+    """
+    os_name = platform.system()
+    os_release = platform.release()
+    arch = platform.machine()
+    processor = platform.processor() or "unknown"
+    ram_gb = round(psutil.virtual_memory().total / (1024 ** 3), 2)
+    cpu_count = psutil.cpu_count(logical=True)
+
+    available_ort_providers = ort.get_available_providers() if ort else []
+    
+    # Accurate detection of NPU/QNN
+    has_qnn = "QNNExecutionProvider" in available_ort_providers
+    if has_qnn:
+        npu_status = "Available"
+        npu_target = "Qualcomm AI Engine Direct (Hexagon NPU)"
+    elif "Windows" in os_name and ("arm" in arch.lower() or "aarch64" in arch.lower()):
+        npu_status = "Pending QNN Runtime Installation"
+        npu_target = "Qualcomm Hexagon NPU (Supported Hardware Detected)"
+    else:
+        npu_status = "Unavailable (Non-Snapdragon / Host Architecture)"
+        npu_target = None
+
+    # GPU acceleration detection
+    if "DmlExecutionProvider" in available_ort_providers:
+        gpu_accel = "DirectML (GPU)"
+    elif "CoreMLExecutionProvider" in available_ort_providers:
+        gpu_accel = "Apple Neural Engine / CoreML"
+    elif "CUDAExecutionProvider" in available_ort_providers:
+        gpu_accel = "NVIDIA CUDA"
+    else:
+        gpu_accel = "CPU Fallback"
+
+    return {
+        "os": os_name,
+        "os_version": os_release,
+        "architecture": arch,
+        "processor": processor,
+        "cpu_logical_cores": cpu_count,
+        "ram_total_gb": ram_gb,
+        "npu": {
+            "status": npu_status,
+            "target": npu_target,
+            "qnn_provider_present": has_qnn,
+        },
+        "gpu_acceleration": gpu_accel,
+        "available_execution_providers": available_ort_providers,
+        "active_ai_backend": ai_pipeline.get_telemetry().get("active_backend", "cpu"),
+        "hardware_verified": has_qnn,
+    }
+
+
+@router.post("/backup")
+def create_backup() -> Dict[str, Any]:
+    """Exports consistent local database backup (Section 18)."""
+    try:
+        backup_path = export_database_backup()
+        return {
+            "status": "success",
+            "backup_file": backup_path.name,
+            "backup_path": str(backup_path),
+            "size_bytes": backup_path.stat().st_size,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database backup failed: {e}")
+
+
+@router.post("/restore")
+def restore_backup(payload: Dict[str, str] = Body(...)) -> Dict[str, Any]:
+    """Restores database from an exported backup file (Section 18)."""
+    backup_file = payload.get("backup_file")
+    if not backup_file:
+        raise HTTPException(status_code=400, detail="Field 'backup_file' is required.")
+
+    backup_path = settings.BACKUP_DIR / Path(backup_file).name
+    try:
+        result = restore_database_backup(backup_path)
+        return result
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Backup file not found: {backup_file}")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Backup validation failed: {ve}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database restore failed: {e}")
+
