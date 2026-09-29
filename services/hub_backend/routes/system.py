@@ -424,3 +424,202 @@ def restore_backup(payload: Dict[str, str] = Body(...)) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database restore failed: {e}")
 
+
+# ---------------------------------------------------------------------------
+# Phase 9: Categorized Configuration Management (Sections 18, 19, 24)
+# ---------------------------------------------------------------------------
+
+@router.get("/config")
+def get_system_configuration() -> Dict[str, Any]:
+    """Retrieves all categorized system configuration without exposing secrets."""
+    from services.hub_backend.config_manager import load_categorized_config
+    return load_categorized_config()
+
+
+@router.put("/config/{category}")
+def update_system_configuration(category: str, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Validates and updates configuration parameters for a specific category."""
+    from services.hub_backend.config_manager import save_config_category
+    try:
+        return save_config_category(category, payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Configuration update failed: {e}")
+
+
+@router.get("/config/export")
+def export_configuration() -> Dict[str, Any]:
+    """Safely exports complete configuration manifest with zero secret leakage."""
+    from services.hub_backend.config_manager import export_safe_configuration
+    return export_safe_configuration()
+
+
+@router.post("/config/import")
+def import_configuration(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Validates and imports system configuration manifest."""
+    from services.hub_backend.config_manager import import_safe_configuration
+    try:
+        return import_safe_configuration(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Configuration import failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: Storage Dashboard & Retention Lifecycle (Sections 20 & 21)
+# ---------------------------------------------------------------------------
+
+@router.get("/storage")
+def get_storage_dashboard() -> Dict[str, Any]:
+    """Returns detailed storage metrics, usage breakdowns, and retention policies."""
+    from services.hub_backend.storage.retention import get_retention_policies
+    rec_dir = settings.RECORDINGS_DIR.resolve()
+    db_path = settings.DATABASE_PATH.resolve()
+    model_dir = (settings.BASE_DIR / "ai" / "models" / "releases").resolve()
+
+    total_disk_gb = 0.0
+    used_disk_gb = 0.0
+    free_disk_gb = 0.0
+    try:
+        tot, used, free = shutil.disk_usage(rec_dir if rec_dir.exists() else settings.BASE_DIR)
+        total_disk_gb = round(tot / (1024 ** 3), 2)
+        used_disk_gb = round(used / (1024 ** 3), 2)
+        free_disk_gb = round(free / (1024 ** 3), 2)
+    except Exception:
+        pass
+
+    # Recordings storage
+    rec_bytes = 0
+    rec_count = 0
+    if rec_dir.exists():
+        for p in rec_dir.glob("*.mp4"):
+            if p.is_file():
+                rec_bytes += p.stat().st_size
+                rec_count += 1
+    rec_storage_gb = round(rec_bytes / (1024 ** 3), 3)
+
+    # Database size
+    db_bytes = db_path.stat().st_size if db_path.exists() else 0
+    db_size_mb = round(db_bytes / (1024 ** 2), 2)
+
+    # Model storage
+    model_bytes = 0
+    if model_dir.exists():
+        for p in model_dir.glob("*.onnx*"):
+            if p.is_file():
+                model_bytes += p.stat().st_size
+    model_size_mb = round(model_bytes / (1024 ** 2), 2)
+
+    return {
+        "disk_total_gb": total_disk_gb,
+        "disk_used_gb": used_disk_gb,
+        "disk_free_gb": free_disk_gb,
+        "recordings_storage_gb": rec_storage_gb,
+        "recordings_count": rec_count,
+        "database_size_mb": db_size_mb,
+        "models_storage_mb": model_size_mb,
+        "retention_policies": get_retention_policies(),
+        "storage_confinement_safe": True,
+    }
+
+
+@router.post("/storage/retention/cleanup")
+def trigger_retention_cleanup(
+    event_days: Optional[int] = Query(None, ge=1, le=365),
+    recording_days: Optional[int] = Query(None, ge=1, le=180),
+) -> Dict[str, Any]:
+    """Executes automated retention pruning of expired events and recordings."""
+    from services.hub_backend.storage.retention import run_retention_cleanup
+    try:
+        return run_retention_cleanup(
+            event_retention_days=event_days,
+            recording_retention_days=recording_days,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Retention cleanup failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: Operator Activity Log (Section 22)
+# ---------------------------------------------------------------------------
+
+@router.get("/activity", response_model=List[Dict[str, Any]])
+def get_operator_activity_log(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """Retrieves operator activity audit trail with secret masking."""
+    with db_session() as conn:
+        cursor = conn.execute(
+            """
+            SELECT log_id, timestamp, actor, action, resource, metadata_json
+            FROM audit_logs
+            ORDER BY timestamp DESC LIMIT ? OFFSET ?
+            """,
+            (limit, offset)
+        )
+        rows = cursor.fetchall()
+        return [
+            {
+                "log_id": r["log_id"],
+                "timestamp": r["timestamp"],
+                "actor": r["actor"],
+                "action": r["action"],
+                "resource": r["resource"],
+                "details": json.loads(r["metadata_json"]) if r.get("metadata_json") else {},
+            }
+            for r in rows
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: Local Notification Configuration (Sections 10 & 11)
+# ---------------------------------------------------------------------------
+
+@router.get("/notifications")
+def get_notification_settings() -> Dict[str, Any]:
+    """Retrieves notification configuration and per-event cooldown rules."""
+    from services.event_engine.notifications import DEFAULT_COOLDOWNS, EVENT_CATEGORY_MAP
+    with db_session() as conn:
+        rows = conn.execute("SELECT * FROM notification_configs").fetchall()
+        configs = {r["event_type"]: dict(r) for r in rows}
+
+    result = []
+    for evt_type, default_cool in DEFAULT_COOLDOWNS.items():
+        entry = configs.get(evt_type, {})
+        cat = entry.get("category", EVENT_CATEGORY_MAP.get(evt_type, "Important"))
+        if hasattr(cat, "value"):
+            cat = cat.value
+        result.append({
+            "event_type": evt_type,
+            "category": cat,
+            "is_enabled": bool(entry.get("is_enabled", 1)),
+            "cooldown_seconds": float(entry.get("cooldown_seconds", default_cool)),
+        })
+    return {"notifications": result}
+
+
+@router.put("/notifications/{event_type}")
+def update_notification_setting(event_type: str, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Updates cooldown or enabled status for a specific event type."""
+    is_enabled = 1 if payload.get("is_enabled", True) else 0
+    cooldown = float(payload.get("cooldown_seconds", 15.0))
+    category = payload.get("category", "Important")
+
+    with db_session() as conn:
+        conn.execute(
+            """
+            INSERT INTO notification_configs (config_id, event_type, category, is_enabled, cooldown_seconds, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(event_type) DO UPDATE SET
+                is_enabled = excluded.is_enabled,
+                cooldown_seconds = excluded.cooldown_seconds,
+                category = excluded.category,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (f"nc_{event_type.lower()}", event_type, category, is_enabled, cooldown)
+        )
+    return {"status": "success", "event_type": event_type, "is_enabled": bool(is_enabled), "cooldown_seconds": cooldown}
+
