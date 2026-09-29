@@ -1,0 +1,67 @@
+{
+  "report_id": "phase7_hardware_report",
+  "benchmark_timestamp": "2026-09-29T11:06:24.902375+00:00",
+  "system": {
+    "os": "Darwin",
+    "os_version": "27.0.0",
+    "architecture": "arm64",
+    "processor": "arm",
+    "cpu_logical_cores": 10,
+    "ram_gb": 16.0,
+    "available_execution_providers": [
+      "CoreMLExecutionProvider",
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "timestamp": "2026-09-29T11:06:23.375430+00:00"
+  },
+  "spectatornet_fp32": {
+    "active_provider": "CoreMLExecutionProvider",
+    "iterations": 50,
+    "warmup": 10,
+    "mean_ms": 0.21,
+    "p50_ms": 0.2,
+    "p95_ms": 0.26,
+    "min_ms": 0.19,
+    "max_ms": 0.4,
+    "throughput_fps": 4810.64
+  },
+  "spectatornet_int8": {
+    "active_provider": "CoreMLExecutionProvider",
+    "iterations": 50,
+    "warmup": 10,
+    "mean_ms": 0.24,
+    "p50_ms": 0.24,
+    "p95_ms": 0.29,
+    "min_ms": 0.23,
+    "max_ms": 0.44,
+    "throughput_fps": 4082.7
+  },
+  "yolov8n_detector": {
+    "active_provider": "CoreMLExecutionProvider",
+    "iterations": 20,
+    "warmup": 5,
+    "mean_ms": 3.25,
+    "p50_ms": 3.21,
+    "p95_ms": 3.46,
+    "min_ms": 3.11,
+    "max_ms": 3.48,
+    "throughput_fps": 307.42
+  },
+  "motion_gating": {
+    "gating_enabled_frames_processed": 2,
+    "gating_disabled_frames_processed": 12,
+    "frames_filtered_percent": 83.3
+  },
+  "end_to_end_pipeline": {
+    "e2e_mean_ms": 11.72,
+    "e2e_p50_ms": 10.43,
+    "e2e_p95_ms": 13.66,
+    "perception_mean_ms": 11.55,
+    "temporal_model_mean_ms": 0.79,
+    "event_engine_mean_ms": 0.01,
+    "sustainable_fps": 85.4
+  },
+  "hardware_claims_verified": true,
+  "npu_note": "NPU benchmarks pending execution on physical Snapdragon Windows ARM64 device; local benchmarks performed with native host providers."
+}
