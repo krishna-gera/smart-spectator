@@ -1,0 +1,37 @@
+"""
+Smart Spectator - Core System Constants (v1)
+"""
+
+# Networking & Ports
+DEFAULT_HUB_PORT = 8000
+DEFAULT_STREAM_PORT = 8554
+DEFAULT_WS_CONTROL_PORT = 8001
+DEFAULT_MDNS_SERVICE_TYPE = "_smartspectator._tcp.local."
+DEFAULT_MDNS_SERVICE_NAME = "SmartSpectatorHub"
+
+# Streaming & Video Defaults
+DEFAULT_STREAM_FPS = 30
+DEFAULT_STREAM_WIDTH = 1280
+DEFAULT_STREAM_HEIGHT = 720
+DEFAULT_STREAM_BITRATE_KBPS = 2500
+DEFAULT_FRAME_BUFFER_SECONDS = 15  # Pre-event rolling ring buffer size
+DEFAULT_POST_EVENT_SECONDS = 15   # Post-event recording continuation
+
+# AI Inference Defaults
+DEFAULT_INFERENCE_FPS = 5          # Sampled inference frequency per stream
+DEFAULT_DETECTION_CONFIDENCE = 0.45
+DEFAULT_TRACKING_MAX_AGE_FRAMES = 30
+DEFAULT_TEMPORAL_WINDOW_SECONDS = 3.0
+
+# Device Authentication
+PAIRING_CODE_LENGTH = 6
+PAIRING_CODE_EXPIRATION_SECONDS = 300  # 5 minutes
+AUTH_TOKEN_EXPIRATION_HOURS = 720      # 30 days
+HMAC_ALGORITHM = "HS256"
+
+# Storage
+DEFAULT_DB_FILE = "smart_spectator.db"
+DEFAULT_RECORDINGS_DIR = "recordings"
+DEFAULT_SNAPSHOTS_DIR = "snapshots"
+DEFAULT_STORAGE_MAX_GB = 50
+DEFAULT_LOW_STORAGE_THRESHOLD_MB = 1024
