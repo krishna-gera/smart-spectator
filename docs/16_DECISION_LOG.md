@@ -139,3 +139,22 @@
 - **Alternatives Considered:** Absolute pixel coordinates (requires continual rescaling across pipeline stages).
 - **Consequences:** Preprocessing and postprocessing must carefully invert letterbox offsets and scaling factors.
 
+---
+
+## ADR-016: Why 500MB Storage Threshold Protection and Sensitive Log Scrubbing?
+- **Context:** Edge hosts running 24/7 are vulnerable to complete filesystem exhaustion when recording video clips continuously, which can corrupt the SQLite database and crash host services. In addition, logging auth tokens creates severe credential leakage risks.
+- **Decision:** Enforce a hard 500 MB minimum free disk threshold (`MIN_FREE_DISK_MB = 500.0`) in `ClipRecorder`. If free space drops below 500MB, video MP4 encoding is bypassed and events are recorded with `recording_degraded: true` (`disk_full_threshold`). Concurrently, install a regex-based `SensitiveDataFilter` on all logging handlers to redact bearer tokens, `ss_tok_*` secrets, and PINs.
+- **Reason:** Keeps the edge hub operational and prevents database corruption during high-traffic or constrained disk scenarios, while protecting authentication credentials.
+- **Alternatives Considered:** Unbounded recording until OS throws `ENOSPC` (risks SQLite corruption), periodic aggressive deletion of all historical footage without notification.
+- **Consequences:** Monitoring client can explicitly display degraded status notifications when disk headroom is low.
+
+---
+
+## ADR-017: Why Multi-Tiered Dynamic Inference Fallback Chain with Honest Hardware Reporting?
+- **Context:** Edge deployment targets vary widely: Qualcomm Snapdragon devices have Hexagon NPUs running QNN, Windows systems have DirectML, Apple Silicon hosts have CoreML, and generic Linux hosts have CPU NEON/AVX2. Development machines may not have physical Snapdragon silicon attached.
+- **Decision:** Architect `InferenceProviderManager` with a tiered fallback hierarchy: `QNNExecutionProvider` $\rightarrow$ `DirectMLExecutionProvider` / `CoreMLExecutionProvider` $\rightarrow$ `CPUExecutionProvider`. When Snapdragon hardware is absent, truthfully report `"Pending physical Snapdragon hardware / QNN SDK"` without simulating or fabricating benchmarks.
+- **Reason:** Guarantees zero crashes and graceful degradation across heterogeneous edge hardware while adhering strictly to honest benchmarking ethics.
+- **Alternatives Considered:** Hardcoding Snapdragon simulation or failing fast if QNN is absent.
+- **Consequences:** Benchmarks clearly delineate between host-measured providers (CoreML/CPU) and target platform expectations (QNN).
+
+

@@ -20,7 +20,9 @@ The Smart Spectator engineering roadmap is partitioned into six distinct, milest
 |  Phase 3: Smart Spectator Dataset & SpectatorNet Temporal Model     [ COMPLETED ]  |
 |  Phase 4: Event Engine, Spatial Zones, Rules & MP4 Recording        [ COMPLETED ]  |
 |  Phase 5: Monitoring Client SPA, Dark Theme UI & Telemetry Overlay  [ COMPLETED ]  |
-|  Phase 6: Future Scale (RTSP/ONVIF CCTV, VLM Queries, iOS Node)     [ POST-COMP ]  |
+|  Phase 6: Production Hardening, Health Checks & Database Lifecycle  [ COMPLETED ]  |
+|  Phase 7: Snapdragon Optimization, Release Packaging & Benchmarks   [ COMPLETED ]  |
+|  Phase 8: Future Scale (RTSP/ONVIF CCTV, VLM Queries, iOS Node)     [ POST-COMP ]  |
 +------------------------------------------------------------------------------------+
 ```
 

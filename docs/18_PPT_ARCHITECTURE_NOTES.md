@@ -82,3 +82,10 @@
 
 **Q4: How scalable is this for commercial CCTV installations?**  
 *Answer:* Scalability is built into the architecture via our `CameraSource` abstraction. While Phase 1 delivers phone nodes, the underlying stream engine, ring buffer, and AI inference pipeline are 100% decoupled from the transport. Ingesting standard RTSP or ONVIF feeds requires adding a single adapter class without touching any AI models or client interfaces.
+
+**Q5: What happens if disk space runs out during 24/7 recording?**  
+*Answer:* Smart Spectator incorporates proactive disk threshold protection (`MIN_FREE_DISK_MB = 500MB`). Before encoding and writing any video clip, the system probes the host storage. If free space is below 500 MB, the event is saved in the SQLite database with `recording_degraded: true`, while disk video writes are safely skipped. The edge gateway never crashes or corrupts the database due to out-of-disk conditions.
+
+**Q6: How does the system adapt between Snapdragon hardware and non-Snapdragon machines?**  
+*Answer:* Smart Spectator features an intelligent tiered fallback chain in `InferenceProviderManager`: `QNNExecutionProvider` (Snapdragon Hexagon NPU) $\rightarrow$ `DirectMLExecutionProvider` / `CoreMLExecutionProvider` (Adreno GPU / Apple Silicon) $\rightarrow$ `CPUExecutionProvider` (NEON/AVX2). If a development or evaluation machine lacks Snapdragon hardware, the system runs gracefully on host acceleration while reporting status truthfully without any simulated or fabricated numbers.
+
