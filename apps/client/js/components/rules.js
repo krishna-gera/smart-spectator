@@ -97,6 +97,17 @@ export function renderRules(container, stores, actions) {
                     </div>
 
                     <div class="form-group">
+                        <label>PRIORITY OVERRIDE:</label>
+                        <select id="rule-priority-override" class="form-select">
+                            <option value="">Default Deterministic Priority</option>
+                            <option value="CRITICAL">Critical</option>
+                            <option value="HIGH">High</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="LOW">Low</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label>THEN ACTIONS:</label>
                         <div class="checkbox-group">
                             <label><input type="checkbox" id="act-create" checked disabled> Create Confirmed Event</label>
@@ -161,6 +172,7 @@ export function renderRules(container, stores, actions) {
         const timeStart = container.querySelector('#rule-time-start').value || null;
         const timeEnd = container.querySelector('#rule-time-end').value || null;
         const sevOverride = container.querySelector('#rule-severity-override').value || null;
+        const prioOverride = container.querySelector('#rule-priority-override').value || null;
         const cooldown = parseInt(container.querySelector('#rule-cooldown').value, 10);
 
         const actionsList = ['CREATE_EVENT'];
@@ -184,7 +196,8 @@ export function renderRules(container, stores, actions) {
                 conditions,
                 actions: actionsList,
                 cooldown_seconds: cooldown,
-                severity_override: sevOverride
+                severity_override: sevOverride,
+                priority_override: prioOverride
             });
             await actions.refreshRules();
             renderRules(container, stores, actions);

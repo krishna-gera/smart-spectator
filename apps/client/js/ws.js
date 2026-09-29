@@ -13,7 +13,19 @@ export class EventStreamClient {
         this.maxReconnectDelayMs = 30000;
         this.listeners = new Map();
         this.statusListeners = new Set();
-        this.pingInterval = null;
+        this.subscriptionFilter = null;
+    }
+
+    setSubscription(filter = {}) {
+        this.subscriptionFilter = filter;
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({
+                type: 'subscription',
+                camera_ids: filter.camera_ids || [],
+                event_types: filter.event_types || [],
+                min_confidence: filter.min_confidence || 0.0
+            }));
+        }
     }
 
     onStatusChange(listener) {
@@ -73,6 +85,11 @@ export class EventStreamClient {
 
                 // Start heartbeat ping
                 this.startHeartbeat();
+
+                // Restore subscription filter if configured
+                if (this.subscriptionFilter) {
+                    this.setSubscription(this.subscriptionFilter);
+                }
             };
 
             this.socket.onmessage = (event) => {

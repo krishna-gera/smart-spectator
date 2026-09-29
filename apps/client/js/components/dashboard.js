@@ -78,7 +78,10 @@ export function renderDashboard(container, stores, actions) {
                     ${events.length === 0 ? '<p class="empty-state">No events recorded yet. AI perception is actively monitoring streams.</p>' : ''}
                     ${events.slice(0, 5).map(ev => `
                         <div class="feed-event-item severity-${ev.severity}" data-event-id="${ev.event_id}">
-                            <div class="event-item-badge badge-${ev.severity}">${ev.severity.toUpperCase()}</div>
+                            <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                                <div class="event-item-badge badge-${ev.severity}">${ev.severity.toUpperCase()}</div>
+                                <span class="badge badge-priority-${(ev.priority || 'medium').toLowerCase()}" style="font-size: 0.7rem; padding: 2px 6px;">${(ev.priority || 'MEDIUM')}</span>
+                            </div>
                             <div class="event-item-body">
                                 <div class="event-item-title">
                                     <b>${ev.event_type.replace(/_/g, ' ')}</b>

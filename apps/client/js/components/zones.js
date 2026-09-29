@@ -58,11 +58,21 @@ export function renderZoneEditor(container, stores, actions, selectedCameraId) {
                     <input type="text" id="zone-name-input" placeholder="e.g. Front Door, Restricted Desk" class="form-input">
                 </div>
                 <div class="form-group">
+                    <label>Zone Type:</label>
+                    <select id="zone-type-select" class="form-select">
+                        <option value="detection">Detection (Default)</option>
+                        <option value="exclusion">Exclusion (Ignore Motion)</option>
+                        <option value="loitering">Loitering Dwell Area</option>
+                        <option value="transit">Transit / Boundary Line</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>Zone Color:</label>
                     <input type="color" id="zone-color-input" value="#38bdf8" class="form-input-color">
                 </div>
-                <div class="form-group">
-                    <label>Points Defined: <b id="point-count">0</b></label>
+                <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;">
+                    <label>Points: <b id="point-count">0</b> <small>(min 3)</small></label>
+                    <button class="btn btn-small btn-secondary" id="btn-undo-point">Undo Point</button>
                 </div>
 
                 <div class="panel-header" style="margin-top: 24px;">
@@ -75,7 +85,7 @@ export function renderZoneEditor(container, stores, actions, selectedCameraId) {
                             <div class="zone-color-tag" style="background-color: ${z.color || '#38bdf8'};"></div>
                             <div class="zone-info">
                                 <b>${z.name}</b>
-                                <small>${z.polygon.length} vertices</small>
+                                <small>${z.zone_type || 'detection'} • ${z.polygon.length} vertices</small>
                             </div>
                             <button class="btn btn-small btn-danger btn-del-zone" data-zone-id="${z.zone_id}">Delete</button>
                         </div>
@@ -90,7 +100,10 @@ export function renderZoneEditor(container, stores, actions, selectedCameraId) {
     const img = container.querySelector('#zone-bg-img');
     const pointCountEl = container.querySelector('#point-count');
     const zoneNameInput = container.querySelector('#zone-name-input');
+    const zoneTypeSelect = container.querySelector('#zone-type-select');
     const zoneColorInput = container.querySelector('#zone-color-input');
+
+    let draggingVertexIdx = -1;
 
     // Resize canvas to match display size
     const resizeCanvas = () => {
@@ -116,7 +129,7 @@ export function renderZoneEditor(container, stores, actions, selectedCameraId) {
                 ctx.lineTo(z.polygon[i][0] * w, z.polygon[i][1] * h);
             }
             ctx.closePath();
-            ctx.fillStyle = (z.color || '#38bdf8') + '33'; // 20% opacity
+            ctx.fillStyle = (z.color || '#38bdf8') + '33';
             ctx.fill();
             ctx.strokeStyle = z.color || '#38bdf8';
             ctx.lineWidth = 2;
@@ -127,7 +140,7 @@ export function renderZoneEditor(container, stores, actions, selectedCameraId) {
             const cy = z.polygon[0][1] * h;
             ctx.fillStyle = '#fff';
             ctx.font = '12px sans-serif';
-            ctx.fillText(z.name, cx + 5, cy + 15);
+            ctx.fillText(`${z.name} (${z.zone_type || 'detection'})`, cx + 5, cy + 15);
         });
 
         // 2. Draw draft polygon
@@ -148,27 +161,69 @@ export function renderZoneEditor(container, stores, actions, selectedCameraId) {
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Draw vertices
-            draftPoints.forEach(pt => {
+            // Draw vertices as draggable circles
+            draftPoints.forEach((pt, idx) => {
                 ctx.beginPath();
-                ctx.arc(pt[0] * w, pt[1] * h, 5, 0, Math.PI * 2);
-                ctx.fillStyle = '#fbbf24';
+                ctx.arc(pt[0] * w, pt[1] * h, idx === draggingVertexIdx ? 8 : 6, 0, Math.PI * 2);
+                ctx.fillStyle = idx === 0 ? '#10b981' : '#fbbf24';
                 ctx.fill();
                 ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1.5;
                 ctx.stroke();
             });
         }
     };
 
-    // Canvas click event to place points
-    canvas.addEventListener('click', (e) => {
+    canvas.addEventListener('mousedown', (e) => {
         const rect = canvas.getBoundingClientRect();
-        const normX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        const normY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const w = canvas.width;
+        const h = canvas.height;
 
-        draftPoints.push([parseFloat(normX.toFixed(3)), parseFloat(normY.toFixed(3))]);
-        pointCountEl.textContent = draftPoints.length;
-        drawAll();
+        // Check if clicked near an existing draft vertex to drag it
+        const hitRadius = 12;
+        const hitIdx = draftPoints.findIndex(pt => {
+            const px = pt[0] * w;
+            const py = pt[1] * h;
+            return Math.hypot(px - mouseX, py - mouseY) <= hitRadius;
+        });
+
+        if (hitIdx >= 0) {
+            draggingVertexIdx = hitIdx;
+        } else {
+            // Add new vertex
+            const normX = Math.max(0, Math.min(1, mouseX / w));
+            const normY = Math.max(0, Math.min(1, mouseY / h));
+            draftPoints.push([parseFloat(normX.toFixed(3)), parseFloat(normY.toFixed(3))]);
+            pointCountEl.textContent = draftPoints.length;
+            drawAll();
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (draggingVertexIdx >= 0) {
+            const rect = canvas.getBoundingClientRect();
+            const normX = Math.max(0, Math.min(1, (e.clientX - rect.left) / canvas.width));
+            const normY = Math.max(0, Math.min(1, (e.clientY - rect.top) / canvas.height));
+            draftPoints[draggingVertexIdx] = [parseFloat(normX.toFixed(3)), parseFloat(normY.toFixed(3))];
+            drawAll();
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (draggingVertexIdx >= 0) {
+            draggingVertexIdx = -1;
+            drawAll();
+        }
+    });
+
+    container.querySelector('#btn-undo-point')?.addEventListener('click', () => {
+        if (draftPoints.length > 0) {
+            draftPoints.pop();
+            pointCountEl.textContent = draftPoints.length;
+            drawAll();
+        }
     });
 
     container.querySelector('#btn-reset-draft')?.addEventListener('click', () => {
@@ -192,6 +247,7 @@ export function renderZoneEditor(container, stores, actions, selectedCameraId) {
             await actions.createZone(activeCam.camera_id, {
                 name: name,
                 polygon: draftPoints,
+                zone_type: zoneTypeSelect.value || 'detection',
                 color: zoneColorInput.value || '#38bdf8',
                 is_active: true
             });

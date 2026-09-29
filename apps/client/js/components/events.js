@@ -55,6 +55,17 @@ export function renderEvents(container, stores, actions) {
             </div>
 
             <div class="filter-item">
+                <label>Priority:</label>
+                <select id="filter-priority">
+                    <option value="">All Priorities</option>
+                    <option value="CRITICAL" ${filters.priority === 'CRITICAL' ? 'selected' : ''}>Critical</option>
+                    <option value="HIGH" ${filters.priority === 'HIGH' ? 'selected' : ''}>High</option>
+                    <option value="MEDIUM" ${filters.priority === 'MEDIUM' ? 'selected' : ''}>Medium</option>
+                    <option value="LOW" ${filters.priority === 'LOW' ? 'selected' : ''}>Low</option>
+                </select>
+            </div>
+
+            <div class="filter-item">
                 <label>Status:</label>
                 <select id="filter-status">
                     <option value="">All Statuses</option>
@@ -79,6 +90,7 @@ export function renderEvents(container, stores, actions) {
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th>Priority</th>
                             <th>Severity</th>
                             <th>Event Type</th>
                             <th>Camera</th>
@@ -92,6 +104,7 @@ export function renderEvents(container, stores, actions) {
                     <tbody>
                         ${events.map(ev => `
                             <tr class="event-row" data-event-id="${ev.event_id}">
+                                <td><span class="badge badge-priority-${(ev.priority || 'medium').toLowerCase()}">${ev.priority || 'MEDIUM'}</span></td>
                                 <td><span class="badge badge-${ev.severity}">${ev.severity.toUpperCase()}</span></td>
                                 <td><b>${ev.event_type.replace(/_/g, ' ')}</b></td>
                                 <td>${ev.camera_id}</td>
@@ -115,17 +128,19 @@ export function renderEvents(container, stores, actions) {
         const cam = container.querySelector('#filter-camera').value;
         const type = container.querySelector('#filter-type').value;
         const sev = container.querySelector('#filter-severity').value;
+        const prio = container.querySelector('#filter-priority').value;
         const stat = container.querySelector('#filter-status').value;
-        actions.setEventFilters({ camera_id: cam, event_type: type, severity: sev, status: stat });
+        actions.setEventFilters({ camera_id: cam, event_type: type, severity: sev, priority: prio, status: stat });
     };
 
     container.querySelector('#filter-camera')?.addEventListener('change', updateFilters);
     container.querySelector('#filter-type')?.addEventListener('change', updateFilters);
     container.querySelector('#filter-severity')?.addEventListener('change', updateFilters);
+    container.querySelector('#filter-priority')?.addEventListener('change', updateFilters);
     container.querySelector('#filter-status')?.addEventListener('change', updateFilters);
 
     container.querySelector('#btn-clear-filters')?.addEventListener('click', () => {
-        actions.setEventFilters({ camera_id: '', event_type: '', severity: '', status: '' });
+        actions.setEventFilters({ camera_id: '', event_type: '', severity: '', priority: '', status: '' });
     });
 
     container.querySelector('#btn-refresh-events')?.addEventListener('click', () => actions.refreshEvents());

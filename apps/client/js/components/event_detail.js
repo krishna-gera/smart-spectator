@@ -24,11 +24,24 @@ export function renderEventDetail(container, stores, actions, eventId) {
         ? event.involved_track_ids.map(t => `#${t}`).join(', ')
         : 'None recorded';
 
+    const priority = event.priority || 'MEDIUM';
+    const milestones = (event.timeline_milestones && event.timeline_milestones.length > 0)
+        ? event.timeline_milestones
+        : [
+            { timestamp: event.start_time || new Date().toISOString(), title: 'Motion Detected', description: `Motion registered on camera ${event.camera_id}` },
+            { timestamp: event.timestamp || new Date().toISOString(), title: 'Pattern Confirmed', description: `${event.event_type.replace(/_/g, ' ')} confirmed with ${Math.round(event.confidence * 100)}% confidence` },
+            { timestamp: event.timestamp || new Date().toISOString(), title: 'Event Triggered', description: `Assigned priority ${priority}` }
+        ];
+
     container.innerHTML = `
         <div class="screen-header">
             <div>
                 <button class="btn-text" id="btn-back-events">&larr; Back to Events Feed</button>
-                <h2>Event: ${event.event_type.replace(/_/g, ' ')}</h2>
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px;">
+                    <h2>Event: ${event.event_type.replace(/_/g, ' ')}</h2>
+                    <span class="badge badge-priority-${priority.toLowerCase()}">${priority}</span>
+                    <span class="badge badge-${event.severity}">${event.severity.toUpperCase()}</span>
+                </div>
                 <p class="subtitle">ID: ${event.event_id} • Camera: ${event.camera_id}</p>
             </div>
             <div class="actions-row">
@@ -42,50 +55,47 @@ export function renderEventDetail(container, stores, actions, eventId) {
             </div>
         </div>
 
+        <div class="explanation-card">
+            <div class="explanation-title">
+                <span>🔍</span> Why This Event Was Triggered
+            </div>
+            <div class="explanation-text">
+                ${event.explanation || event.summary || 'Event pattern verified deterministically by SpectatorNet and Event Engine rules.'}
+            </div>
+        </div>
+
         <div class="event-detail-grid">
             <div class="panel">
                 <div class="panel-header">
-                    <h3>Deterministic Perception Explanation</h3>
+                    <h3>Causal Timeline Milestones</h3>
                 </div>
-                <div class="explanation-box severity-border-${event.severity}">
-                    <p style="font-size: 1.05rem; margin: 0; line-height: 1.5;">${event.explanation || event.summary}</p>
-                </div>
-
-                <div class="panel-header" style="margin-top: 24px;">
-                    <h3>Lifecycle Timeline</h3>
-                </div>
-                <div class="timeline-container">
-                    <div class="timeline-step step-complete">
-                        <div class="step-marker">1</div>
-                        <div class="step-label"><b>DETECTED</b><br><small>${startStr}</small></div>
-                    </div>
-                    <div class="timeline-line"></div>
-                    <div class="timeline-step ${['confirmed', 'active', 'resolved'].includes(event.status) ? 'step-complete' : ''}">
-                        <div class="step-marker">2</div>
-                        <div class="step-label"><b>CONFIRMED</b><br><small>Debounced</small></div>
-                    </div>
-                    <div class="timeline-line"></div>
-                    <div class="timeline-step ${['active', 'resolved'].includes(event.status) ? 'step-complete' : ''}">
-                        <div class="step-marker">3</div>
-                        <div class="step-label"><b>ACTIVE</b><br><small>Buffer Rolling</small></div>
-                    </div>
-                    <div class="timeline-line"></div>
-                    <div class="timeline-step ${event.status === 'resolved' ? 'step-complete' : (event.status === 'dismissed' ? 'step-dismissed' : '')}">
-                        <div class="step-marker">4</div>
-                        <div class="step-label"><b>${event.status === 'dismissed' ? 'DISMISSED' : 'RESOLVED'}</b><br><small>${event.status === 'resolved' ? endStr : (event.status === 'dismissed' ? 'Canceled' : 'Pending')}</small></div>
-                    </div>
+                <div class="timeline-milestones">
+                    ${milestones.map((m, idx) => `
+                        <div class="timeline-node">
+                            <div class="timeline-marker ${idx === milestones.length - 1 ? priority.toLowerCase() : ''}"></div>
+                            <div class="timeline-content">
+                                <div class="timeline-header">
+                                    <span class="timeline-title">${m.title}</span>
+                                    <span class="timeline-time">${m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : ''}</span>
+                                </div>
+                                <div class="timeline-desc">${m.description}</div>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
 
                 <div class="panel-header" style="margin-top: 24px;">
                     <h3>Event Parameters</h3>
                 </div>
                 <div class="telemetry-table">
+                    <div class="telem-row"><span>Priority</span><span class="badge badge-priority-${priority.toLowerCase()}">${priority}</span></div>
                     <div class="telem-row"><span>Severity</span><span class="badge badge-${event.severity}">${event.severity.toUpperCase()}</span></div>
                     <div class="telem-row"><span>Model Confidence</span><span>${Math.round(event.confidence * 100)}%</span></div>
                     <div class="telem-row"><span>Triggered Rule</span><span>${event.rule_id || 'System Default Policy'}</span></div>
                     <div class="telem-row"><span>Associated Zone</span><span>${event.zone_id || 'Full Scene'}</span></div>
                     <div class="telem-row"><span>Involved Tracks</span><span>${tracksStr}</span></div>
-                    <div class="telem-row"><span>Confirmation Latency</span><span>${event.metadata?.confirmation_latency_ms ? event.metadata.confirmation_latency_ms + ' ms' : 'N/A'}</span></div>
+                    <div class="telem-row"><span>Start Time</span><span>${startStr}</span></div>
+                    <div class="telem-row"><span>End Time</span><span>${endStr}</span></div>
                 </div>
             </div>
 
@@ -101,7 +111,7 @@ export function renderEventDetail(container, stores, actions, eventId) {
                         </video>
                         <div class="clip-meta">
                             <span><b>Clip ID:</b> ${event.recording_id}</span>
-                            <a href="/api/v1/recordings/${event.recording_id}/stream" download="event_${event.event_id}.mp4" class="btn btn-small btn-secondary">Download MP4</a>
+                            <a href="/api/v1/recordings/${event.recording_id}/download" download="event_${event.event_id}.mp4" class="btn btn-small btn-secondary">Download MP4</a>
                         </div>
                     </div>
                 ` : `

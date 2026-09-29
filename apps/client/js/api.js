@@ -65,6 +65,33 @@ class BaseApi {
     }
 }
 
+export class AiApi extends BaseApi {
+    async getStatus() {
+        return this.get('/api/v1/ai/status');
+    }
+
+    async listModels() {
+        return this.get('/api/v1/ai/models');
+    }
+
+    async getModel(modelId) {
+        return this.get(`/api/v1/ai/models/${modelId}`);
+    }
+
+    async activateModel(taskType, modelId) {
+        return this.post(`/api/v1/ai/models/${taskType}/activate`, { model_id: modelId });
+    }
+
+    async runAbEvaluation(modelAId, modelBId, taskType = 'temporal_classification', numFrames = 50) {
+        return this.post('/api/v1/ai/ab-evaluate', {
+            model_a_id: modelAId,
+            model_b_id: modelBId,
+            task_type: taskType,
+            num_test_frames: numFrames
+        });
+    }
+}
+
 export class CameraApi extends BaseApi {
     async listCameras() {
         return this.get('/api/v1/cameras');
@@ -72,6 +99,18 @@ export class CameraApi extends BaseApi {
 
     async getCamera(cameraId) {
         return this.get(`/api/v1/cameras/${cameraId}`);
+    }
+
+    async renameCamera(cameraId, name) {
+        return this.put(`/api/v1/cameras/${cameraId}`, { name });
+    }
+
+    async disconnectCamera(cameraId) {
+        return this.post(`/api/v1/cameras/${cameraId}/disconnect`);
+    }
+
+    async reconnectCamera(cameraId) {
+        return this.post(`/api/v1/cameras/${cameraId}/reconnect`);
     }
 
     getLivePreviewUrl(cameraId) {
@@ -82,6 +121,10 @@ export class CameraApi extends BaseApi {
 export class EventApi extends BaseApi {
     async listEvents(filters = {}) {
         return this.get('/api/v1/events', filters);
+    }
+
+    async getEventStats() {
+        return this.get('/api/v1/events/stats');
     }
 
     async getEvent(eventId) {
@@ -170,6 +213,23 @@ export class RecordingApi extends BaseApi {
         return `${this.client.baseUrl}/api/v1/recordings/${recordingId}/thumbnail`;
     }
 
+    getDownloadUrl(recordingId) {
+        return `${this.client.baseUrl}/api/v1/recordings/${recordingId}/download`;
+    }
+
+    async toggleLock(recordingId, isLocked) {
+        const res = await fetch(`${this.client.baseUrl}/api/v1/recordings/${recordingId}/lock`, {
+            method: 'PATCH',
+            headers: this.client.getHeaders(),
+            body: JSON.stringify({ is_locked: isLocked })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || `Lock update failed: ${res.status}`);
+        }
+        return res.json();
+    }
+
     async deleteRecording(recordingId) {
         return this.delete(`/api/v1/recordings/${recordingId}`);
     }
@@ -213,11 +273,50 @@ export class SystemApi extends BaseApi {
     async getAITelemetry() {
         return this.get('/api/v1/ai/telemetry');
     }
+
+    async getStorage() {
+        return this.get('/api/v1/system/storage');
+    }
+
+    async runRetentionCleanup(dryRun = false) {
+        return this.post('/api/v1/system/storage/retention/cleanup', { dry_run: dryRun });
+    }
+
+    async getConfig(category = null) {
+        return this.get('/api/v1/system/config', category ? { category } : {});
+    }
+
+    async updateConfig(category, settings) {
+        return this.put(`/api/v1/system/config/${category}`, settings);
+    }
+
+    async exportConfig() {
+        return this.get('/api/v1/system/config/export');
+    }
+
+    async importConfig(configData) {
+        return this.post('/api/v1/system/config/import', configData);
+    }
+
+    async getActivityLogs(params = {}) {
+        return this.get('/api/v1/system/activity', params);
+    }
+
+    async getNotifications() {
+        return this.get('/api/v1/system/notifications');
+    }
+
+    async updateNotification(eventType, settings) {
+        return this.put(`/api/v1/system/notifications/${eventType}`, settings);
+    }
+
+    async backupDatabase() {
+        return this.post('/api/v1/system/backup');
+    }
 }
 
 export class HubApiClient {
     constructor(baseUrl = '') {
-        // Defaults to current host origin if served by Hub
         this.baseUrl = baseUrl || window.location.origin;
         this.authToken = localStorage.getItem('ss_auth_token') || null;
 
@@ -228,6 +327,7 @@ export class HubApiClient {
         this.recordings = new RecordingApi(this);
         this.devices = new DeviceApi(this);
         this.system = new SystemApi(this);
+        this.ai = new AiApi(this);
     }
 
     setBaseUrl(url) {

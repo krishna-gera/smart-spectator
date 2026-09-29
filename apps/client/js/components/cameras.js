@@ -51,8 +51,9 @@ export function renderCameras(container, stores, actions) {
                             <div class="camera-card-footer">
                                 <span class="cam-meta-spec">${c.width}x${c.height} • ${c.target_fps} FPS</span>
                                 <div class="footer-actions">
+                                    <button class="btn btn-small btn-secondary btn-cam-rename" data-camera-id="${c.camera_id}" data-camera-name="${c.name}">Rename</button>
                                     <button class="btn btn-small btn-secondary btn-cam-zones" data-camera-id="${c.camera_id}">Zones</button>
-                                    <button class="btn btn-small btn-primary btn-cam-live" data-camera-id="${c.camera_id}">Open Live</button>
+                                    <button class="btn btn-small btn-primary btn-cam-live" data-camera-id="${c.camera_id}">Live</button>
                                 </div>
                             </div>
                         </div>
@@ -77,6 +78,23 @@ export function renderCameras(container, stores, actions) {
             e.stopPropagation();
             const camId = el.getAttribute('data-camera-id');
             actions.openZoneEditor(camId);
+        });
+    });
+
+    container.querySelectorAll('.btn-cam-rename').forEach(el => {
+        el.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const camId = el.getAttribute('data-camera-id');
+            const curName = el.getAttribute('data-camera-name');
+            const newName = prompt(`Enter new name for camera (${curName}):`, curName);
+            if (newName && newName.trim() && newName !== curName) {
+                try {
+                    await window.app.api.cameras.renameCamera(camId, newName.trim());
+                    await actions.refreshCameras();
+                } catch (err) {
+                    alert('Failed to rename camera: ' + err.message);
+                }
+            }
         });
     });
 }
