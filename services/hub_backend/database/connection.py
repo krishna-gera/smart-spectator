@@ -59,6 +59,9 @@ def db_session() -> Generator[sqlite3.Connection, None, None]:
         raise
 
 
+get_db = db_session
+
+
 def init_database() -> None:
     """Executes database schema migration and enforces WAL mode."""
     with db_session() as conn:

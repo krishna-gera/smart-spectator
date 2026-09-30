@@ -12,10 +12,10 @@ from pydantic import BaseModel, Field
 class Settings(BaseModel):
     # Environment & Product Info
     ENVIRONMENT: str = os.getenv("SMART_SPECTATOR_ENV", "development").lower()
-    APP_VERSION: str = "1.2.0"
-    HUB_VERSION: str = "1.2.0"
-    SCHEMA_VERSION: str = "4"
-    CLIENT_VERSION: str = "1.2.0"
+    APP_VERSION: str = "2.0.0"
+    HUB_VERSION: str = "2.0.0"
+    SCHEMA_VERSION: str = "5"
+    CLIENT_VERSION: str = "2.0.0"
     DETECTOR_VERSION: str = "1.0.0"
     SPECTATORNET_VERSION: str = "1.0.0"
 

@@ -248,6 +248,137 @@ MIGRATIONS: List[Tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_recordings_search ON recordings(camera_id, start_time DESC, duration_seconds, file_size_bytes);
         """,
     ),
+    (
+        5,
+        "v5_phase10_advanced_intelligence",
+        """
+        -- 1. Incidents Table
+        CREATE TABLE IF NOT EXISTS incidents (
+            incident_id TEXT PRIMARY KEY,
+            incident_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            severity TEXT NOT NULL CHECK(severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+            status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED')),
+            summary TEXT NOT NULL,
+            camera_ids_json TEXT NOT NULL,
+            zone_ids_json TEXT,
+            source_event_ids_json TEXT NOT NULL,
+            context_json TEXT,
+            acknowledged_at DATETIME,
+            acknowledged_by TEXT,
+            resolved_at DATETIME,
+            resolved_by TEXT,
+            resolution_notes TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status, severity);
+        CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_at DESC);
+
+        -- 2. Event Relationships Table
+        CREATE TABLE IF NOT EXISTS event_relationships (
+            relationship_id TEXT PRIMARY KEY,
+            relationship_type TEXT NOT NULL,
+            event_a_id TEXT NOT NULL,
+            event_b_id TEXT NOT NULL,
+            camera_id TEXT,
+            zone_id TEXT,
+            time_delta_seconds REAL NOT NULL,
+            confidence REAL NOT NULL,
+            details_json TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(event_a_id) REFERENCES events(event_id) ON DELETE CASCADE,
+            FOREIGN KEY(event_b_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_relationships_events ON event_relationships(event_a_id, event_b_id);
+        CREATE INDEX IF NOT EXISTS idx_relationships_type ON event_relationships(relationship_type);
+
+        -- 3. Event Patterns Table
+        CREATE TABLE IF NOT EXISTS event_patterns (
+            pattern_id TEXT PRIMARY KEY,
+            pattern_type TEXT NOT NULL,
+            event_types_json TEXT NOT NULL,
+            camera_id TEXT,
+            zone_id TEXT,
+            frequency INTEGER NOT NULL DEFAULT 1,
+            time_window_seconds REAL NOT NULL,
+            confidence REAL NOT NULL,
+            first_seen DATETIME NOT NULL,
+            last_seen DATETIME NOT NULL,
+            metadata_json TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_patterns_camera ON event_patterns(camera_id, pattern_type);
+
+        -- 4. Statistical Baselines Table
+        CREATE TABLE IF NOT EXISTS statistical_baselines (
+            baseline_id TEXT PRIMARY KEY,
+            metric_name TEXT NOT NULL,
+            camera_id TEXT,
+            hour_of_day INTEGER,
+            day_of_week INTEGER,
+            sample_count INTEGER NOT NULL DEFAULT 0,
+            mean_value REAL NOT NULL DEFAULT 0.0,
+            std_dev REAL NOT NULL DEFAULT 0.0,
+            median_value REAL NOT NULL DEFAULT 0.0,
+            min_value REAL NOT NULL DEFAULT 0.0,
+            max_value REAL NOT NULL DEFAULT 0.0,
+            last_updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_baselines_metric ON statistical_baselines(metric_name, camera_id, hour_of_day, day_of_week);
+
+        -- 5. Anomalies Table
+        CREATE TABLE IF NOT EXISTS anomalies (
+            anomaly_id TEXT PRIMARY KEY,
+            anomaly_type TEXT NOT NULL,
+            score REAL NOT NULL,
+            explanation TEXT NOT NULL,
+            camera_id TEXT,
+            source_event_ids_json TEXT,
+            metric_name TEXT,
+            baseline_mean REAL,
+            observed_value REAL,
+            timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_anomalies_time ON anomalies(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_anomalies_type ON anomalies(anomaly_type);
+
+        -- 6. Human Feedback Table
+        CREATE TABLE IF NOT EXISTS human_feedback (
+            feedback_id TEXT PRIMARY KEY,
+            event_id TEXT NOT NULL,
+            feedback TEXT NOT NULL CHECK(feedback IN ('CORRECT', 'INCORRECT', 'NOT_SURE')),
+            notes TEXT,
+            model_version TEXT,
+            operator_id TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(event_id) REFERENCES events(event_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_feedback_event ON human_feedback(event_id);
+
+        -- 7. Model Drift Logs Table
+        CREATE TABLE IF NOT EXISTS model_drift_logs (
+            log_id TEXT PRIMARY KEY,
+            model_id TEXT NOT NULL,
+            window_start DATETIME NOT NULL,
+            window_end DATETIME NOT NULL,
+            mean_confidence REAL NOT NULL,
+            sample_count INTEGER NOT NULL,
+            drift_detected INTEGER NOT NULL DEFAULT 0,
+            drift_score REAL NOT NULL DEFAULT 0.0,
+            warning_message TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_drift_model ON model_drift_logs(model_id, created_at DESC);
+        """,
+    ),
 ]
 
 

@@ -17,7 +17,10 @@ from services.device_manager.discovery import hub_advertiser, get_local_ip
 from services.stream_engine.server import stream_engine
 from services.ai_engine.pipeline import ai_pipeline
 from services.event_engine import event_engine_service
-from .routes import health, devices, cameras, streams, ai, events, zones, rules, recordings, system
+from .routes import (
+    health, devices, cameras, streams, ai, events, zones, rules, recordings, system,
+    query, incidents, anomalies, memory, feedback
+)
 from .websocket import control, events as events_ws
 
 
@@ -92,6 +95,11 @@ app.include_router(rules.router, prefix=API_PREFIX)
 app.include_router(recordings.router, prefix=API_PREFIX)
 app.include_router(system.router, prefix=API_PREFIX)
 app.include_router(events_ws.router, prefix=API_PREFIX)
+app.include_router(query.router, prefix=API_PREFIX)
+app.include_router(incidents.router, prefix=API_PREFIX)
+app.include_router(anomalies.router, prefix=API_PREFIX)
+app.include_router(memory.router, prefix=API_PREFIX)
+app.include_router(feedback.router, prefix=API_PREFIX)
 
 # Also mount convenience routes for direct root access
 app.include_router(health.router)

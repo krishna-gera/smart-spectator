@@ -1,0 +1,36 @@
+# Smart Spectator Routes Module
+from . import (
+    health,
+    devices,
+    cameras,
+    streams,
+    ai,
+    events,
+    zones,
+    rules,
+    recordings,
+    system,
+    query,
+    incidents,
+    anomalies,
+    memory,
+    feedback,
+)
+
+__all__ = [
+    "health",
+    "devices",
+    "cameras",
+    "streams",
+    "ai",
+    "events",
+    "zones",
+    "rules",
+    "recordings",
+    "system",
+    "query",
+    "incidents",
+    "anomalies",
+    "memory",
+    "feedback",
+]

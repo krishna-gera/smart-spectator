@@ -72,7 +72,7 @@ class ModelRegistry:
                 "runtime": "ONNX Runtime (QNN / DirectML / CoreML / CPU)",
                 "filename": "spectatornet_v1.onnx",
                 "input_shape": [1, 30, 166],
-                "output_shape": [1, 6],
+                "output_shape": [1, 9],
             },
             {
                 "id": "spectatornet_v1_int8",
@@ -83,7 +83,7 @@ class ModelRegistry:
                 "runtime": "ONNX Runtime / QNN Hexagon NPU",
                 "filename": "spectatornet_v1_int8.onnx",
                 "input_shape": [1, 30, 166],
-                "output_shape": [1, 6],
+                "output_shape": [1, 9],
             },
         ]
 
