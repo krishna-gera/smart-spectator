@@ -126,6 +126,24 @@ class MotionDetector {
     return out;
   }
 
+  /// Compact 32x18 brightness fingerprint of a frame (576 bytes), sent with
+  /// snapshots so the main phone can skip AI checks when nothing changed.
+  static Uint8List sceneGrid(Uint8List luma, int width, int height, int rowStride) {
+    final avg = blockAverages(luma, width, height, rowStride);
+    return Uint8List.fromList([for (final v in avg) v.round().clamp(0, 255)]);
+  }
+
+  /// Share of the picture that changed between two fingerprints (0–1),
+  /// ignoring whole-picture brightness shifts.
+  static double gridChange(Uint8List a, Uint8List b, {double threshold = 12}) {
+    if (a.length != b.length || a.isEmpty) return 1;
+    return changedFraction(
+      Float64List.fromList(a.map((v) => v.toDouble()).toList()),
+      Float64List.fromList(b.map((v) => v.toDouble()).toList()),
+      threshold,
+    );
+  }
+
   /// Share of blocks whose brightness moved more than [threshold], after
   /// removing the picture-wide average shift (exposure changes).
   static double changedFraction(Float64List a, Float64List b, double threshold) {

@@ -105,7 +105,7 @@ void main() {
     // On connect the camera receives its current settings.
     expect((await first.timeout(const Duration(seconds: 2)))['action'], 'set_motion');
 
-    final next = commands.stream.first;
+    final next = commands.stream.firstWhere((c) => c['action'] == 'set_motion');
     await server.updateCameraSettings(cam.cameraId!, const CameraSettings(motionEnabled: false, sensitivity: 0.9));
     final cmd = await next.timeout(const Duration(seconds: 2));
     expect((cmd['enabled'], cmd['sensitivity']), (false, 0.9));

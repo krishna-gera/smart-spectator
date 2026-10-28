@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import '../core/ai/ai_client.dart';
 import 'event_store.dart';
 import 'hub_server.dart';
+import 'watch_tasks.dart';
 import 'web_dashboard.dart';
 
 /// Browser dashboard served by the main phone at `http://<main-phone>:8000/`.
@@ -25,6 +26,9 @@ import 'web_dashboard.dart';
 ///   POST   /api/v1/web/cameras/{id}/ask-ai     describe the current picture
 ///   GET    /api/v1/web/events/{id}/snapshot    event JPEG
 ///   POST   /api/v1/web/events/seen             mark all events seen
+///   POST   /api/v1/web/tasks                   create an AI watch task
+///   POST   /api/v1/web/tasks/{id}/{action}     pause | resume | stop | ack
+///   DELETE /api/v1/web/tasks/{id}
 class WebApi {
   static const cookieName = 'ss_session';
   static const sessionTtl = Duration(hours: 12);
@@ -39,6 +43,9 @@ class WebApi {
   /// Set by the app when AI is available ("Ask AI" in the browser).
   Future<AiResult> Function(String cameraId)? onAskAi;
   bool aiAvailable = false;
+
+  /// AI watch tasks (set by the app once the watcher is running).
+  TaskWatcher? tasks;
 
   WebApi(this.server);
 
@@ -68,6 +75,7 @@ class WebApi {
     }
 
     final parts = path.split('/'); // ['', 'api', 'v1', 'web', kind, id, action]
+    if (parts.length >= 5 && parts[4] == 'tasks') return _tasks(req, parts);
     if (parts.length == 7 && parts[4] == 'cameras') {
       final id = parts[5];
       if (!server.cameras.any((c) => c.cameraId == id)) return _json(res, 404, {'detail': 'Unknown camera'});
@@ -176,7 +184,79 @@ class WebApi {
           }
       ],
       'unseen': store?.unseenCount ?? 0,
+      'tasks': [
+        for (final t in tasks?.store.tasks ?? const <WatchTask>[])
+          {
+            'id': t.id,
+            'camera_id': t.cameraId,
+            'camera_name': t.cameraName,
+            'description': t.description,
+            'question': t.question,
+            'status': t.status.name,
+            'status_text': t.lastError ?? describeTaskStatus(t, DateTime.now()),
+            'has_error': t.lastError != null,
+            'observation': t.lastObservation,
+            'progress': t.lastProgress,
+            'progress_applicable': t.progressApplicable,
+            'needs_ack': t.needsAcknowledgement,
+            'interval_seconds': t.intervalSeconds,
+          }
+      ],
     };
+  }
+
+  Future<void> _tasks(HttpRequest req, List<String> parts) async {
+    final watcher = tasks;
+    final res = req.response;
+    if (watcher == null || !aiAvailable) return _json(res, 503, {'detail': 'AI tasks are not available on this main phone.'});
+
+    if (parts.length == 5 && req.method == 'POST') {
+      Map<String, dynamic> body;
+      try {
+        body = Map<String, dynamic>.from(jsonDecode(await utf8.decoder.bind(req).join()) as Map);
+      } catch (_) {
+        return _json(res, 400, {'detail': 'Invalid JSON'});
+      }
+      final cam = server.cameras.where((c) => c.cameraId == body['camera_id']).firstOrNull;
+      final text = (body['description'] as String? ?? '').trim();
+      if (cam == null) return _json(res, 404, {'detail': 'Unknown camera'});
+      if (text.length < 8 || text.length > 300) return _json(res, 422, {'detail': 'Describe the task in 8–300 characters.'});
+      final interval = (body['interval_seconds'] as num?)?.toInt() ?? 30;
+      final auto = (body['auto_stop_minutes'] as num?)?.toInt() ?? 180;
+      final t = await watcher.create(
+        cameraId: cam.cameraId,
+        cameraName: cam.deviceName,
+        description: text,
+        intervalSeconds: TaskWatcher.intervals.contains(interval) ? interval : 30,
+        remindUntilAck: body['remind_until_ack'] != false,
+        keepWatching: body['keep_watching'] == true,
+        autoStopMinutes: const [60, 180, 480].contains(auto) ? auto : 180,
+      );
+      return _json(res, 201, {'id': t.id});
+    }
+
+    final task = parts.length >= 6 ? watcher.store.byId(parts[5]) : null;
+    if (task == null) return _json(res, 404, {'detail': 'Unknown task'});
+    if (parts.length == 6 && req.method == 'DELETE') {
+      await watcher.delete(task);
+      return _json(res, 200, {'status': 'deleted'});
+    }
+    if (parts.length == 7 && req.method == 'POST') {
+      switch (parts[6]) {
+        case 'pause':
+          await watcher.pause(task);
+        case 'resume':
+          await watcher.resume(task);
+        case 'stop':
+          await watcher.stopTask(task);
+        case 'ack':
+          await watcher.acknowledge(task);
+        default:
+          return _json(res, 404, {'detail': 'Unknown action'});
+      }
+      return _json(res, 200, {'status': task.status.name});
+    }
+    return _json(res, 404, {'detail': 'Not found'});
   }
 
   static String _status(CameraLink c) {

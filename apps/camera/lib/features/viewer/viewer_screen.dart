@@ -14,7 +14,9 @@ import '../../hub/event_store.dart';
 import '../../hub/hub_server.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
+import '../../hub/watch_tasks.dart';
 import 'add_camera_screen.dart';
+import 'task_editor_screen.dart';
 import 'events_view.dart';
 
 /// Main phone: runs the local hub, shows live cameras, events and AI insights.
@@ -34,6 +36,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
   final Map<String, LiveVideoController> _live = {};
   EventStore? _events;
   AlertService? _alerts;
+  TaskWatcher? _tasks;
+  StreamSubscription<void>? _tasksSub;
   StreamSubscription<void>? _changesSub;
   Timer? _ticker;
   String? _localIp;
@@ -56,6 +60,17 @@ class _ViewerScreenState extends State<ViewerScreen> {
       final alerts = AlertService(store: events, ai: _ai, notify: SystemBridge.notify);
       _events = events;
       _alerts = alerts;
+      final taskStore = TaskStore(Directory('${support.path}/events'));
+      await taskStore.load();
+      _tasks = TaskWatcher(
+        store: taskStore,
+        events: events,
+        ai: _ai,
+        snapshot: (id) => _server.requestFrame(id, timeout: const Duration(seconds: 5)),
+        rotationOf: (id) => _server.cameras.where((c) => c.cameraId == id).firstOrNull?.rotationDegrees ?? 0,
+        notify: SystemBridge.notify,
+        onWatchChanged: _server.setAiWatch,
+      );
       _server
         ..events = events
         ..onMotionStarted = (event, _) async {
@@ -66,11 +81,16 @@ class _ViewerScreenState extends State<ViewerScreen> {
       // Browser dashboard at http://<this phone>:8000/ (sign in with the pairing code).
       _server.web
         ..aiAvailable = _ai.config.isConfigured
+        ..tasks = _tasks
         ..onAskAi = (cameraId) async {
           final cam = _server.cameras.where((c) => c.cameraId == cameraId).firstOrNull;
           return cam == null ? const AiResult.failed('Unknown camera.') : _askAi(cam);
         };
       await _server.start();
+      _tasks!.start();
+      _tasksSub = _tasks!.changes.listen((_) {
+        if (mounted) setState(() {});
+      });
       _localIp = await HubServer.localIpAddress();
       _server.displayName = 'Main phone${_localIp != null ? ' ($_localIp)' : ''}';
       await SystemBridge.startHubService(text: 'Watching your cameras');
@@ -110,6 +130,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
       c.dispose();
     }
     _live.clear();
+    _tasksSub?.cancel();
+    _tasks?.dispose();
     _server.dispose();
     SystemBridge.stopAdvertisingHub();
     SystemBridge.stopHubService();
@@ -117,6 +139,15 @@ class _ViewerScreenState extends State<ViewerScreen> {
   }
 
   // ---------------------------------------------------------------- actions
+
+  Future<void> _newTask({String? cameraId}) async {
+    final tasks = _tasks;
+    if (tasks == null) return;
+    await Navigator.of(context).push(MaterialPageRoute<bool>(
+      builder: (_) => TaskEditorScreen(watcher: tasks, cameras: _server.cameras, initialCameraId: cameraId),
+    ));
+    if (mounted) setState(() {});
+  }
 
   Future<void> _addCamera() async {
     final port = _server.boundPort;
@@ -244,6 +275,38 @@ class _ViewerScreenState extends State<ViewerScreen> {
     );
   }
 
+  List<Widget> _aiTasksSection() {
+    final watcher = _tasks!;
+    final tasks = watcher.store.tasks;
+    return [
+      const CenteredLabel('AI tasks', icon: Icons.auto_awesome, iconColor: AppColors.ai),
+      if (tasks.isEmpty)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Text(
+              _ai.config.isConfigured
+                  ? 'Give a camera a job in plain words — "tell me when the washing machine is full" or '
+                      '"notify me when the laptop download finishes" — and the AI watches for it.'
+                  : 'AI tasks need the AI service, which is not set up in this build.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textMuted, height: 1.4),
+            ),
+          ),
+        ),
+      for (final t in tasks)
+        Padding(padding: const EdgeInsets.only(bottom: 12), child: _TaskCard(task: t, watcher: watcher)),
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: OutlinedButton.icon(
+          onPressed: _ai.config.isConfigured ? () => _newTask() : null,
+          icon: const Icon(Icons.auto_awesome, color: AppColors.ai, size: 18),
+          label: const Text('New AI task'),
+        ),
+      ),
+    ];
+  }
+
   Widget _camerasTab() {
     final cameras = _server.cameras;
     final live = cameras.where((c) => _live.containsKey(c.cameraId)).toList();
@@ -301,6 +364,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             );
           }),
         ],
+        if (cameras.isNotEmpty && _tasks != null) ..._aiTasksSection(),
         if (cameras.isNotEmpty) ...[
           const CenteredLabel('All cameras', icon: Icons.videocam_outlined),
           for (final cam in cameras)
@@ -313,6 +377,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 onOpen: _live.containsKey(cam.cameraId) ? () => _openLive(cam) : null,
                 onSettings: () => _openSettings(cam),
                 onRemove: () => _removeCamera(cam),
+                onWatch: _ai.config.isConfigured ? () => _newTask(cameraId: cam.cameraId) : null,
               ),
             ),
           const CenteredLabel('Pairing code', icon: Icons.key_rounded),
@@ -561,6 +626,7 @@ class _CameraCard extends StatelessWidget {
   final VoidCallback? onOpen;
   final VoidCallback onSettings;
   final VoidCallback onRemove;
+  final VoidCallback? onWatch;
 
   const _CameraCard({
     required this.camera,
@@ -569,6 +635,7 @@ class _CameraCard extends StatelessWidget {
     required this.onOpen,
     required this.onSettings,
     required this.onRemove,
+    this.onWatch,
   });
 
   @override
@@ -616,10 +683,11 @@ class _CameraCard extends StatelessWidget {
               ),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert_rounded, color: AppColors.textMuted),
-                onSelected: (v) => v == 'settings' ? onSettings() : onRemove(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'settings', child: Text('Motion, alerts & AI')),
-                  PopupMenuItem(value: 'remove', child: Text('Remove camera')),
+                onSelected: (v) => switch (v) { 'settings' => onSettings(), 'watch' => onWatch?.call(), _ => onRemove() },
+                itemBuilder: (_) => [
+                  if (onWatch != null) const PopupMenuItem(value: 'watch', child: Text('Watch for something…')),
+                  const PopupMenuItem(value: 'settings', child: Text('Motion, alerts & AI')),
+                  const PopupMenuItem(value: 'remove', child: Text('Remove camera')),
                 ],
               ),
             ]),
@@ -634,6 +702,94 @@ class _CameraCard extends StatelessWidget {
               CheckCircle(checked: live),
             ]),
           ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// One AI watch task: progress ring, status, the AI's latest observation, actions.
+class _TaskCard extends StatelessWidget {
+  final WatchTask task;
+  final TaskWatcher watcher;
+  const _TaskCard({required this.task, required this.watcher});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = task;
+    final now = DateTime.now();
+    final done = t.status == TaskStatus.done;
+    final active = t.status == TaskStatus.watching;
+    final progress = done ? 1.0 : ((t.lastProgress ?? (active ? 5 : 0)) / 100);
+    final color = done ? AppColors.success : (active ? AppColors.ai : AppColors.textFaint);
+
+    Widget action(String label, IconData icon, VoidCallback onTap, {bool primary = false}) => Expanded(
+          child: primary
+              ? FilledButton.icon(
+                  onPressed: onTap,
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+                  icon: Icon(icon, size: 18),
+                  label: Text(label),
+                )
+              : OutlinedButton.icon(
+                  onPressed: onTap,
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+                  icon: Icon(icon, size: 18),
+                  label: Text(label),
+                ),
+        );
+
+    final actions = <Widget>[
+      if (t.needsAcknowledgement) action('Handled', Icons.check_rounded, () => watcher.acknowledge(t), primary: true),
+      if (active) action('Pause', Icons.pause_rounded, () => watcher.pause(t)),
+      if (t.status == TaskStatus.paused) action('Resume', Icons.play_arrow_rounded, () => watcher.resume(t), primary: true),
+      if (!active && t.status != TaskStatus.paused && !t.needsAcknowledgement)
+        action('Watch again', Icons.replay_rounded, () => watcher.resume(t)),
+      action(active ? 'Stop' : 'Delete', active ? Icons.stop_rounded : Icons.delete_outline_rounded, () async {
+        if (active) {
+          await watcher.stopTask(t);
+        } else if (await confirm(context, title: 'Delete this task?', message: t.description, action: 'Delete', destructive: true)) {
+          await watcher.delete(t);
+        }
+      }),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ProgressRing(icon: done ? Icons.check_rounded : Icons.auto_awesome, color: color, progress: progress),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t.description, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3)),
+                const SizedBox(height: 4),
+                Text('${t.cameraName}${t.lastProgress != null && t.progressApplicable ? ' · ~${t.lastProgress}%' : ''}',
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5)),
+              ]),
+            ),
+            CheckCircle(checked: done, size: 26),
+          ]),
+          if (t.lastObservation != null && t.lastObservation!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('“${t.lastObservation}”', style: const TextStyle(color: AppColors.text, fontSize: 14, height: 1.35)),
+          ],
+          const SizedBox(height: 10),
+          const Divider(),
+          const SizedBox(height: 10),
+          Row(children: [
+            Icon(t.lastError != null ? Icons.error_outline_rounded : Icons.schedule_rounded,
+                size: 18, color: t.lastError != null || t.needsAcknowledgement ? AppColors.danger : AppColors.textMuted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(t.lastError ?? describeTaskStatus(t, now),
+                  style: TextStyle(
+                      color: t.lastError != null || t.needsAcknowledgement ? AppColors.danger : AppColors.textMuted, fontSize: 13.5)),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(width: 10), actions[i]]]),
         ]),
       ),
     );

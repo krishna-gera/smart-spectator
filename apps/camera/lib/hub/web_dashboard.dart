@@ -81,6 +81,25 @@ const String dashboardHtml = r'''<!doctype html>
   .empty { text-align:center; padding:60px 20px; color:var(--muted); }
   .empty .big { font-size:20px; color:var(--text); font-weight:700; margin-bottom:6px; }
   .code-box { display:inline-block; margin-top:14px; padding:12px 20px; border-radius:18px; background:var(--surface); color:var(--code); font-size:32px; font-weight:800; letter-spacing:6px; }
+  /* AI tasks */
+  .ai-title::before { content:"✦  " !important; color:var(--ai) !important; }
+  .tasks { display:grid; gap:12px; margin-bottom:12px; }
+  .task .name { font-size:15px; }
+  .task-icon { width:44px; height:44px; border-radius:50%; display:grid; place-items:center; flex:none; font-size:18px;
+    box-shadow:0 0 0 4px rgba(100,112,128,.5); background:var(--surface-high); }
+  .task-icon.active { box-shadow:0 0 0 4px var(--ai); }
+  .task-icon.done { box-shadow:0 0 0 4px var(--success); }
+  .bar { height:8px; border-radius:99px; background:var(--surface-high); margin-top:12px; overflow:hidden; }
+  .bar div { height:100%; background:var(--primary); border-radius:99px; }
+  .obs { margin-top:10px; font-size:14px; }
+  .status { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); color:var(--muted); font-size:13.5px; }
+  .status.urgent { color:var(--danger); }
+  .btn.yellow { background:var(--primary); border-color:var(--primary); color:var(--on-primary); font-weight:700; }
+  .task-form { display:grid; gap:10px; margin-bottom:6px; }
+  .task-form select, .task-form textarea { background:var(--surface-high); color:var(--text); border:1.5px solid transparent; border-radius:14px; padding:10px 12px; font:inherit; }
+  .task-form textarea { width:100%; resize:vertical; }
+  .task-form textarea:focus, .task-form select:focus { outline:none; border-color:var(--primary); }
+  .task-form label { display:flex; align-items:center; gap:10px; color:var(--muted); }
   /* events */
   .events { display:grid; gap:10px; }
   .event { display:flex; gap:14px; background:var(--surface); border:1px solid transparent; border-radius:22px; overflow:hidden; cursor:pointer; padding:12px; }
@@ -98,7 +117,7 @@ const String dashboardHtml = r'''<!doctype html>
   .dlg-img canvas { max-width:100%; max-height:60vh; }
   .kv { display:grid; grid-template-columns:150px 1fr; gap:6px 12px; margin-top:12px; font-size:14px; }
   .kv div:nth-child(odd) { color:var(--muted); }
-  @media (max-width:640px) { .tabs { margin-left:0; } .brand span { display:none; } .thumb { width:110px; } }
+  @media (max-width:640px) { .tabs { margin-left:0; } .brand span, #hub-name { display:none; } .thumb { width:110px; } .bar { gap:10px; } }
 </style>
 </head>
 <body>
@@ -257,7 +276,15 @@ function renderCameras(d) {
       el("span", {}, "On another phone open Smart Spectator, choose Camera, and enter the main phone's pairing code.")), el("div", { class:"round" }, "+")));
     return;
   }
-  const grid = root.querySelector(".grid") || (() => { const g = el("div", { class:"grid" }); root.replaceChildren(header, el("div", { class:"section-title" }, "All cameras"), g); return g; })();
+  let grid = root.querySelector(".grid");
+  if (!grid) {
+    grid = el("div", { class:"grid" });
+    root.replaceChildren(header, el("div", { class:"section-title ai-title" }, "AI tasks"), el("div", { id:"task-list", class:"tasks" }),
+      d.hub.ai_available ? taskForm() : el("div", { class:"faint", style:"text-align:center" }, "AI tasks need the AI service."),
+      el("div", { class:"section-title" }, "All cameras"), grid);
+  }
+  renderTasks(d);
+  syncTaskFormCameras(d);
   const ids = new Set(d.cameras.map(c => c.camera_id));
   for (const id of Object.keys(cards)) if (!ids.has(id)) { cards[id].remove(); delete cards[id]; clearTimeout(state.frameTimers[id]); }
   for (const cam of d.cameras) {
@@ -337,8 +364,72 @@ function settingsPanel(cam, aiAvailable) {
     toggle("AI descriptions (Groq)", aiAvailable ? "Describe motion snapshots." : "Not available on this main phone.", "ai_enabled", aiAvailable && s.ai_enabled, !aiAvailable));
 }
 
+// ---------------------------------------------------------------- AI tasks
+function renderTasks(d) {
+  const list = document.getElementById("task-list");
+  if (!list) return;
+  if (!d.tasks.length) {
+    list.replaceChildren(el("div", { class:"card card-body faint", style:"text-align:center" },
+      "Give a camera a job in plain words — \"tell me when the washing machine is full\" — and the AI watches for it."));
+    return;
+  }
+  list.replaceChildren(...d.tasks.map(t => {
+    const done = t.status === "done", active = t.status === "watching";
+    const act = (label, action, primary) => el("button", { class: primary ? "btn yellow" : "btn", onclick: async () => {
+      if (action === "delete" && !confirm(`Delete this task?\n\n${t.description}`)) return;
+      await api(`/api/v1/web/tasks/${encodeURIComponent(t.id)}${action === "delete" ? "" : "/" + action}`, { method: action === "delete" ? "DELETE" : "POST" });
+      refresh();
+    } }, label);
+    const pct = done ? 100 : (t.progress ?? 0);
+    return el("div", { class:"card card-body task" },
+      el("div", { class:"row" },
+        el("span", { class:"task-icon" + (done ? " done" : active ? " active" : "") }, done ? "✓" : "✦"),
+        el("div", { style:"flex:1; min-width:0" }, el("div", { class:"name" }, t.description),
+          el("div", { class:"faint" }, `${t.camera_name}${t.progress_applicable && t.progress != null ? ` · ~${t.progress}%` : ""}`))),
+      t.progress_applicable || done ? el("div", { class:"bar" }, el("div", { style:`width:${pct}%` })) : "",
+      t.observation ? el("div", { class:"obs" }, `“${t.observation}”`) : "",
+      el("div", { class: t.has_error || t.needs_ack ? "status urgent" : "status" }, t.status_text),
+      el("div", { class:"actions" },
+        t.needs_ack ? act("Handled", "ack", true) : "",
+        active ? act("Pause", "pause") : "",
+        t.status === "paused" ? act("Resume", "resume", true) : "",
+        !active && t.status !== "paused" && !t.needs_ack ? act("Watch again", "resume") : "",
+        active ? act("Stop", "stop") : act("Delete", "delete")));
+  }));
+}
+function taskForm() {
+  const sel = el("select", { id:"task-camera" });
+  const text = el("textarea", { id:"task-text", maxlength:"300", rows:"3", placeholder:"e.g. Tell me when the water in the washing machine reaches the MAX line" });
+  const interval = el("select", { id:"task-interval" }, ...[[15,"15 s"],[30,"30 s"],[60,"1 min"],[300,"5 min"]].map(([v,l]) => el("option", { value:String(v), selected: v === 30 }, l)));
+  const remind = el("input", { type:"checkbox", id:"task-remind", checked:true });
+  const msg = el("div", { class:"error" });
+  const start = el("button", { class:"btn yellow", onclick: async () => {
+    msg.textContent = "";
+    const res = await api("/api/v1/web/tasks", { method:"POST", body: JSON.stringify({ camera_id: sel.value, description: text.value,
+      interval_seconds: Number(interval.value), remind_until_ack: remind.checked }) });
+    if (!res.ok) { msg.textContent = (await res.json()).detail || "Could not start the task."; return; }
+    text.value = ""; refresh();
+  } }, "✦ Start watching");
+  return el("div", { class:"card card-body task-form" },
+    el("b", {}, "New AI task"),
+    el("div", { class:"faint" }, "Describe what the AI should watch for. Pictures from that camera go to Groq while the task runs."),
+    el("label", {}, "Camera", sel), text,
+    el("div", { class:"row", style:"gap:16px; flex-wrap:wrap" }, el("label", {}, "Check every ", interval),
+      el("label", { class:"row", style:"gap:8px" }, remind, "Remind me until handled")),
+    start, msg);
+}
+function syncTaskFormCameras(d) {
+  const sel = document.getElementById("task-camera");
+  if (!sel) return;
+  const want = d.cameras.map(c => `${c.camera_id}|${c.name}`).join(",");
+  if (sel.dataset.cams === want) return;
+  const prev = sel.value;
+  sel.replaceChildren(...d.cameras.map(c => el("option", { value:c.camera_id, selected: c.camera_id === prev }, c.name)));
+  sel.dataset.cams = want;
+}
+
 // ---------------------------------------------------------------- events
-function eventTitle(e) { return e.ai_category ? (LABELS[e.ai_category] || "Motion") : (e.type === "ai_check" ? "AI check" : "Motion"); }
+function eventTitle(e) { if (e.type === "task_done") return "Task done"; return e.ai_category ? (LABELS[e.ai_category] || "Motion") : (e.type === "ai_check" ? "AI check" : "Motion"); }
 function renderEvents(d) {
   const root = document.getElementById("tab-events");
   const header = ringHeader("🔔", "#f25c70", d.events.length ? (d.events.length - d.unseen) / d.events.length : 0,

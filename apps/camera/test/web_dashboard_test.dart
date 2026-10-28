@@ -10,6 +10,7 @@ import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
 import 'package:smart_spectator_camera/hub/device_registry.dart';
 import 'package:smart_spectator_camera/hub/event_store.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
+import 'package:smart_spectator_camera/hub/watch_tasks.dart';
 
 final _jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 7, 7, 7, 0xFF, 0xD9]);
 
@@ -184,5 +185,47 @@ void main() {
     await signIn();
     expect((await browser.json('POST', '/api/v1/web/logout')).$1, 200);
     expect((await browser.json('GET', '/api/v1/web/state')).$1, 401);
+  });
+
+  test('AI tasks: create, list, act on and delete from the browser', () async {
+    final cam = await PairingClient.pairWithCode(
+        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'Laundry', code: registry.hubCode);
+    final taskStore = TaskStore(dir);
+    final watcher = TaskWatcher(
+      store: taskStore,
+      events: events,
+      ai: AiClient(AiConfig(proxyUrl: Uri.parse('http://127.0.0.1:1'), token: 't')),
+      snapshot: (_) async => null,
+      notify: ({required id, required title, required body}) async {},
+      onWatchChanged: server.setAiWatch,
+    );
+    await signIn();
+
+    expect((await browser.json('POST', '/api/v1/web/tasks', {'camera_id': cam.cameraId, 'description': 'water at max'})).$1, 503,
+        reason: 'AI not available yet');
+    server.web
+      ..aiAvailable = true
+      ..tasks = watcher;
+
+    expect((await browser.json('POST', '/api/v1/web/tasks', {'camera_id': cam.cameraId, 'description': 'short'})).$1, 422);
+    expect((await browser.json('POST', '/api/v1/web/tasks', {'camera_id': 'cam_x', 'description': 'water at max level'})).$1, 404);
+    final (status, created) = await browser.json('POST', '/api/v1/web/tasks',
+        {'camera_id': cam.cameraId, 'description': 'Tell me when the water reaches MAX', 'interval_seconds': 60, 'remind_until_ack': false});
+    expect(status, 201);
+    final t = taskStore.byId(created['id'] as String)!;
+    expect((t.intervalSeconds, t.remindUntilAck, t.cameraName), (60, false, 'Laundry'));
+
+    final (_, state) = await browser.json('GET', '/api/v1/web/state');
+    expect(state['tasks'].single['description'], 'Tell me when the water reaches MAX');
+    expect(state['tasks'].single['status'], 'watching');
+
+    expect((await browser.json('POST', '/api/v1/web/tasks/${t.id}/pause')).$1, 200);
+    expect(t.status, TaskStatus.paused);
+    expect((await browser.json('POST', '/api/v1/web/tasks/${t.id}/resume')).$1, 200);
+    expect(t.status, TaskStatus.watching);
+    expect((await browser.json('POST', '/api/v1/web/tasks/${t.id}/explode')).$1, 404);
+    expect((await browser.json('DELETE', '/api/v1/web/tasks/${t.id}')).$1, 200);
+    expect(taskStore.tasks, isEmpty);
+    watcher.dispose();
   });
 }

@@ -20,6 +20,7 @@ String _day(DateTime t) {
 }
 
 String _duration(CameraEvent e) {
+  if (e.type == 'task_done') return 'AI task';
   if (e.type != 'motion') return 'snapshot';
   final d = e.duration;
   if (d == null) return 'ongoing';
@@ -28,6 +29,7 @@ String _duration(CameraEvent e) {
 }
 
 String _title(CameraEvent e) {
+  if (e.type == 'task_done') return 'Task done';
   final category = e.aiCategory;
   if (category != null) return AlertService.categoryLabels[category] ?? 'Motion';
   return e.type == 'ai_check' ? 'AI check' : 'Motion';

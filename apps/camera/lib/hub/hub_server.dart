@@ -74,6 +74,13 @@ class CameraLink {
   }
 }
 
+/// A JPEG from a camera plus its 32x18 brightness fingerprint (when sent).
+class CameraSnapshot {
+  final Uint8List jpeg;
+  final Uint8List? grid;
+  const CameraSnapshot(this.jpeg, this.grid);
+}
+
 /// A validated video packet tagged with the camera it came from.
 class CameraPacket {
   final String cameraId;
@@ -102,7 +109,10 @@ class HubServer {
   /// Called when a camera reports new motion (after the event is stored).
   void Function(CameraEvent event, CameraLink camera)? onMotionStarted;
 
-  final Map<String, (String cameraId, Completer<Uint8List?>)> _snapshotRequests = {};
+  final Map<String, (String cameraId, Completer<CameraSnapshot?>)> _snapshotRequests = {};
+
+  /// Watch-task labels per camera; cameras show an "AI watching" badge.
+  final Map<String, List<String>> _aiWatch = {};
 
   /// Browser dashboard served by this main phone (Phase 5).
   late final WebApi web = WebApi(this);
@@ -336,6 +346,7 @@ class HubServer {
     _notify();
     // The camera applies the settings chosen on this phone.
     _pushMotionSettings(device.deviceId, device.cameraId);
+    _pushAiWatch(device.deviceId, device.cameraId);
 
     ws.listen(
       (msg) {
@@ -442,11 +453,15 @@ class HubServer {
 
   /// Asks a camera for a JPEG of its current picture ("Ask AI now").
   /// Returns null if the camera is offline or does not answer in [timeout].
-  Future<Uint8List?> requestSnapshot(String cameraId, {Duration timeout = const Duration(seconds: 6)}) async {
+  Future<Uint8List?> requestSnapshot(String cameraId, {Duration timeout = const Duration(seconds: 6)}) async =>
+      (await requestFrame(cameraId, timeout: timeout))?.jpeg;
+
+  /// Like [requestSnapshot], also returning the camera's scene fingerprint.
+  Future<CameraSnapshot?> requestFrame(String cameraId, {Duration timeout = const Duration(seconds: 6)}) async {
     final link = _links[cameraId];
     if (link == null) return null;
     final requestId = 'snap_${++_snapshotSeq}_${DateTime.now().millisecondsSinceEpoch}';
-    final completer = Completer<Uint8List?>();
+    final completer = Completer<CameraSnapshot?>();
     _snapshotRequests[requestId] = (cameraId, completer);
     final sent = sendCommand(link.deviceId, {
       'protocol': 'ss_control_v1',
@@ -486,8 +501,37 @@ class HubServer {
     if (jpeg.length < 2 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) {
       return _json(req.response, 400, {'detail': 'snapshot_jpeg is not a JPEG'});
     }
-    if (!completer.isCompleted) completer.complete(jpeg);
+    Uint8List? grid;
+    final rawGrid = body['grid'];
+    if (rawGrid is String) {
+      try {
+        final g = base64Decode(rawGrid);
+        if (g.length == 32 * 18) grid = g;
+      } catch (_) {}
+    }
+    if (!completer.isCompleted) completer.complete(CameraSnapshot(jpeg, grid));
     return _json(req.response, 200, {'status': 'received'});
+  }
+
+  /// Tells a camera which AI watch tasks are active on it (privacy badge).
+  void setAiWatch(String cameraId, List<String> taskLabels) {
+    if (taskLabels.isEmpty) {
+      _aiWatch.remove(cameraId);
+    } else {
+      _aiWatch[cameraId] = taskLabels;
+    }
+    final link = _links[cameraId];
+    if (link != null) _pushAiWatch(link.deviceId, cameraId);
+  }
+
+  void _pushAiWatch(String deviceId, String cameraId) {
+    sendCommand(deviceId, {
+      'protocol': 'ss_control_v1',
+      'type': 'device_control_command',
+      'target_camera_id': cameraId,
+      'action': 'set_ai_watch',
+      'tasks': _aiWatch[cameraId] ?? const <String>[],
+    });
   }
 
   void _pushMotionSettings(String deviceId, String cameraId) {

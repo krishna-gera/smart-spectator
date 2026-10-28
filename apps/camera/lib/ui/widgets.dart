@@ -65,14 +65,33 @@ class RingHeader extends StatelessWidget {
   }
 }
 
+/// Small icon-in-ring indicator (same look as [RingHeader]) for list items.
+class ProgressRing extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final double progress;
+  final double size;
+  const ProgressRing({super.key, required this.icon, required this.color, required this.progress, this.size = 48});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(
+          painter: _RingPainter(color: color, progress: progress.clamp(0.0, 1.0), stroke: size / 12),
+          child: Center(child: Icon(icon, color: Colors.white, size: size * 0.42)),
+        ),
+      );
+}
+
 class _RingPainter extends CustomPainter {
   final Color color;
   final double progress;
-  _RingPainter({required this.color, required this.progress});
+  final double stroke;
+  _RingPainter({required this.color, required this.progress, this.stroke = 6});
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 6.0;
     final rect = Offset.zero & size;
     final arcRect = rect.deflate(stroke / 2);
     canvas.drawArc(arcRect, 0, math.pi * 2, false,

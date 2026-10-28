@@ -39,11 +39,15 @@ class MotionReporter {
   }
 
   /// Answers a main phone's "capture_snapshot" request ("Ask AI now").
-  Future<bool> uploadSnapshot({required String requestId, required Uint8List jpeg}) async {
+  Future<bool> uploadSnapshot({required String requestId, required Uint8List jpeg, Uint8List? grid}) async {
     try {
       final res = await http
           .post(hub.uri('/api/v1/snapshots'),
-              headers: _headers, body: jsonEncode({'request_id': requestId, 'snapshot_jpeg': base64Encode(jpeg)}))
+              headers: _headers, body: jsonEncode({
+                'request_id': requestId,
+                'snapshot_jpeg': base64Encode(jpeg),
+                if (grid != null) 'grid': base64Encode(grid),
+              }))
           .timeout(const Duration(seconds: 8));
       return res.statusCode == 200;
     } catch (_) {

@@ -99,4 +99,14 @@ void main() {
     expect(feed(frame(squareX: 140)), isNull);
     expect(d.isActive, isFalse);
   });
+
+  test('scene fingerprint: 576 bytes, unchanged scene ≈ 0, moved object > 1%', () {
+    final a = MotionDetector.sceneGrid(frame(), w, h, w);
+    expect(a.length, 32 * 18);
+    expect(MotionDetector.gridChange(a, MotionDetector.sceneGrid(frame(), w, h, w)), 0);
+    expect(MotionDetector.gridChange(a, MotionDetector.sceneGrid(frame(base: 160), w, h, w)), 0,
+        reason: 'whole-picture brightness change is ignored');
+    expect(MotionDetector.gridChange(a, MotionDetector.sceneGrid(frame(squareX: 100), w, h, w)), greaterThan(0.01));
+    expect(MotionDetector.gridChange(a, a.sublist(0, 10)), 1, reason: 'mismatched grids count as changed');
+  });
 }

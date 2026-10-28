@@ -79,6 +79,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   bool _motionEnabled = true;
   bool _motionActive = false;
 
+  // AI watch tasks per main phone (shown as a badge for privacy).
+  final Map<String, List<String>> _aiWatch = {};
+
   // "Ask AI now" requests waiting for the next frame: (connection key, request id).
   final List<(String, String)> _snapshotRequests = [];
 
@@ -210,6 +213,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         if (!enabled && _motionActive) _finishMotion(0);
         if (!enabled) _motion.reset();
         if (mounted) setState(() => _motionEnabled = enabled);
+      case 'set_ai_watch':
+        final tasks = (cmd['tasks'] as List?)?.whereType<String>().toList() ?? const <String>[];
+        if (mounted) setState(() => tasks.isEmpty ? _aiWatch.remove(hubKey) : _aiWatch[hubKey] = tasks);
       case 'capture_snapshot':
         final id = cmd['request_id'];
         if (id is String) _snapshotRequests.add((hubKey, id));
@@ -309,13 +315,17 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void _answerSnapshots(CameraImage image) {
     final requests = List.of(_snapshotRequests);
     _snapshotRequests.clear();
+    // Brightness fingerprint lets the main phone skip AI checks of an unchanged scene.
+    final luma = image.planes.first;
+    final grid = MotionDetector.sceneGrid(luma.bytes, image.width, image.height, luma.bytesPerRow);
     H264HardwareEncoder.snapshotJpeg(image, quality: 80).then((jpeg) {
       if (jpeg == null) return;
       for (final (hubKey, requestId) in requests) {
-        _hubs[hubKey]?.reporter.uploadSnapshot(requestId: requestId, jpeg: jpeg);
+        _hubs[hubKey]?.reporter.uploadSnapshot(requestId: requestId, jpeg: jpeg, grid: grid);
       }
     });
   }
+
 
   Future<void> _stopStreaming() async {
     if (_motionActive) _finishMotion(0);
@@ -479,6 +489,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           streaming: _streaming,
           motionEnabled: _motionEnabled,
           motionActive: _motionActive,
+          aiWatching: _aiWatch.values.expand((t) => t).toList(),
           onChangeRole: widget.onChangeRole,
         );
 
@@ -520,12 +531,14 @@ class _TopBar extends StatelessWidget {
   final bool streaming;
   final bool motionEnabled;
   final bool motionActive;
+  final List<String> aiWatching;
   final VoidCallback onChangeRole;
   const _TopBar({
     required this.name,
     required this.streaming,
     required this.motionEnabled,
     required this.motionActive,
+    required this.aiWatching,
     required this.onChangeRole,
   });
 
@@ -538,6 +551,13 @@ class _TopBar extends StatelessWidget {
         child: Row(children: [
           StatusChip(streaming ? 'LIVE' : 'READY', color: streaming ? AppColors.danger : AppColors.textMuted, filled: streaming),
           const SizedBox(width: 8),
+          if (aiWatching.isNotEmpty) ...[
+            Tooltip(
+              message: 'AI is watching: ${aiWatching.join('; ')}',
+              child: const StatusChip('AI watching', color: AppColors.ai, filled: true, icon: Icons.auto_awesome),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (streaming)
             StatusChip(
               !motionEnabled ? 'Motion off' : (motionActive ? 'Motion' : 'Watching'),
