@@ -37,3 +37,7 @@ artifacts/runs/**/*.pt
 .dev.vars
 **/.dev.vars
 *.secret
+
+# Node / Cloudflare Wrangler
+node_modules/
+.wrangler/
