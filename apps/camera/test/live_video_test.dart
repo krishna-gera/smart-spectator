@@ -186,7 +186,7 @@ void main() {
       expect(server.cameras.single.controlConnected, isTrue);
 
       expect(server.requestKeyframe(paired.cameraId!), isTrue);
-      final cmd = await commands.stream.first.timeout(const Duration(seconds: 2));
+      final cmd = await commands.stream.firstWhere((c) => c['action'] == 'request_idr').timeout(const Duration(seconds: 2));
       expect(cmd['action'], 'request_idr');
 
       // Telemetry is sent once per second.

@@ -15,11 +15,11 @@ class NsdHelper(context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var registration: NsdManager.RegistrationListener? = null
 
-    fun register(port: Int, name: String) {
+    fun register(port: Int, name: String, type: String = SERVICE_TYPE) {
         unregister()
         val info = NsdServiceInfo().apply {
             serviceName = name
-            serviceType = SERVICE_TYPE
+            serviceType = type
             setPort(port)
         }
         val listener = object : NsdManager.RegistrationListener {
@@ -43,7 +43,7 @@ class NsdHelper(context: Context) {
     }
 
     /** Browses for [timeoutMs] and returns every resolved hub as {host, port, name}. */
-    fun discover(timeoutMs: Long, onResult: (List<Map<String, Any>>) -> Unit) {
+    fun discover(timeoutMs: Long, type: String = SERVICE_TYPE, onResult: (List<Map<String, Any>>) -> Unit) {
         val found = mutableListOf<Map<String, Any>>()
         val toResolve = ArrayDeque<NsdServiceInfo>()
         var resolving = false
@@ -91,7 +91,7 @@ class NsdHelper(context: Context) {
         }
 
         try {
-            nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener)
+            nsd.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (e: Exception) {
             onResult(emptyList())
             return

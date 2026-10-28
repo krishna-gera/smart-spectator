@@ -13,9 +13,9 @@ final class LocalDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
   private var results: [[String: Any]] = []
   private var completion: (([[String: Any]]) -> Void)?
 
-  func publish(port: Int, name: String) {
+  func publish(port: Int, name: String, type: String = LocalDiscovery.serviceType) {
     unpublish()
-    let service = NetService(domain: "local.", type: LocalDiscovery.serviceType, name: name, port: Int32(port))
+    let service = NetService(domain: "local.", type: LocalDiscovery.bonjourType(type), name: name, port: Int32(port))
     service.publish()
     published = service
   }
@@ -25,8 +25,11 @@ final class LocalDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
     published = nil
   }
 
-  /// Browses for `timeout` seconds and returns resolved hubs as {host, port, name}.
-  func discover(timeout: TimeInterval, completion: @escaping ([[String: Any]]) -> Void) {
+  /// "_x._tcp" → "_x._tcp." as NetService expects.
+  static func bonjourType(_ t: String) -> String { t.hasSuffix(".") ? t : t + "." }
+
+  /// Browses for `timeout` seconds and returns resolved services as {host, port, name}.
+  func discover(timeout: TimeInterval, type: String = LocalDiscovery.serviceType, completion: @escaping ([[String: Any]]) -> Void) {
     guard self.completion == nil else {
       completion([])  // a search is already running
       return
@@ -35,7 +38,7 @@ final class LocalDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDeleg
     results = []
     let browser = NetServiceBrowser()
     browser.delegate = self
-    browser.searchForServices(ofType: LocalDiscovery.serviceType, inDomain: "local.")
+    browser.searchForServices(ofType: LocalDiscovery.bonjourType(type), inDomain: "local.")
     self.browser = browser
     DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in self?.finish() }
   }

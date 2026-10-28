@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/pairing/code_guard.dart';
+
 /// A camera phone that has completed pairing with this main phone.
 class PairedDevice {
   final String deviceId;
@@ -73,11 +75,19 @@ abstract class DeviceStore {
   Future<void> saveSecret(String secret);
   Future<List<PairedDevice>> loadDevices();
   Future<void> saveDevices(List<PairedDevice> devices);
+  Future<String?> loadHubCode();
+  Future<void> saveHubCode(String code);
 }
 
 class InMemoryDeviceStore implements DeviceStore {
   String? _secret;
+  String? _hubCode;
   List<PairedDevice> _devices = [];
+
+  @override
+  Future<String?> loadHubCode() async => _hubCode;
+  @override
+  Future<void> saveHubCode(String code) async => _hubCode = code;
 
   @override
   Future<String?> loadSecret() async => _secret;
@@ -92,6 +102,14 @@ class InMemoryDeviceStore implements DeviceStore {
 class SharedPrefsDeviceStore implements DeviceStore {
   static const _keySecret = 'ss_hub_token_secret';
   static const _keyDevices = 'ss_hub_paired_devices';
+  static const _keyHubCode = 'ss_hub_pairing_code';
+
+  @override
+  Future<String?> loadHubCode() async => (await SharedPreferences.getInstance()).getString(_keyHubCode);
+
+  @override
+  Future<void> saveHubCode(String code) async =>
+      (await SharedPreferences.getInstance()).setString(_keyHubCode, code);
 
   @override
   Future<String?> loadSecret() async =>
@@ -149,19 +167,17 @@ class DeviceRegistry {
   final Map<String, PairedDevice> _devices = {};
   late List<int> _secret;
 
-  /// Code shown permanently on the main phone; any camera that enters it pairs.
-  final Duration hubCodeTtl;
+  /// Permanent code shown on the main phone; any camera that enters it pairs.
   final int maxHubCodeFailures;
-  String _hubCode = '';
-  DateTime _hubCodeExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
-  int _hubCodeFailures = 0;
+  final Duration hubCodeLockout;
+  late CodeGuard _hubCode;
 
   DeviceRegistry({
     required this.store,
     this.pinTtl = const Duration(minutes: 5),
     this.maxPendingRequests = 16,
-    this.hubCodeTtl = const Duration(minutes: 10),
     this.maxHubCodeFailures = 10,
+    this.hubCodeLockout = const Duration(minutes: 5),
     DateTime Function()? now,
     Random? random,
   })  : _now = now ?? DateTime.now,
@@ -176,6 +192,14 @@ class DeviceRegistry {
       await store.saveSecret(secret);
     }
     _secret = utf8.encode(secret);
+    _hubCode = CodeGuard(
+      code: await store.loadHubCode(),
+      maxFailures: maxHubCodeFailures,
+      lockout: hubCodeLockout,
+      now: _now,
+      random: _random,
+    );
+    await store.saveHubCode(_hubCode.code);
     for (final d in await store.loadDevices()) {
       _devices[d.deviceId] = d;
     }
@@ -188,36 +212,23 @@ class DeviceRegistry {
 
   List<PairedDevice> get devices => _devices.values.toList();
 
-  /// The current 6-digit pairing code; rotates when it expires.
-  String get hubCode {
-    if (_hubCode.isEmpty || !_now().isBefore(_hubCodeExpiresAt)) rotateHubCode();
-    return _hubCode;
-  }
+  /// The main phone's permanent 6-digit pairing code.
+  String get hubCode => _hubCode.code;
 
-  DateTime get hubCodeExpiresAt {
-    hubCode; // refresh if expired
-    return _hubCodeExpiresAt;
-  }
+  /// Remaining pause after too many wrong codes, or null.
+  Duration? get hubCodeLockedFor => _hubCode.lockedFor;
 
-  void rotateHubCode() {
-    _hubCode = (100000 + _random.nextInt(900000)).toString();
-    _hubCodeExpiresAt = _now().add(hubCodeTtl);
-    _hubCodeFailures = 0;
+  /// Replaces the code ("Change code"); cameras already paired stay paired.
+  Future<String> changeHubCode() async {
+    final code = _hubCode.regenerate();
+    await store.saveHubCode(code);
+    return code;
   }
 
   /// One-step pairing: a camera sends the code shown on the main phone.
-  /// Too many wrong guesses (from any device) replace the code.
   Future<VerifyResult> pairWithHubCode(String deviceId, String deviceName, String submittedCode) async {
-    final current = hubCode;
-    if (!_constantTimeEquals(current, submittedCode.trim())) {
-      _hubCodeFailures++;
-      if (_hubCodeFailures >= maxHubCodeFailures) {
-        rotateHubCode();
-        return VerifyFailure('Too many wrong codes. A new code is now shown on the main phone.');
-      }
-      return VerifyFailure('That code is not correct. Check the code on the main phone.');
-    }
-    _hubCodeFailures = 0;
+    final check = _hubCode.check(submittedCode);
+    if (!check.ok) return VerifyFailure(check.message!);
     _pending.remove(deviceId);
     final (device, rawToken) = await _issueToken(deviceId, deviceName);
     return VerifySuccess(device, rawToken);
@@ -261,6 +272,11 @@ class DeviceRegistry {
     final (device, rawToken) = await _issueToken(deviceId, req.deviceName);
     return VerifySuccess(device, rawToken);
   }
+
+  /// Creates (or replaces) credentials for a camera that this main phone is
+  /// adding by the camera's own code. The raw token is handed to the camera.
+  Future<(PairedDevice, String)> issueCredential(String deviceId, String deviceName) =>
+      _issueToken(deviceId, deviceName);
 
   Future<(PairedDevice, String)> _issueToken(String deviceId, String deviceName) async {
     final rawToken = '$tokenPrefix${_randomHex(24)}';

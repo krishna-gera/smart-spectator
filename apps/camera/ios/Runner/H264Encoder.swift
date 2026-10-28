@@ -65,7 +65,7 @@ final class H264Encoder {
 
   /// Encodes one frame and returns every packet produced so far.
   func encode(planes: [PlaneData], timestampUs: Int64) -> [[String: Any]] {
-    guard let s = session, let pixelBuffer = makePixelBuffer(planes: planes) else { return [] }
+    guard let s = session, let pixelBuffer = H264Encoder.makeNV12(planes: planes, width: width, height: height) else { return [] }
     let pts = CMTime(value: timestampUs, timescale: 1_000_000)
 
     var frameProperties: CFDictionary?
@@ -121,7 +121,7 @@ final class H264Encoder {
 
   /// Builds an NV12 pixel buffer from NV12 (iOS camera, 2 planes) or
   /// planar/semi-planar YUV420 with explicit strides (3 planes).
-  private func makePixelBuffer(planes: [PlaneData]) -> CVPixelBuffer? {
+  static func makeNV12(planes: [PlaneData], width: Int, height: Int) -> CVPixelBuffer? {
     guard planes.count == 2 || planes.count >= 3 else { return nil }
     var buffer: CVPixelBuffer?
     let attrs: [CFString: Any] = [kCVPixelBufferIOSurfacePropertiesKey: [:] as [CFString: Any]]
@@ -169,7 +169,7 @@ final class H264Encoder {
     return pb
   }
 
-  private func copyRows(_ plane: PlaneData, to dst: UnsafeMutablePointer<UInt8>, dstStride: Int, rowBytes: Int, rows: Int) {
+  private static func copyRows(_ plane: PlaneData, to dst: UnsafeMutablePointer<UInt8>, dstStride: Int, rowBytes: Int, rows: Int) {
     plane.bytes.withUnsafeBytes { raw in
       guard let src = raw.bindMemory(to: UInt8.self).baseAddress else { return }
       for row in 0..<rows {

@@ -34,6 +34,7 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_smartspectator._tcp</string>
+		<string>_ss-camera._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Camcorder Mode uses the camera to stream video to your main phone.</string>

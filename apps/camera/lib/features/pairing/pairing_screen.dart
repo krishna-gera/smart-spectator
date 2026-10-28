@@ -1,18 +1,33 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../../camera/camcorder_service.dart';
 import '../../core/discovery/hub_discovery.dart';
 import '../../core/pairing/pairing_client.dart';
 import '../../core/storage/credential_store.dart';
+import '../../ui/theme.dart';
+import '../../ui/widgets.dart';
 
-/// Camcorder Mode pairing: type the 6-digit code shown on the main phone.
-/// Main phones on the same Wi-Fi are found automatically; typing an address is
-/// only a fallback for networks that block discovery.
+/// Camcorder Mode: connect this camera to a main phone. Two ways:
+///  1. type the main phone's code here, or
+///  2. on the main phone choose "Add camera" and type this camera's code.
 class PairingScreen extends StatefulWidget {
+  final CamcorderService service;
   final VoidCallback onPaired;
   final VoidCallback onChangeRole;
 
-  const PairingScreen({super.key, required this.onPaired, required this.onChangeRole});
+  /// True when this camera already has a main phone and is adding another.
+  final bool addingAnother;
+
+  const PairingScreen({
+    super.key,
+    required this.service,
+    required this.onPaired,
+    required this.onChangeRole,
+    this.addingAnother = false,
+  });
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -25,248 +40,240 @@ class _PairingScreenState extends State<PairingScreen> {
   final List<DiscoveredHub> _hubs = [];
   DiscoveredHub? _selected;
   StreamSubscription<DiscoveredHub>? _searchSub;
-  bool _isSearching = false;
+  StreamSubscription<HubLink>? _linkedSub;
+  bool _searching = false;
   bool _showManual = false;
-  bool _isBusy = false;
-  String? _statusMessage;
-  String _deviceId = '';
+  bool _busy = false;
+  String? _message;
 
   @override
   void initState() {
     super.initState();
-    _initDevice();
     _search();
     _codeController.addListener(() => setState(() {}));
     _addressController.addListener(() => setState(() {}));
+    // A main phone added this camera by the camera's code.
+    _linkedSub = widget.service.linked.listen((_) {
+      if (mounted) widget.onPaired();
+    });
   }
 
   @override
   void dispose() {
     _searchSub?.cancel();
+    _linkedSub?.cancel();
     _codeController.dispose();
     _addressController.dispose();
     super.dispose();
   }
 
-  Future<void> _initDevice() async {
-    final creds = await CredentialStore.load();
-    if (mounted) setState(() => _deviceId = creds.deviceId);
-  }
-
-  String get _deviceName {
-    final suffix = _deviceId.length >= 4 ? _deviceId.substring(_deviceId.length - 4) : _deviceId;
-    return 'Camera $suffix';
-  }
-
   void _search() {
     _searchSub?.cancel();
     setState(() {
-      _isSearching = true;
+      _searching = true;
       _hubs.clear();
       _selected = null;
     });
+    final known = widget.service.hubs.map((h) => h.key).toSet();
     _searchSub = HubDiscovery.discoverHubs().listen(
       (hub) {
         if (!mounted || _hubs.any((h) => h.address == hub.address)) return;
+        if (known.contains('${hub.address.host}:${hub.address.port}')) return; // already connected
         setState(() {
           _hubs.add(hub);
           _selected ??= hub;
         });
       },
       onDone: () {
-        if (mounted) setState(() => _isSearching = false);
+        if (mounted) setState(() => _searching = false);
       },
     );
   }
 
-  /// Where to send the code: the chosen main phone, a typed address, or every
-  /// main phone found (the code is unique to one of them).
-  List<HubAddress> get _targets {
+  List<(HubAddress, String)> get _targets {
     if (_showManual) {
       final typed = HubAddress.tryParse(_addressController.text);
-      return typed == null ? [] : [typed];
+      return typed == null ? [] : [(typed, 'Main phone')];
     }
-    if (_selected != null) return [_selected!.address];
-    return _hubs.map((h) => h.address).toList();
+    if (_selected != null) return [(_selected!.address, _selected!.name)];
+    return _hubs.map((h) => (h.address, h.name)).toList();
   }
 
-  bool get _canConnect =>
-      !_isBusy && _deviceId.isNotEmpty && _codeController.text.trim().length == 6 && _targets.isNotEmpty;
+  bool get _canConnect => !_busy && _codeController.text.trim().length == 6 && _targets.isNotEmpty;
 
   Future<void> _connect() async {
-    final code = _codeController.text.trim();
-    final targets = _targets;
+    final creds = widget.service.credentials;
+    if (creds == null) return;
     setState(() {
-      _isBusy = true;
-      _statusMessage = 'Connecting...';
+      _busy = true;
+      _message = 'Connecting…';
     });
-
     PairingResponse? last;
-    HubAddress? pairedWith;
-    for (final hub in targets) {
-      last = await PairingClient.pairWithCode(hub: hub, deviceId: _deviceId, deviceName: _deviceName, code: code);
-      if (last.success) {
-        pairedWith = hub;
-        break;
+    for (final (address, name) in _targets) {
+      last = await PairingClient.pairWithCode(
+        hub: address,
+        deviceId: creds.deviceId,
+        deviceName: widget.service.deviceName,
+        code: _codeController.text,
+      );
+      if (last.success && last.deviceToken != null && last.cameraId != null) {
+        await CredentialStore.addHub(HubLink(
+          hubHost: address.host,
+          hubPort: address.port,
+          hubName: name,
+          cameraId: last.cameraId!,
+          deviceToken: last.deviceToken!,
+        ));
+        await widget.service.reload();
+        if (mounted) widget.onPaired();
+        return;
       }
     }
     if (!mounted) return;
-
-    if (pairedWith != null && last!.deviceToken != null && last.cameraId != null) {
-      await CredentialStore.save(
-        deviceToken: last.deviceToken!,
-        cameraId: last.cameraId!,
-        hubIp: pairedWith.host,
-        hubPort: pairedWith.port,
-      );
-      widget.onPaired();
-      return;
-    }
     setState(() {
-      _isBusy = false;
-      _statusMessage = last?.errorMessage ?? 'Pairing failed. Check the code and try again.';
+      _busy = false;
+      _message = last?.errorMessage ?? 'Could not connect. Check the code and try again.';
     });
   }
-
-  InputDecoration _fieldDecoration(String label) => InputDecoration(
-        counterText: '',
-        labelText: label,
-        labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-        filled: true,
-        fillColor: const Color(0xFF1E293B),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const Text('Camcorder Mode'),
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
+        title: Text(widget.addingAnother ? 'Add a main phone' : 'Connect camera'),
+        automaticallyImplyLeading: widget.addingAnother,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horiz),
-            tooltip: 'Change phone mode',
-            onPressed: widget.onChangeRole,
-          ),
+          if (!widget.addingAnother)
+            IconButton(icon: const Icon(Icons.swap_horiz), tooltip: 'Change phone mode', onPressed: widget.onChangeRole),
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            const Icon(Icons.videocam_outlined, size: 56, color: Color(0xFF38BDF8)),
-            const SizedBox(height: 12),
-            const Text(
-              'Connect to your main phone',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+              children: [
+                const Text('Enter the main phone\'s code',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                const SizedBox(height: 6),
+                const Text(
+                  'Open Smart Spectator on your main phone. Its pairing code is on the Cameras screen.',
+                  style: TextStyle(color: AppColors.textMuted, height: 1.4),
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: _codeController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 6,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.code, fontSize: 34, letterSpacing: 10, fontWeight: FontWeight.w800),
+                  decoration: const InputDecoration(counterText: '', hintText: '••••••'),
+                ),
+                if (!_showManual) ..._nearby() else ..._manual(),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _canConnect ? _connect : null,
+                  child: _busy
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                      : const Text('Connect'),
+                ),
+                if (_message != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_message!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textMuted)),
+                ],
+                const SectionHeader('Or add this camera from the main phone'),
+                CodeDisplay(
+                  code: widget.service.cameraCode,
+                  caption: 'On the main phone: Cameras → Add camera → ${widget.service.deviceName}',
+                  compact: true,
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Both phones need to be on the same Wi-Fi. Connecting over the internet needs the Smart Spectator relay, '
+                  'which is not set up yet.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textFaint, fontSize: 12, height: 1.4),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Enter the 6-digit code shown on your main phone (View Mode).',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _codeController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              maxLength: 6,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 32, letterSpacing: 8, fontWeight: FontWeight.bold),
-              decoration: _fieldDecoration('Pairing code'),
-            ),
-            const SizedBox(height: 20),
-            if (!_showManual) ..._nearbySection() else ..._manualSection(),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _canConnect ? _connect : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF38BDF8),
-                foregroundColor: const Color(0xFF0F172A),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: _isBusy
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF0F172A)))
-                  : const Text('Connect', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-            if (_statusMessage != null) ...[
-              const SizedBox(height: 12),
-              Text(_statusMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-            ],
-            const SizedBox(height: 24),
-            const Text(
-              'Not on the same Wi-Fi? Connecting over the internet needs the Smart Spectator relay, which is not set up yet.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  List<Widget> _nearbySection() => [
-        Row(children: [
-          const Expanded(
-            child: Text('MAIN PHONES ON THIS WI-FI',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w600)),
-          ),
-          if (_isSearching)
-            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-          else
-            IconButton(
-              icon: const Icon(Icons.refresh, color: Color(0xFF38BDF8)),
-              tooltip: 'Search again',
-              onPressed: _search,
-            ),
-        ]),
-        const SizedBox(height: 8),
+  List<Widget> _nearby() => [
+        SectionHeader(
+          'Main phones on this Wi-Fi',
+          trailing: _searching
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : IconButton(
+                  icon: const Icon(Icons.refresh, size: 20, color: AppColors.primary),
+                  tooltip: 'Search again',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _search,
+                ),
+        ),
         if (_hubs.isEmpty)
-          Text(
-            _isSearching ? 'Looking for main phones…' : 'No main phone found. Open View Mode on your main phone and keep both phones on the same Wi-Fi.',
-            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-          ),
-        ..._hubs.map((hub) {
-          final isSelected = hub.address == _selected?.address;
-          return Card(
-            color: isSelected ? const Color(0xFF1E3A5F) : const Color(0xFF1E293B),
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              onTap: () => setState(() => _selected = hub),
-              leading: Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_off, color: const Color(0xFF38BDF8)),
-              title: Text(hub.name, style: const TextStyle(color: Colors.white)),
-              subtitle: Text(hub.address.toString(), style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                _searching ? 'Looking for main phones…' : 'None found. Make sure the main phone has Smart Spectator open.',
+                style: const TextStyle(color: AppColors.textMuted),
+              ),
             ),
-          );
-        }),
-        TextButton(
-          onPressed: () => setState(() => _showManual = true),
-          child: const Text("Can't see your main phone? Enter its address"),
+          ),
+        for (final hub in _hubs)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Card(
+              color: hub.address == _selected?.address ? AppColors.primary.withValues(alpha: 0.12) : null,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: hub.address == _selected?.address ? AppColors.primary : AppColors.border),
+              ),
+              child: ListTile(
+                onTap: () => setState(() => _selected = hub),
+                leading: Icon(
+                  hub.address == _selected?.address ? Icons.radio_button_checked : Icons.radio_button_off,
+                  color: AppColors.primary,
+                ),
+                title: Text(hub.name),
+                subtitle: Text(hub.address.toString(), style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => setState(() => _showManual = true),
+            child: const Text("Can't see it? Enter the main phone's address"),
+          ),
         ),
       ];
 
-  List<Widget> _manualSection() => [
+  List<Widget> _manual() => [
+        const SizedBox(height: 16),
         TextField(
           controller: _addressController,
           keyboardType: TextInputType.url,
           autocorrect: false,
-          style: const TextStyle(color: Colors.white),
-          decoration: _fieldDecoration('Main phone address (shown on the main phone)'),
+          decoration: const InputDecoration(labelText: 'Main phone address', hintText: '192.168.1.23'),
         ),
         if (_addressController.text.isNotEmpty && HubAddress.tryParse(_addressController.text) == null)
           const Padding(
             padding: EdgeInsets.only(top: 6),
-            child: Text('Use the form 192.168.1.23 or 192.168.1.23:8000', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+            child: Text('Use the form 192.168.1.23 or 192.168.1.23:8000', style: TextStyle(color: AppColors.danger, fontSize: 12)),
           ),
-        TextButton(
-          onPressed: () => setState(() => _showManual = false),
-          child: const Text('Back to nearby main phones'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => setState(() => _showManual = false),
+            child: const Text('Back to nearby main phones'),
+          ),
         ),
       ];
 }

@@ -19,6 +19,10 @@ class ControlClient {
   /// the picture upright.
   final int sensorOrientation;
 
+  /// Live rotation (0/90/180/270) when the camera phone can be turned while
+  /// streaming; overrides [sensorOrientation].
+  final int Function()? rotationProvider;
+
   /// Current measured capture FPS (null when not streaming).
   final double? Function()? fpsProvider;
 
@@ -36,6 +40,7 @@ class ControlClient {
     required this.deviceToken,
     this.onCommand,
     this.sensorOrientation = 0,
+    this.rotationProvider,
     this.fpsProvider,
   });
 
@@ -116,7 +121,7 @@ class ControlClient {
           'is_charging': isCharging,
           'battery_temperature_c': null,
           'encoder_fps': fpsProvider?.call(),
-          'sensor_orientation': sensorOrientation,
+          'sensor_orientation': rotationProvider?.call() ?? sensorOrientation,
           'uptime_seconds': timer.tick,
         }
       };

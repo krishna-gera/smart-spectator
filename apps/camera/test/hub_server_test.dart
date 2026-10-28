@@ -128,7 +128,7 @@ void main() {
     expect(server.cameras.single.isCharging, isTrue);
 
     expect(server.requestKeyframe(paired.cameraId!), isTrue);
-    final cmd = jsonDecode(await inbox.stream.first);
+    final cmd = jsonDecode(await inbox.stream.firstWhere((m) => (jsonDecode(m) as Map)['action'] == 'request_idr'));
     expect(cmd['action'], 'request_idr');
     await control.close();
   });

@@ -91,6 +91,20 @@ class H264HardwareEncoder {
     }
   }
 
+  /// JPEG of one camera frame (for event snapshots); null if it fails.
+  static Future<Uint8List?> snapshotJpeg(CameraImage image, {int quality = 70}) async {
+    try {
+      return await _channel.invokeMethod<Uint8List>('snapshotJpeg', {
+        'planes': planesOf(image),
+        'width': image.width,
+        'height': image.height,
+        'quality': quality,
+      });
+    } on PlatformException {
+      return null;
+    }
+  }
+
   Future<void> requestKeyframe() async {
     if (!_isInitialized) return;
     try {

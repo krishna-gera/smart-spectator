@@ -26,13 +26,15 @@ void main() {
     });
   });
 
-  group('registry hub code', () {
+  group('registry hub code (permanent)', () {
     late DateTime now;
+    late InMemoryDeviceStore store;
     late DeviceRegistry registry;
 
     setUp(() async {
       now = DateTime(2026, 10, 28, 12);
-      registry = DeviceRegistry(store: InMemoryDeviceStore(), now: () => now, maxHubCodeFailures: 3);
+      store = InMemoryDeviceStore();
+      registry = DeviceRegistry(store: store, now: () => now, maxHubCodeFailures: 3);
       await registry.load();
     });
 
@@ -46,26 +48,39 @@ void main() {
       expect(a.device.cameraId, isNot(b.device.cameraId));
     });
 
-    test('code rotates when it expires', () {
-      final first = registry.hubCode;
-      now = now.add(const Duration(minutes: 11));
-      // A collision is possible in principle; the expiry must still move forward.
-      registry.hubCode;
-      expect(registry.hubCodeExpiresAt.isAfter(now), isTrue);
-      expect(first.length, 6);
+    test('the code never expires and survives an app restart', () async {
+      final code = registry.hubCode;
+      now = now.add(const Duration(days: 30));
+      expect(registry.hubCode, code);
+      final reloaded = DeviceRegistry(store: store, now: () => now);
+      await reloaded.load();
+      expect(reloaded.hubCode, code);
     });
 
-    test('repeated wrong guesses replace the code', () async {
+    test('repeated wrong guesses pause pairing instead of changing the code', () async {
       final code = registry.hubCode;
       final wrong = code == '111111' ? '222222' : '111111';
-      expect(await registry.pairWithHubCode('dev_x', 'X', wrong), isA<VerifyFailure>());
-      expect(await registry.pairWithHubCode('dev_x', 'X', wrong), isA<VerifyFailure>());
+      await registry.pairWithHubCode('dev_x', 'X', wrong);
+      await registry.pairWithHubCode('dev_x', 'X', wrong);
       final third = await registry.pairWithHubCode('dev_x', 'X', wrong) as VerifyFailure;
-      expect(third.message, contains('new code'));
-      // The old code no longer works after rotation (unless the new one happens to match).
-      if (registry.hubCode != code) {
-        expect(await registry.pairWithHubCode('dev_x', 'X', code), isA<VerifyFailure>());
-      }
+      expect(third.message, contains('paused'));
+      expect(registry.hubCode, code, reason: 'the code stays the same');
+      // Even the right code is refused while paused.
+      expect(await registry.pairWithHubCode('dev_x', 'X', code), isA<VerifyFailure>());
+      now = now.add(const Duration(minutes: 6));
+      expect(await registry.pairWithHubCode('dev_x', 'X', code), isA<VerifySuccess>());
+    });
+
+    test('change code replaces it, keeps paired cameras, and persists', () async {
+      final old = registry.hubCode;
+      final paired = await registry.pairWithHubCode('dev_a', 'A', old) as VerifySuccess;
+      final fresh = await registry.changeHubCode();
+      expect(fresh, isNot(old));
+      expect(registry.authenticate(paired.rawToken), isNotNull);
+      expect(await registry.pairWithHubCode('dev_b', 'B', old), isA<VerifyFailure>());
+      final reloaded = DeviceRegistry(store: store, now: () => now);
+      await reloaded.load();
+      expect(reloaded.hubCode, fresh);
     });
   });
 

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'core/storage/credential_store.dart';
+
+import 'camera/camcorder_service.dart';
 import 'core/storage/role_store.dart';
-import 'features/pairing/pairing_screen.dart';
 import 'features/camera/camera_screen.dart';
+import 'features/pairing/pairing_screen.dart';
 import 'features/role/role_select_screen.dart';
 import 'features/viewer/viewer_screen.dart';
+import 'ui/theme.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const SmartSpectatorApp());
 }
@@ -19,53 +21,93 @@ class SmartSpectatorApp extends StatefulWidget {
 }
 
 class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
+  final _navigator = GlobalKey<NavigatorState>();
   AppRole? _role;
-  DeviceCredentials? _credentials;
-  bool _isLoading = true;
+  bool _loading = true;
+  CamcorderService? _camcorder;
 
   @override
   void initState() {
     super.initState();
-    _loadState();
+    _load();
   }
 
-  Future<void> _loadState() async {
+  @override
+  void dispose() {
+    _camcorder?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
     final role = await RoleStore.load();
-    final creds = await CredentialStore.load();
+    if (role == AppRole.camcorder) {
+      await _startCamcorder();
+    } else {
+      _stopCamcorder();
+    }
     if (!mounted) return;
     setState(() {
       _role = role;
-      _credentials = creds;
-      _isLoading = false;
+      _loading = false;
     });
+  }
+
+  Future<void> _startCamcorder() async {
+    if (_camcorder != null) return;
+    final service = CamcorderService();
+    _camcorder = service;
+    service.addListener(_onCamcorderChanged);
+    await service.start();
+  }
+
+  void _stopCamcorder() {
+    _camcorder
+      ?..removeListener(_onCamcorderChanged)
+      ..dispose();
+    _camcorder = null;
+  }
+
+  void _onCamcorderChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _selectRole(AppRole role) async {
     await RoleStore.save(role);
-    await _loadState();
+    await _load();
   }
 
   Future<void> _changeRole() async {
     await RoleStore.clear();
-    await _loadState();
+    await _load();
+  }
+
+  void _addMainPhone() {
+    final service = _camcorder;
+    if (service == null) return;
+    _navigator.currentState?.push(MaterialPageRoute<void>(
+      builder: (ctx) => PairingScreen(
+        service: service,
+        addingAnother: true,
+        onPaired: () => Navigator.of(ctx).pop(),
+        onChangeRole: _changeRole,
+      ),
+    ));
   }
 
   Widget _home() {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8))),
-      );
-    }
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     switch (_role) {
       case null:
         return RoleSelectScreen(onSelected: _selectRole);
       case AppRole.viewer:
         return ViewerScreen(onChangeRole: _changeRole);
       case AppRole.camcorder:
-        if (_credentials != null && _credentials!.isPaired) {
-          return CameraScreen(credentials: _credentials!, onUnpaired: _loadState);
+        final service = _camcorder!;
+        if (!service.isReady) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        if (service.credentials!.isPaired) {
+          return CameraScreen(service: service, onAddMainPhone: _addMainPhone, onChangeRole: _changeRole);
         }
-        return PairingScreen(onPaired: _loadState, onChangeRole: _changeRole);
+        return PairingScreen(service: service, onPaired: service.reload, onChangeRole: _changeRole);
     }
   }
 
@@ -74,13 +116,8 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
     return MaterialApp(
       title: 'Smart Spectator',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF38BDF8),
-          surface: Color(0xFF1E293B),
-        ),
-      ),
+      navigatorKey: _navigator,
+      theme: AppTheme.dark(),
       home: _home(),
     );
   }

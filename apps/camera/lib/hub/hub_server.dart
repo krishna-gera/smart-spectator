@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import '../core/protocol/packet_decoder.dart';
 import 'device_registry.dart';
+import 'event_store.dart';
 
 /// Live state of one camera phone as seen by the main phone.
 class CameraLink {
@@ -28,6 +29,10 @@ class CameraLink {
 
   /// Clockwise rotation needed to show the camera's picture upright.
   int rotationDegrees = 0;
+
+  /// Motion currently reported by this camera, and the event it belongs to.
+  bool motionActive = false;
+  String? activeEventId;
 
   int? _lastSequence;
   DateTime _windowStart = DateTime.now();
@@ -87,6 +92,18 @@ class HubServer {
   static const int defaultPort = 8000;
   static const int maxJsonBodyBytes = 16 * 1024;
 
+  /// Motion reports carry a JPEG snapshot (base64), so they may be larger.
+  static const int maxEventBodyBytes = 4 * 1024 * 1024;
+
+  /// Event history; when null, motion reports are acknowledged but not stored.
+  EventStore? events;
+
+  /// Called when a camera reports new motion (after the event is stored).
+  void Function(CameraEvent event, CameraLink camera)? onMotionStarted;
+
+  final Map<String, (String cameraId, Completer<Uint8List?>)> _snapshotRequests = {};
+  int _snapshotSeq = 0;
+
   final DeviceRegistry registry;
   final int port;
 
@@ -105,6 +122,7 @@ class HubServer {
     required this.registry,
     this.port = defaultPort,
     this.displayName = 'Smart Spectator main phone',
+    this.events,
     InternetAddress? bindAddress,
   }) : bindAddress = bindAddress ?? InternetAddress.anyIPv4;
 
@@ -203,6 +221,12 @@ class HubServer {
       }
       if (path == '/api/v1/devices/pair/verify' && req.method == 'POST') {
         return await _pairVerify(req);
+      }
+      if (path == '/api/v1/events/motion' && req.method == 'POST') {
+        return await _motionEvent(req);
+      }
+      if (path == '/api/v1/snapshots' && req.method == 'POST') {
+        return await _snapshotUpload(req);
       }
       if (path == '/api/v1/control/ws') {
         return await _controlSocket(req);
@@ -303,6 +327,8 @@ class HubServer {
     _controlSockets[device.deviceId] = ws;
     final link = _linkFor(device)..controlConnected = true;
     _notify();
+    // The camera applies the settings chosen on this phone.
+    _pushMotionSettings(device.deviceId, device.cameraId);
 
     ws.listen(
       (msg) {
@@ -332,6 +358,7 @@ class HubServer {
         if (identical(_controlSockets[device.deviceId], ws)) {
           _controlSockets.remove(device.deviceId);
           link.controlConnected = false;
+          _endMotion(link);
           _notify();
         }
       },
@@ -398,11 +425,150 @@ class HubServer {
     return req.uri.queryParameters['token'];
   }
 
-  Future<Map<String, dynamic>?> _readJson(HttpRequest req) async {
+  /// Saves new per-camera settings and sends them to the camera if online.
+  Future<void> updateCameraSettings(String cameraId, CameraSettings settings) async {
+    await events?.updateSettings(cameraId, settings);
+    final link = _links[cameraId];
+    if (link != null) _pushMotionSettings(link.deviceId, cameraId);
+    _notify();
+  }
+
+  /// Asks a camera for a JPEG of its current picture ("Ask AI now").
+  /// Returns null if the camera is offline or does not answer in [timeout].
+  Future<Uint8List?> requestSnapshot(String cameraId, {Duration timeout = const Duration(seconds: 6)}) async {
+    final link = _links[cameraId];
+    if (link == null) return null;
+    final requestId = 'snap_${++_snapshotSeq}_${DateTime.now().millisecondsSinceEpoch}';
+    final completer = Completer<Uint8List?>();
+    _snapshotRequests[requestId] = (cameraId, completer);
+    final sent = sendCommand(link.deviceId, {
+      'protocol': 'ss_control_v1',
+      'type': 'device_control_command',
+      'target_camera_id': cameraId,
+      'action': 'capture_snapshot',
+      'request_id': requestId,
+    });
+    if (!sent) {
+      _snapshotRequests.remove(requestId);
+      return null;
+    }
+    try {
+      return await completer.future.timeout(timeout, onTimeout: () => null);
+    } finally {
+      _snapshotRequests.remove(requestId);
+    }
+  }
+
+  Future<void> _snapshotUpload(HttpRequest req) async {
+    final device = registry.authenticate(_token(req));
+    if (device == null) return _json(req.response, 401, {'detail': 'Invalid or revoked token'});
+    final body = await _readJson(req, maxBytes: maxEventBodyBytes);
+    if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON body'});
+    final pending = _snapshotRequests[body['request_id']];
+    // Only the camera that was asked may answer.
+    if (pending == null || pending.$1 != device.cameraId) {
+      return _json(req.response, 404, {'detail': 'Unknown or expired snapshot request'});
+    }
+    final completer = pending.$2;
+    Uint8List jpeg;
+    try {
+      jpeg = base64Decode(body['snapshot_jpeg'] as String);
+    } catch (_) {
+      return _json(req.response, 400, {'detail': 'snapshot_jpeg is not valid base64'});
+    }
+    if (jpeg.length < 2 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) {
+      return _json(req.response, 400, {'detail': 'snapshot_jpeg is not a JPEG'});
+    }
+    if (!completer.isCompleted) completer.complete(jpeg);
+    return _json(req.response, 200, {'status': 'received'});
+  }
+
+  void _pushMotionSettings(String deviceId, String cameraId) {
+    final s = events?.settingsFor(cameraId) ?? const CameraSettings();
+    sendCommand(deviceId, {
+      'protocol': 'ss_control_v1',
+      'type': 'device_control_command',
+      'target_camera_id': cameraId,
+      'action': 'set_motion',
+      'enabled': s.motionEnabled,
+      'sensitivity': s.sensitivity,
+    });
+  }
+
+  void _endMotion(CameraLink link) {
+    if (!link.motionActive) return;
+    link.motionActive = false;
+    link.activeEventId = null;
+    events?.closeOngoing(link.cameraId);
+  }
+
+  /// Camera reports motion start (with snapshot) or end.
+  ///   `{"phase":"started","score":0.12,"snapshot_jpeg":"BASE64"}` → `{"event_id":...}`
+  ///   `{"phase":"ended","event_id":"...","peak_score":0.3}`
+  Future<void> _motionEvent(HttpRequest req) async {
+    final device = registry.authenticate(_token(req));
+    if (device == null) return _json(req.response, 401, {'detail': 'Invalid or revoked token'});
+    final body = await _readJson(req, maxBytes: maxEventBodyBytes);
+    if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON body'});
+    final link = _linkFor(device);
+
+    switch (body['phase']) {
+      case 'started':
+        final score = (body['score'] as num?)?.toDouble() ?? 0;
+        Uint8List? jpeg;
+        final b64 = body['snapshot_jpeg'];
+        if (b64 is String && b64.isNotEmpty) {
+          try {
+            jpeg = base64Decode(b64);
+          } on FormatException {
+            return _json(req.response, 400, {'detail': 'snapshot_jpeg is not valid base64'});
+          }
+          // JPEG files start with FF D8.
+          if (jpeg.length < 2 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) {
+            return _json(req.response, 400, {'detail': 'snapshot_jpeg is not a JPEG'});
+          }
+        }
+        if (events != null && !events!.settingsFor(link.cameraId).motionEnabled) {
+          return _json(req.response, 202, {'ignored': true, 'reason': 'motion detection is off for this camera'});
+        }
+        final event = await events?.startMotion(
+          cameraId: link.cameraId,
+          cameraName: link.deviceName,
+          score: score,
+          rotationDegrees: link.rotationDegrees,
+          snapshotJpeg: jpeg,
+        );
+        link
+          ..motionActive = true
+          ..activeEventId = event?.id;
+        _notify();
+        if (event != null) onMotionStarted?.call(event, link);
+        return _json(req.response, 201, {'event_id': event?.id});
+      case 'ended':
+        final eventId = body['event_id'];
+        if (eventId is String && events != null) {
+          final ended = await events!.endMotion(
+            eventId: eventId,
+            cameraId: link.cameraId,
+            peakScore: (body['peak_score'] as num?)?.toDouble(),
+          );
+          if (ended == null) return _json(req.response, 404, {'detail': 'No such event for this camera'});
+        }
+        link
+          ..motionActive = false
+          ..activeEventId = null;
+        _notify();
+        return _json(req.response, 200, {'status': 'ended'});
+      default:
+        return _json(req.response, 422, {'detail': 'phase must be "started" or "ended"'});
+    }
+  }
+
+  Future<Map<String, dynamic>?> _readJson(HttpRequest req, {int maxBytes = maxJsonBodyBytes}) async {
     final builder = BytesBuilder(copy: false);
     await for (final chunk in req) {
       builder.add(chunk);
-      if (builder.length > maxJsonBodyBytes) return null;
+      if (builder.length > maxBytes) return null;
     }
     try {
       final decoded = jsonDecode(utf8.decode(builder.takeBytes()));

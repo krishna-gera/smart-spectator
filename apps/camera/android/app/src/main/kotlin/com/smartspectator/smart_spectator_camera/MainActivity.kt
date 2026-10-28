@@ -14,11 +14,13 @@ class MainActivity : FlutterActivity() {
     private val encoder = VideoEncoder()
     private val decoders = mutableMapOf<Long, VideoDecoder>()
     private var nsd: NsdHelper? = null
+    private var notifier: EventNotifier? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         nsd = NsdHelper(applicationContext)
+        notifier = EventNotifier(applicationContext)
 
         // ---- Camcorder Mode: hardware H.264 encoder
         MethodChannel(messenger, ENCODER_CHANNEL).setMethodCallHandler { call, result ->
@@ -63,6 +65,27 @@ class MainActivity : FlutterActivity() {
                 "requestKeyframe" -> {
                     encoder.requestKeyframe()
                     result.success(true)
+                }
+                "snapshotJpeg" -> {
+                    val rawPlanes = call.argument<List<Map<String, Any>>>("planes")
+                    val width = call.argument<Int>("width") ?: 0
+                    val height = call.argument<Int>("height") ?: 0
+                    val quality = call.argument<Int>("quality") ?: 70
+                    if (rawPlanes == null) {
+                        result.error("INVALID_ARGS", "Expected YUV planes", null)
+                        return@setMethodCallHandler
+                    }
+                    val planes = rawPlanes.map {
+                        PlaneData(it["bytes"] as ByteArray, (it["rowStride"] as Number).toInt(), (it["pixelStride"] as Number).toInt())
+                    }
+                    encoder.post {
+                        val jpeg = try {
+                            SnapshotJpeg.encode(planes, width, height, quality)
+                        } catch (e: Exception) {
+                            null
+                        }
+                        main.post { result.success(jpeg) }
+                    }
                 }
                 "stopEncoder" -> encoder.post {
                     encoder.stopCodec()
@@ -128,7 +151,23 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "nsdRegister" -> {
-                    nsd?.register(call.argument<Int>("port") ?: 8000, call.argument<String>("name") ?: "SmartSpectator")
+                    nsd?.register(
+                        call.argument<Int>("port") ?: 8000,
+                        call.argument<String>("name") ?: "SmartSpectator",
+                        call.argument<String>("type") ?: NsdHelper.SERVICE_TYPE,
+                    )
+                    result.success(true)
+                }
+                "requestNotificationPermission" -> {
+                    notifier?.requestPermission(this)
+                    result.success(true)
+                }
+                "notify" -> {
+                    notifier?.show(
+                        call.argument<Int>("id") ?: 0,
+                        call.argument<String>("title") ?: "Smart Spectator",
+                        call.argument<String>("body") ?: "",
+                    )
                     result.success(true)
                 }
                 "nsdUnregister" -> {
@@ -139,7 +178,7 @@ class MainActivity : FlutterActivity() {
                     val timeout = (call.argument<Number>("timeoutMs") ?: 3000).toLong()
                     val helper = nsd
                     if (helper == null) result.success(emptyList<Any>())
-                    else helper.discover(timeout) { hubs -> result.success(hubs) }
+                    else helper.discover(timeout, call.argument<String>("type") ?: NsdHelper.SERVICE_TYPE) { hubs -> result.success(hubs) }
                 }
                 else -> result.notImplemented()
             }
