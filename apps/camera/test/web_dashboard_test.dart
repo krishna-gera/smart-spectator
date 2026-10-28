@@ -1,0 +1,188 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_spectator_camera/core/ai/ai_client.dart';
+import 'package:smart_spectator_camera/core/control/control_client.dart';
+import 'package:smart_spectator_camera/core/motion/motion_reporter.dart';
+import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
+import 'package:smart_spectator_camera/hub/device_registry.dart';
+import 'package:smart_spectator_camera/hub/event_store.dart';
+import 'package:smart_spectator_camera/hub/hub_server.dart';
+
+final _jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 7, 7, 7, 0xFF, 0xD9]);
+
+/// Minimal browser: keeps the session cookie between requests.
+class Browser {
+  final int port;
+  final HttpClient _http = HttpClient();
+  final List<Cookie> cookies = [];
+  Browser(this.port);
+
+  Future<(int, HttpHeaders, List<int>)> send(String method, String path, [Object? body]) async {
+    final req = await _http.open(method, '127.0.0.1', port, path);
+    req.cookies.addAll(cookies);
+    if (body != null) {
+      req.headers.contentType = ContentType.json;
+      req.write(jsonEncode(body));
+    }
+    final res = await req.close();
+    for (final c in res.cookies) {
+      cookies.removeWhere((x) => x.name == c.name);
+      if (c.value.isNotEmpty) cookies.add(c);
+    }
+    final bytes = await res.fold<List<int>>([], (a, b) => a..addAll(b));
+    return (res.statusCode, res.headers, bytes);
+  }
+
+  Future<(int, dynamic)> json(String method, String path, [Object? body]) async {
+    final (status, _, bytes) = await send(method, path, body);
+    return (status, bytes.isEmpty ? null : jsonDecode(utf8.decode(bytes)));
+  }
+
+  void close() => _http.close(force: true);
+}
+
+void main() {
+  late Directory dir;
+  late DeviceRegistry registry;
+  late EventStore events;
+  late HubServer server;
+  late Browser browser;
+
+  setUp(() async {
+    dir = await Directory.systemTemp.createTemp('ss_web_test');
+    registry = DeviceRegistry(store: InMemoryDeviceStore(), maxHubCodeFailures: 3);
+    await registry.load();
+    events = EventStore(dir: dir);
+    await events.load();
+    server = HubServer(registry: registry, port: 0, bindAddress: InternetAddress.loopbackIPv4, events: events, displayName: 'Main phone (test)');
+    await server.start();
+    browser = Browser(server.boundPort!);
+  });
+
+  tearDown(() async {
+    browser.close();
+    await server.dispose();
+    await dir.delete(recursive: true);
+  });
+
+  Future<void> signIn() async {
+    final (status, _) = await browser.json('POST', '/api/v1/web/login', {'code': registry.hubCode});
+    expect(status, 200);
+  }
+
+  test('serves the dashboard page with security headers', () async {
+    final (status, headers, body) = await browser.send('GET', '/');
+    expect(status, 200);
+    expect(headers.contentType?.mimeType, 'text/html');
+    expect(headers.value('content-security-policy'), contains("default-src 'self'"));
+    expect(headers.value('x-frame-options'), 'DENY');
+    expect(utf8.decode(body), contains('Smart Spectator'));
+  });
+
+  test('everything else needs a signed-in session', () async {
+    expect((await browser.json('GET', '/api/v1/web/state')).$1, 401);
+    expect((await browser.json('GET', '/api/v1/web/cameras/x/frame')).$1, 401);
+  });
+
+  test('wrong code is refused; the right code signs in with an HttpOnly cookie', () async {
+    final wrong = registry.hubCode == '111111' ? '222222' : '111111';
+    expect((await browser.json('POST', '/api/v1/web/login', {'code': wrong})).$1, 401);
+    final (status, headers, _) = await browser.send('POST', '/api/v1/web/login', {'code': registry.hubCode});
+    expect(status, 200);
+    final setCookie = headers[HttpHeaders.setCookieHeader]!.join(';');
+    expect(setCookie, allOf(contains('HttpOnly'), contains('SameSite=Strict')));
+    expect((await browser.json('GET', '/api/v1/web/state')).$1, 200);
+  });
+
+  test('guessing the code is locked out (shared with camera pairing)', () async {
+    final wrong = registry.hubCode == '111111' ? '222222' : '111111';
+    for (var i = 0; i < 2; i++) {
+      await browser.json('POST', '/api/v1/web/login', {'code': wrong});
+    }
+    expect((await browser.json('POST', '/api/v1/web/login', {'code': wrong})).$1, 429);
+    expect((await browser.json('POST', '/api/v1/web/login', {'code': registry.hubCode})).$1, 429);
+  });
+
+  test('state lists cameras with settings and events with AI fields', () async {
+    final cam = await PairingClient.pairWithCode(
+        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'Front door', code: registry.hubCode);
+    final e = await events.startMotion(cameraId: cam.cameraId!, cameraName: 'Front door', score: 0.2, snapshotJpeg: _jpeg);
+    await events.setAiResult(e.id, summary: 'A person at the door.', category: 'person', threatLevel: 'none');
+    await signIn();
+
+    final (_, state) = await browser.json('GET', '/api/v1/web/state');
+    expect(state['hub']['name'], 'Main phone (test)');
+    expect(state['cameras'].single['name'], 'Front door');
+    expect(state['cameras'].single['status'], 'offline');
+    expect(state['cameras'].single['settings']['motion_enabled'], isTrue);
+    expect(state['events'].single['ai_summary'], 'A person at the door.');
+    expect(state['unseen'], 1);
+
+    final (status, headers, bytes) = await browser.send('GET', '/api/v1/web/events/${e.id}/snapshot');
+    expect(status, 200);
+    expect(headers.contentType?.mimeType, 'image/jpeg');
+    expect(bytes, _jpeg);
+
+    expect((await browser.json('POST', '/api/v1/web/events/seen')).$1, 200);
+    expect(events.unseenCount, 0);
+  });
+
+  test('settings change from the browser; AI cannot be enabled when unavailable', () async {
+    final cam = await PairingClient.pairWithCode(
+        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'A', code: registry.hubCode);
+    await signIn();
+    final path = '/api/v1/web/cameras/${cam.cameraId}/settings';
+    final (status, body) = await browser.json('PUT', path, {'motion_enabled': false, 'sensitivity': 0.9, 'ai_enabled': true});
+    expect(status, 200);
+    expect(body['motion_enabled'], isFalse);
+    expect(events.settingsFor(cam.cameraId!).sensitivity, 0.9);
+    expect(events.settingsFor(cam.cameraId!).aiEnabled, isFalse);
+
+    server.web.aiAvailable = true;
+    await browser.json('PUT', path, {'ai_enabled': true});
+    expect(events.settingsFor(cam.cameraId!).aiEnabled, isTrue);
+    expect((await browser.json('PUT', '/api/v1/web/cameras/cam_nope/settings', {})).$1, 404);
+  });
+
+  test('live picture comes from the camera; Ask AI uses the app callback', () async {
+    final hub = HubAddress('127.0.0.1', server.boundPort!);
+    final cam = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_a', deviceName: 'A', code: registry.hubCode);
+    final reporter = MotionReporter(hub: hub, deviceToken: cam.deviceToken!);
+    final control = ControlClient(
+      hubIp: '127.0.0.1',
+      hubPort: hub.port,
+      deviceId: 'dev_a',
+      cameraId: cam.cameraId!,
+      deviceToken: cam.deviceToken!,
+      onCommand: (cmd) {
+        if (cmd['action'] == 'capture_snapshot') reporter.uploadSnapshot(requestId: cmd['request_id'] as String, jpeg: _jpeg);
+      },
+    );
+    await control.start();
+    await signIn();
+
+    final (status, headers, bytes) = await browser.send('GET', '/api/v1/web/cameras/${cam.cameraId}/frame');
+    expect(status, 200);
+    expect(headers.contentType?.mimeType, 'image/jpeg');
+    expect(bytes, _jpeg);
+
+    expect((await browser.json('POST', '/api/v1/web/cameras/${cam.cameraId}/ask-ai')).$1, 503, reason: 'AI not available yet');
+    server.web
+      ..aiAvailable = true
+      ..onAskAi = (id) async => const AiResult.ok(
+          AiInsight(summary: 'Empty hallway.', category: 'no_activity', threatLevel: 'none', peopleCount: 0, confidence: 0.9));
+    final (aiStatus, ai) = await browser.json('POST', '/api/v1/web/cameras/${cam.cameraId}/ask-ai');
+    expect(aiStatus, 200);
+    expect(ai['summary'], 'Empty hallway.');
+    control.stop();
+  });
+
+  test('sign out ends the session', () async {
+    await signIn();
+    expect((await browser.json('POST', '/api/v1/web/logout')).$1, 200);
+    expect((await browser.json('GET', '/api/v1/web/state')).$1, 401);
+  });
+}

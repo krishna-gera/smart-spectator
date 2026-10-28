@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import '../core/protocol/packet_decoder.dart';
 import 'device_registry.dart';
 import 'event_store.dart';
+import 'web_api.dart';
 
 /// Live state of one camera phone as seen by the main phone.
 class CameraLink {
@@ -102,6 +103,9 @@ class HubServer {
   void Function(CameraEvent event, CameraLink camera)? onMotionStarted;
 
   final Map<String, (String cameraId, Completer<Uint8List?>)> _snapshotRequests = {};
+
+  /// Browser dashboard served by this main phone (Phase 5).
+  late final WebApi web = WebApi(this);
   int _snapshotSeq = 0;
 
   final DeviceRegistry registry;
@@ -204,6 +208,9 @@ class HubServer {
   Future<void> _handle(HttpRequest req) async {
     final path = req.uri.path;
     try {
+      if (path == '/' || path.startsWith('/api/v1/web/')) {
+        return await web.handle(req);
+      }
       if (path == '/api/v1/health' && req.method == 'GET') {
         return await _json(req.response, 200, {
           'status': 'ok',

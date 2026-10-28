@@ -63,6 +63,13 @@ class _ViewerScreenState extends State<ViewerScreen> {
           if (mounted) setState(() {});
         };
       await SystemBridge.requestNotificationPermission();
+      // Browser dashboard at http://<this phone>:8000/ (sign in with the pairing code).
+      _server.web
+        ..aiAvailable = _ai.config.isConfigured
+        ..onAskAi = (cameraId) async {
+          final cam = _server.cameras.where((c) => c.cameraId == cameraId).firstOrNull;
+          return cam == null ? const AiResult.failed('Unknown camera.') : _askAi(cam);
+        };
       await _server.start();
       _localIp = await HubServer.localIpAddress();
       _server.displayName = 'Main phone${_localIp != null ? ' ($_localIp)' : ''}';

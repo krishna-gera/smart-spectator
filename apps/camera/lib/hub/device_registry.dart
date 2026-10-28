@@ -218,6 +218,10 @@ class DeviceRegistry {
   /// Remaining pause after too many wrong codes, or null.
   Duration? get hubCodeLockedFor => _hubCode.lockedFor;
 
+  /// Checks the code without pairing anything (web dashboard login). Shares
+  /// the same lockout as camera pairing.
+  CodeCheck checkHubCode(String code) => _hubCode.check(code);
+
   /// Replaces the code ("Change code"); cameras already paired stay paired.
   Future<String> changeHubCode() async {
     final code = _hubCode.regenerate();

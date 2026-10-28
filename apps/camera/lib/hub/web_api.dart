@@ -1,0 +1,266 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
+
+import '../core/ai/ai_client.dart';
+import 'event_store.dart';
+import 'hub_server.dart';
+import 'web_dashboard.dart';
+
+/// Browser dashboard served by the main phone at `http://<main-phone>:8000/`.
+///
+/// Sign-in uses the main phone's pairing code (same lockout as cameras) and
+/// creates an HttpOnly, SameSite=Strict session cookie, so images and API
+/// calls are authenticated without tokens in URLs. Works only while the main
+/// phone app is open and on the same network.
+///
+///   GET    /                                   dashboard page
+///   POST   /api/v1/web/login                   {"code"} → sets cookie
+///   POST   /api/v1/web/logout
+///   GET    /api/v1/web/state                   cameras, events, hub info
+///   GET    /api/v1/web/cameras/{id}/frame      current JPEG (≈1 per second)
+///   PUT    /api/v1/web/cameras/{id}/settings   partial CameraSettings JSON
+///   POST   /api/v1/web/cameras/{id}/ask-ai     describe the current picture
+///   GET    /api/v1/web/events/{id}/snapshot    event JPEG
+///   POST   /api/v1/web/events/seen             mark all events seen
+class WebApi {
+  static const cookieName = 'ss_session';
+  static const sessionTtl = Duration(hours: 12);
+  static const frameCacheFor = Duration(milliseconds: 800);
+
+  final HubServer server;
+  final Map<String, DateTime> _sessions = {};
+  final Map<String, (DateTime, Uint8List)> _frames = {};
+  final Map<String, Future<Uint8List?>> _frameInFlight = {};
+  final Random _random = Random.secure();
+
+  /// Set by the app when AI is available ("Ask AI" in the browser).
+  Future<AiResult> Function(String cameraId)? onAskAi;
+  bool aiAvailable = false;
+
+  WebApi(this.server);
+
+  Future<void> handle(HttpRequest req) async {
+    final path = req.uri.path;
+    final res = req.response;
+    _securityHeaders(res);
+
+    if (path == '/' && req.method == 'GET') {
+      res.headers.contentType = ContentType.html;
+      res.write(dashboardHtml);
+      return res.close();
+    }
+    if (path == '/api/v1/web/login' && req.method == 'POST') return _login(req);
+
+    if (!_authenticated(req)) return _json(res, 401, {'detail': 'Sign in with the main phone\'s pairing code.'});
+
+    if (path == '/api/v1/web/logout' && req.method == 'POST') {
+      _sessions.remove(_cookie(req));
+      res.headers.add(HttpHeaders.setCookieHeader, '$cookieName=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict');
+      return _json(res, 200, {'status': 'signed_out'});
+    }
+    if (path == '/api/v1/web/state' && req.method == 'GET') return _json(res, 200, _state());
+    if (path == '/api/v1/web/events/seen' && req.method == 'POST') {
+      await server.events?.markSeen(server.events!.events.map((e) => e.id));
+      return _json(res, 200, {'status': 'ok'});
+    }
+
+    final parts = path.split('/'); // ['', 'api', 'v1', 'web', kind, id, action]
+    if (parts.length == 7 && parts[4] == 'cameras') {
+      final id = parts[5];
+      if (!server.cameras.any((c) => c.cameraId == id)) return _json(res, 404, {'detail': 'Unknown camera'});
+      switch ((parts[6], req.method)) {
+        case ('frame', 'GET'):
+          return _frame(res, id);
+        case ('settings', 'PUT'):
+          return _settings(req, id);
+        case ('ask-ai', 'POST'):
+          return _askAi(res, id);
+      }
+    }
+    if (parts.length == 7 && parts[4] == 'events' && parts[6] == 'snapshot' && req.method == 'GET') {
+      final e = server.events?.byId(parts[5]);
+      final file = e == null ? null : server.events!.snapshotOf(e);
+      if (file == null || !await file.exists()) return _json(res, 404, {'detail': 'No snapshot'});
+      res.headers
+        ..contentType = ContentType('image', 'jpeg')
+        ..set(HttpHeaders.cacheControlHeader, 'private, max-age=86400');
+      res.add(await file.readAsBytes());
+      return res.close();
+    }
+    return _json(res, 404, {'detail': 'Not found'});
+  }
+
+  // ---------------------------------------------------------------- auth
+
+  Future<void> _login(HttpRequest req) async {
+    Map<String, dynamic>? body;
+    try {
+      final raw = await utf8.decoder.bind(req).join();
+      if (raw.length < 1024) body = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {}
+    final code = body?['code'];
+    if (code is! String) return _json(req.response, 400, {'detail': 'Enter the 6-digit code.'});
+    final check = server.registry.checkHubCode(code);
+    if (!check.ok) return _json(req.response, check.locked ? 429 : 401, {'detail': check.message});
+
+    final token = List.generate(32, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    _sessions[token] = DateTime.now().add(sessionTtl);
+    req.response.headers.add(HttpHeaders.setCookieHeader,
+        '$cookieName=$token; Path=/; Max-Age=${sessionTtl.inSeconds}; HttpOnly; SameSite=Strict');
+    return _json(req.response, 200, {'status': 'signed_in'});
+  }
+
+  String? _cookie(HttpRequest req) {
+    for (final c in req.cookies) {
+      if (c.name == cookieName) return c.value;
+    }
+    return null;
+  }
+
+  bool _authenticated(HttpRequest req) {
+    final token = _cookie(req);
+    if (token == null) return false;
+    final expires = _sessions[token];
+    if (expires == null) return false;
+    if (DateTime.now().isAfter(expires)) {
+      _sessions.remove(token);
+      return false;
+    }
+    return true;
+  }
+
+  // ---------------------------------------------------------------- data
+
+  Map<String, dynamic> _state() {
+    final store = server.events;
+    return {
+      'hub': {
+        'name': server.displayName,
+        'port': server.boundPort,
+        'ai_available': aiAvailable,
+      },
+      'cameras': [
+        for (final c in server.cameras)
+          {
+            'camera_id': c.cameraId,
+            'name': c.deviceName,
+            'status': _status(c),
+            'battery': c.batteryLevel?.round(),
+            'charging': c.isCharging,
+            'motion_active': c.motionActive,
+            'rotation': c.rotationDegrees,
+            'bitrate_kbps': c.bitrateKbps.round(),
+            'settings': (store?.settingsFor(c.cameraId) ?? const CameraSettings()).toJson(),
+          }
+      ],
+      'events': [
+        for (final e in (store?.events ?? const <CameraEvent>[]).take(100))
+          {
+            'id': e.id,
+            'camera_id': e.cameraId,
+            'camera_name': e.cameraName,
+            'type': e.type,
+            'started_at': e.startedAt.toUtc().toIso8601String(),
+            'ended_at': e.endedAt?.toUtc().toIso8601String(),
+            'peak_score': e.peakScore,
+            'rotation': e.rotationDegrees,
+            'seen': e.seen,
+            'has_snapshot': e.snapshotFile != null,
+            'ai_summary': e.aiSummary,
+            'ai_category': e.aiCategory,
+            'ai_threat_level': e.aiThreatLevel,
+            'ai_error': e.aiError,
+          }
+      ],
+      'unseen': store?.unseenCount ?? 0,
+    };
+  }
+
+  static String _status(CameraLink c) {
+    final last = c.lastPacketAt;
+    if (c.streaming && last != null && DateTime.now().difference(last).inSeconds < 3) return 'live';
+    if (c.streaming) return 'connecting';
+    if (c.controlConnected) return 'online';
+    return 'offline';
+  }
+
+  /// Current picture. Several browsers share one camera snapshot per ~0.8 s.
+  Future<void> _frame(HttpResponse res, String cameraId) async {
+    final cached = _frames[cameraId];
+    Uint8List? jpeg;
+    if (cached != null && DateTime.now().difference(cached.$1) < frameCacheFor) {
+      jpeg = cached.$2;
+    } else {
+      // Note: the cleanup must not return the removed future, or whenComplete
+      // would wait for this very future and never finish.
+      final pending = _frameInFlight[cameraId] ??=
+          server.requestSnapshot(cameraId, timeout: const Duration(seconds: 3)).whenComplete(() {
+        _frameInFlight.remove(cameraId);
+      });
+      jpeg = await pending;
+      if (jpeg != null) _frames[cameraId] = (DateTime.now(), jpeg);
+    }
+    if (jpeg == null) return _json(res, 503, {'detail': 'Camera is not streaming'});
+    res.headers
+      ..contentType = ContentType('image', 'jpeg')
+      ..set(HttpHeaders.cacheControlHeader, 'no-store');
+    res.add(jpeg);
+    return res.close();
+  }
+
+  Future<void> _settings(HttpRequest req, String cameraId) async {
+    Map<String, dynamic> body;
+    try {
+      body = Map<String, dynamic>.from(jsonDecode(await utf8.decoder.bind(req).join()) as Map);
+    } catch (_) {
+      return _json(req.response, 400, {'detail': 'Invalid JSON'});
+    }
+    final current = server.events?.settingsFor(cameraId) ?? const CameraSettings();
+    final next = current.copyWith(
+      motionEnabled: body['motion_enabled'] is bool ? body['motion_enabled'] as bool : null,
+      sensitivity: body['sensitivity'] is num ? (body['sensitivity'] as num).toDouble().clamp(0.0, 1.0) : null,
+      notify: body['notify'] is bool ? body['notify'] as bool : null,
+      aiEnabled: body['ai_enabled'] is bool ? (body['ai_enabled'] as bool) && aiAvailable : null,
+    );
+    await server.updateCameraSettings(cameraId, next);
+    return _json(req.response, 200, next.toJson());
+  }
+
+  Future<void> _askAi(HttpResponse res, String cameraId) async {
+    final ask = onAskAi;
+    if (!aiAvailable || ask == null) return _json(res, 503, {'detail': 'AI is not available on this main phone.'});
+    final result = await ask(cameraId);
+    final i = result.insight;
+    if (i == null) return _json(res, 502, {'detail': result.error ?? 'AI request failed'});
+    return _json(res, 200, {
+      'summary': i.summary,
+      'category': i.category,
+      'threat_level': i.threatLevel,
+      'people_count': i.peopleCount,
+      'confidence': i.confidence,
+    });
+  }
+
+  // ---------------------------------------------------------------- helpers
+
+  static void _securityHeaders(HttpResponse res) {
+    res.headers
+      ..set('X-Frame-Options', 'DENY')
+      ..set('X-Content-Type-Options', 'nosniff')
+      ..set('Referrer-Policy', 'no-referrer')
+      ..set('Content-Security-Policy',
+          "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'");
+  }
+
+  static Future<void> _json(HttpResponse res, int status, Map<String, dynamic> body) async {
+    res.statusCode = status;
+    res.headers
+      ..contentType = ContentType.json
+      ..set(HttpHeaders.cacheControlHeader, 'no-store');
+    res.write(jsonEncode(body));
+    await res.close();
+  }
+}
