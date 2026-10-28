@@ -80,7 +80,7 @@ void main() {
     expect(headers.contentType?.mimeType, 'text/html');
     expect(headers.value('content-security-policy'), contains("default-src 'self'"));
     expect(headers.value('x-frame-options'), 'DENY');
-    expect(utf8.decode(body), contains('Smart Spectator'));
+    expect(utf8.decode(body), contains('VYRO'));
   });
 
   test('everything else needs a signed-in session', () async {

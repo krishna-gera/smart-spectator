@@ -5,6 +5,47 @@ import 'package:flutter/services.dart';
 
 import 'theme.dart';
 
+/// The VYRO mark (yellow logo on transparent), with an optional soft glow.
+class VyroLogo extends StatelessWidget {
+  final double size;
+  final bool glow;
+  const VyroLogo({super.key, this.size = 28, this.glow = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final image = Image.asset('assets/brand/vyro_mark.png', width: size, height: size, filterQuality: FilterQuality.medium);
+    if (!glow) return image;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.28), blurRadius: size * 0.6, spreadRadius: -size * 0.1)],
+      ),
+      child: image,
+    );
+  }
+}
+
+/// VYRO logo + wordmark, used in app bars.
+class VyroTitle extends StatelessWidget {
+  final String? subtitle;
+  const VyroTitle({super.key, this.subtitle});
+
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        const VyroLogo(size: 26),
+        const SizedBox(width: 10),
+        const Text('VYRO', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 2.4, fontSize: 18)),
+        if (subtitle != null) ...[
+          Container(width: 1, height: 16, margin: const EdgeInsets.symmetric(horizontal: 10), color: AppColors.textFaint),
+          Flexible(
+            child: Text(subtitle!,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600, fontSize: 15)),
+          ),
+        ],
+      ]);
+}
+
 /// Header from the design language: an icon inside a coloured progress ring,
 /// a large bold title and a small counter line ("2/3 cameras live").
 class RingHeader extends StatelessWidget {

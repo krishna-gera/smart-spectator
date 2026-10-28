@@ -1,12 +1,17 @@
+import 'brand_assets.dart';
+
 /// Single-page web dashboard served by the main phone (see WebApi).
-/// Self-contained: no external scripts, fonts or images. All dynamic text is
-/// inserted with textContent, never as HTML.
-const String dashboardHtml = r'''<!doctype html>
+/// Self-contained: no external scripts, fonts or images (the logo is inlined).
+/// All dynamic text is inserted with textContent, never as HTML.
+final String dashboardHtml = _html.replaceAll('%VYRO_LOGO%', vyroLogoDataUri).replaceAll('%VYRO_FAVICON%', vyroFaviconDataUri);
+
+const String _html = r'''<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Smart Spectator</title>
+<title>VYRO</title>
+<link rel="icon" type="image/png" href="%VYRO_FAVICON%">
 <style>
   :root {
     --bg:#1c1e24; --surface:#262932; --surface-high:#30343e; --border:#373b47;
@@ -21,7 +26,7 @@ const String dashboardHtml = r'''<!doctype html>
   /* login */
   #login { min-height:100vh; display:grid; place-items:center; padding:24px; }
   .login-card { width:100%; max-width:420px; background:var(--surface); border-radius:28px; padding:32px; }
-  .logo { width:56px; height:56px; border-radius:50%; background:var(--surface-high); box-shadow:0 0 0 5px rgba(139,124,246,.9); display:grid; place-items:center; font-size:26px; margin:6px 0 20px; }
+  .logo { width:64px; height:64px; display:block; margin:6px 0 18px; filter:drop-shadow(0 0 14px rgba(250,204,46,.35)); }
   h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.4px; }
   .code-input { width:100%; margin:22px 0 12px; padding:14px; border-radius:18px; border:1.5px solid transparent; background:var(--surface-high);
     color:var(--code); font-size:32px; font-weight:800; letter-spacing:12px; text-align:center; outline:none; }
@@ -36,7 +41,8 @@ const String dashboardHtml = r'''<!doctype html>
   header { position:sticky; top:0; z-index:5; background:rgba(28,30,36,.92); backdrop-filter:blur(8px); }
   .bar { max-width:1200px; margin:0 auto; padding:14px 20px; display:flex; align-items:center; gap:16px; }
   .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:18px; }
-  .brand .logo { width:32px; height:32px; font-size:15px; margin:0 4px 0 0; box-shadow:0 0 0 3px rgba(139,124,246,.9); }
+  .brand .logo { width:30px; height:30px; margin:0 2px 0 0; filter:none; }
+  .brand span { letter-spacing:.12em; font-weight:800; }
   .tabs { display:flex; gap:6px; margin-left:12px; }
   .tab { background:none; border:0; color:var(--muted); padding:8px 14px; border-radius:10px; font-weight:600; }
   .tab.active { background:var(--primary); color:var(--on-primary); }
@@ -123,19 +129,19 @@ const String dashboardHtml = r'''<!doctype html>
 <body>
 <section id="login" class="hidden">
   <div class="login-card">
-    <div class="logo">👁</div>
-    <h1>Smart Spectator</h1>
+    <img class="logo" src="%VYRO_LOGO%" alt="">
+    <h1>VYRO</h1>
     <div class="muted">Enter the pairing code shown on your main phone (Cameras screen).</div>
     <input id="code" class="code-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
     <button id="signin" class="btn primary">Sign in</button>
     <div id="login-error" class="error"></div>
-    <div class="faint">The dashboard works while the main phone has Smart Spectator open on this network.</div>
+    <div class="faint">The dashboard works while the main phone has VYRO open on this network.</div>
   </div>
 </section>
 
 <section id="app" class="hidden">
   <header><div class="bar">
-    <div class="brand"><div class="logo">👁</div><span>Smart Spectator</span></div>
+    <div class="brand"><img class="logo" src="%VYRO_LOGO%" alt=""><span>VYRO</span></div>
     <nav class="tabs">
       <button class="tab active" data-tab="cameras">Cameras</button>
       <button class="tab" data-tab="events">Events<span id="unseen" class="badge hidden"></span></button>
@@ -273,7 +279,7 @@ function renderCameras(d) {
   if (top) top.replaceWith(header); else root.prepend(header);
   if (!d.cameras.length) {
     root.replaceChildren(header, el("div", { class:"banner" }, el("div", {}, el("b", {}, "Add a camera"),
-      el("span", {}, "On another phone open Smart Spectator, choose Camera, and enter the main phone's pairing code.")), el("div", { class:"round" }, "+")));
+      el("span", {}, "On another phone open VYRO, choose Camera, and enter the main phone's pairing code.")), el("div", { class:"round" }, "+")));
     return;
   }
   let grid = root.querySelector(".grid");

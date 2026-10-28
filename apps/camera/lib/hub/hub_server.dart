@@ -135,7 +135,7 @@ class HubServer {
   HubServer({
     required this.registry,
     this.port = defaultPort,
-    this.displayName = 'Smart Spectator main phone',
+    this.displayName = 'VYRO main phone',
     this.events,
     InternetAddress? bindAddress,
   }) : bindAddress = bindAddress ?? InternetAddress.anyIPv4;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/storage/role_store.dart';
 import '../../ui/theme.dart';
+import '../../ui/widgets.dart';
 
 class RoleSelectScreen extends StatelessWidget {
   final ValueChanged<AppRole> onSelected;
@@ -19,18 +20,9 @@ class RoleSelectScreen extends StatelessWidget {
               shrinkWrap: true,
               padding: const EdgeInsets.all(24),
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.ai]),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(Icons.visibility_outlined, color: Colors.white, size: 32),
-                ),
-                const SizedBox(height: 20),
-                const Text('Smart Spectator', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                const Align(alignment: Alignment.centerLeft, child: VyroLogo(size: 76, glow: true)),
+                const SizedBox(height: 22),
+                const Text('VYRO', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, letterSpacing: 6)),
                 const SizedBox(height: 8),
                 const Text(
                   'Turn spare phones into smart cameras. Video stays on your Wi-Fi.',

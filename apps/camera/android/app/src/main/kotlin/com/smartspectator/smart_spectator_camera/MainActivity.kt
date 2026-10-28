@@ -165,7 +165,7 @@ class MainActivity : FlutterActivity() {
                 "notify" -> {
                     notifier?.show(
                         call.argument<Int>("id") ?: 0,
-                        call.argument<String>("title") ?: "Smart Spectator",
+                        call.argument<String>("title") ?: "VYRO",
                         call.argument<String>("body") ?: "",
                     )
                     result.success(true)

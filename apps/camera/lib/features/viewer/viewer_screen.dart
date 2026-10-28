@@ -240,7 +240,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
           tooltip: 'Use this phone as a camera',
           onPressed: widget.onChangeRole,
         ),
-        title: Text(_tab == 0 ? 'Main phone' : 'Event history'),
+        title: VyroTitle(subtitle: _tab == 0 ? 'Main phone' : 'Events'),
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_horiz_rounded),
@@ -387,7 +387,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 18),
             child: Text(
-              'Keep Smart Spectator open while cameras stream.\nWeb dashboard and manual setup: http://$address',
+              'Keep VYRO open while cameras stream.\nWeb dashboard and manual setup: http://$address',
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textFaint, fontSize: 12, height: 1.5),
             ),

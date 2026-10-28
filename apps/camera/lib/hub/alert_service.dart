@@ -69,7 +69,7 @@ class AlertService {
       title: insight != null
           ? '${event.cameraName}: ${categoryLabels[insight.category] ?? 'Motion'}${insight.threatLevel == 'high' ? ' ⚠️' : ''}'
           : 'Motion · ${event.cameraName}',
-      body: insight?.summary ?? 'Motion detected at $hhmm. Open Smart Spectator to see the snapshot.',
+      body: insight?.summary ?? 'Motion detected at $hhmm. Open VYRO to see the snapshot.',
     );
   }
 

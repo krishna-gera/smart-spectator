@@ -114,7 +114,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
                 const SizedBox(height: 6),
                 const Text(
-                  'On the camera phone, open Smart Spectator as Camera and tap "Camera code". '
+                  'On the camera phone, open VYRO as Camera and tap "Camera code". '
                   'The same camera can be added to several main phones.',
                   style: TextStyle(color: AppColors.textMuted, height: 1.4),
                 ),
@@ -136,7 +136,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
                       child: Text(
                         _searching
                             ? 'Looking for camera phones…'
-                            : 'No new cameras found. Open Smart Spectator as Camera on the other phone, on the same Wi-Fi.',
+                            : 'No new cameras found. Open VYRO as Camera on the other phone, on the same Wi-Fi.',
                         style: const TextStyle(color: AppColors.textMuted),
                       ),
                     ),

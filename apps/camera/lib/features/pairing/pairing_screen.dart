@@ -158,7 +158,7 @@ class _PairingScreenState extends State<PairingScreen> {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
                 const SizedBox(height: 6),
                 const Text(
-                  'Open Smart Spectator on your main phone. Its pairing code is on the Cameras screen.',
+                  'Open VYRO on your main phone. Its pairing code is on the Cameras screen.',
                   style: TextStyle(color: AppColors.textMuted, height: 1.4),
                 ),
                 const SizedBox(height: 18),
@@ -191,7 +191,7 @@ class _PairingScreenState extends State<PairingScreen> {
                 ),
                 const SizedBox(height: 18),
                 const Text(
-                  'Both phones need to be on the same Wi-Fi. Connecting over the internet needs the Smart Spectator relay, '
+                  'Both phones need to be on the same Wi-Fi. Connecting over the internet needs the VYRO relay, '
                   'which is not set up yet.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textFaint, fontSize: 12, height: 1.4),
@@ -221,7 +221,7 @@ class _PairingScreenState extends State<PairingScreen> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                _searching ? 'Looking for main phones…' : 'None found. Make sure the main phone has Smart Spectator open.',
+                _searching ? 'Looking for main phones…' : 'None found. Make sure the main phone has VYRO open.',
                 style: const TextStyle(color: AppColors.textMuted),
               ),
             ),

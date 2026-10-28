@@ -162,7 +162,7 @@ final class SmartSpectatorNativePlugin: NSObject, FlutterPlugin, UNUserNotificat
       result(true)
     case "notify":
       let content = UNMutableNotificationContent()
-      content.title = args["title"] as? String ?? "Smart Spectator"
+      content.title = args["title"] as? String ?? "VYRO"
       content.body = args["body"] as? String ?? ""
       content.sound = .default
       let id = "ss_event_\(args["id"] as? Int ?? 0)"

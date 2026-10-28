@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Smart Spectator Camera</string>
+	<string>VYRO</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -39,7 +39,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Camcorder Mode uses the camera to stream video to your main phone.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Smart Spectator connects camera phones and your main phone over your Wi-Fi network.</string>
+	<string>VYRO connects camera phones and your main phone over your Wi-Fi network.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -478,7 +478,7 @@ class TaskWatcher {
     await notify(
       id: t.id.hashCode & 0x7fffffff,
       title: '🔔 Reminder · ${t.cameraName}',
-      body: '${t.description} — still waiting for you. Open Smart Spectator to mark it handled.',
+      body: '${t.description} — still waiting for you. Open VYRO to mark it handled.',
     );
     _changed();
   }

@@ -130,7 +130,7 @@ class PairingClient {
     } catch (_) {
       return PairingResponse(
         success: false,
-        errorMessage: 'Could not reach the main phone at $hub. Make sure Smart Spectator is open in View Mode.',
+        errorMessage: 'Could not reach the main phone at $hub. Make sure VYRO is open in View Mode.',
       );
     }
   }

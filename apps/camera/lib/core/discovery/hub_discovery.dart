@@ -24,7 +24,7 @@ class HubDiscovery {
       if (res.statusCode != 200) return null;
       final body = jsonDecode(res.body);
       if (body is! Map || body['role'] != 'main_phone') return null;
-      return DiscoveredHub(address: address, name: body['name'] as String? ?? name ?? 'Smart Spectator main phone');
+      return DiscoveredHub(address: address, name: body['name'] as String? ?? name ?? 'VYRO main phone');
     } catch (_) {
       return null;
     }

@@ -61,7 +61,7 @@ class HubForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return builder
-            .setContentTitle("Smart Spectator is running")
+            .setContentTitle("VYRO is running")
             .setContentText(text)
             .setSmallIcon(applicationInfo.icon)
             .setContentIntent(openApp)

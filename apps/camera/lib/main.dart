@@ -114,7 +114,7 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart Spectator',
+      title: 'VYRO',
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigator,
       theme: AppTheme.dark(),

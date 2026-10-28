@@ -549,6 +549,8 @@ class _TopBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
         child: Row(children: [
+          const VyroLogo(size: 26),
+          const SizedBox(width: 10),
           StatusChip(streaming ? 'LIVE' : 'READY', color: streaming ? AppColors.danger : AppColors.textMuted, filled: streaming),
           const SizedBox(width: 8),
           if (aiWatching.isNotEmpty) ...[
