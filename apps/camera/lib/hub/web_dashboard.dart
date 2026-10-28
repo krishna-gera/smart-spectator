@@ -756,7 +756,15 @@ function openEvent(e) {
 }
 
 // ---------------------------------------------------------------- boot
-fetch("/api/v1/web/state", { credentials:"same-origin" }).then(r => r.ok ? start() : showLogin()).catch(showLogin);
+// The VYRO web apps open this page as http://<phone>:8000/#code=123456 after
+// finding the phone by its code: sign in with it, then drop it from the URL.
+const linkCode = (location.hash.match(/(?:^#|&)code=(\d{6})(?:&|$)/) || [])[1];
+if (linkCode) history.replaceState(null, "", location.pathname + location.search);
+fetch("/api/v1/web/state", { credentials:"same-origin" }).then(r => {
+  if (r.ok) return start();
+  showLogin();
+  if (linkCode) { document.getElementById("code").value = linkCode; signIn(); }
+}).catch(showLogin);
 </script>
 </body>
 </html>

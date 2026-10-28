@@ -60,3 +60,79 @@ function vyroAgo(ms) {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" }).catch(() => {}));
 }
+
+// ---------------------------------------------------------------- find by code
+//
+// The main phone registers its local address with the VYRO cloud service
+// under its dashboard code. The web apps look it up, then open the phone's
+// dashboard with the code so it signs in by itself (the code travels in the
+// URL fragment, which is never sent to any server, and the dashboard removes it).
+const VYRO_DIRECTORY = "https://smart-spectator-ai-proxy.krishna-gera.workers.dev";
+
+async function vyroFind(code) {
+  if (!/^\d{6}$/.test(code)) return { error: "The code has 6 digits." };
+  try {
+    const res = await fetch(`${VYRO_DIRECTORY}/v1/hub/lookup`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+    });
+    if (res.status === 404) return { error: "No main phone with that code. Open VYRO on the main phone (Main phone mode) and check Settings → Web dashboard code." };
+    if (res.status === 429) return { error: "Too many tries. Wait a minute and try again." };
+    if (!res.ok) return { error: "VYRO could not look up the code right now. Try again, or use the phone's address." };
+    const hub = await res.json();
+    return { addr: { host: hub.address, port: hub.port || 8000 }, name: hub.name || "Main phone" };
+  } catch (_) {
+    return { error: "No internet connection. You can still use the phone's address." };
+  }
+}
+
+/** Opens the dashboard and signs in with [code]. */
+function vyroOpenWithCode(addr, code, name) {
+  vyroRemember(addr, name);
+  window.location.href = `${vyroUrl(addr)}#code=${code}`;
+}
+
+/** Keeps a code box to digits, submits at 6. */
+function vyroCodeInput(input, onComplete) {
+  input.addEventListener("input", () => {
+    input.value = input.value.replace(/\D/g, "").slice(0, 6);
+    if (input.value.length === 6) onComplete(input.value);
+  });
+  input.addEventListener("keydown", e => { if (e.key === "Enter" && input.value.length === 6) onComplete(input.value); });
+}
+
+// ---------------------------------------------------------------- right device only
+
+function vyroIsPhone() {
+  const ua = navigator.userAgent;
+  if (/android.+mobile|iphone|ipod|windows phone|mobile safari/i.test(ua)) return true;
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  return coarse && Math.min(screen.width, screen.height) < 600;
+}
+
+function vyroIsDesktop() {
+  return !vyroIsPhone() && window.matchMedia("(pointer: fine)").matches && window.innerWidth >= 900;
+}
+
+/** "mobile": the mobile web app is blocked on computers; "desktop": blocked on phones. */
+function vyroDeviceGuard(kind) {
+  const blocked = kind === "mobile" ? vyroIsDesktop() : vyroIsPhone();
+  if (!blocked) return false;
+  const other = kind === "mobile" ? { href: "/app/app-desktop/", label: "Open the desktop web app" } : { href: "/app/app-mobile/", label: "Open the mobile web app" };
+  const wall = document.createElement("div");
+  wall.className = "device-wall";
+  wall.innerHTML = `
+    <div class="device-card">
+      <img src="/assets/vyro-mark.png" alt="">
+      <h1></h1><p class="muted"></p>
+      <a class="btn primary block"></a>
+      <a class="faint" href="/">Back to the VYRO website</a>
+    </div>`;
+  wall.querySelector("h1").textContent = kind === "mobile" ? "This is the mobile web app" : "This is the desktop web app";
+  wall.querySelector("p").textContent = kind === "mobile"
+    ? "It is made for phones. On a computer, use the desktop web app — same cameras, a bigger dashboard."
+    : "It is made for computers. On a phone, use the mobile web app — it fits your screen and installs to the home screen.";
+  const a = wall.querySelector("a.btn");
+  a.href = other.href; a.textContent = other.label;
+  document.body.replaceChildren(wall);
+  return true;
+}

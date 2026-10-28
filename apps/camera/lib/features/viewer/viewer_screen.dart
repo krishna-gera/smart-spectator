@@ -46,6 +46,19 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
   StreamSubscription<void>? _changesSub;
   Timer? _ticker;
   int _ticks = 0;
+  String? _registeredCode;
+
+  /// Tells the VYRO cloud service where this main phone is, so the web apps
+  /// (smart-vyro.vercel.app/app/...) can find it by the dashboard code.
+  Future<void> _registerWithWebApps() async {
+    final ip = await HubServer.localIpAddress();
+    final port = _server.boundPort;
+    if (ip == null || port == null) return;
+    _localIp = ip;
+    final code = _registry.hubCode;
+    final ok = await _ai.registerHub(code: code, address: ip, port: port, name: _server.displayName, previousCode: _registeredCode);
+    if (ok) _registeredCode = code;
+  }
   late final CameraHealthMonitor _health = CameraHealthMonitor(notify: SystemBridge.notify);
   String? _localIp;
   String? _error;
@@ -61,7 +74,10 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _ready) _server.ensureListening();
+    if (state == AppLifecycleState.resumed && _ready) {
+      _server.ensureListening();
+      _registerWithWebApps(); // the Wi-Fi address may have changed
+    }
   }
 
   Future<void> _start() async {
@@ -122,11 +138,13 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
       });
       _syncLiveVideo();
       _health.enabled = await AppPrefs.healthAlerts();
+      unawaited(_registerWithWebApps());
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         _ticks++;
         // Keep a recent picture of each live camera for when it stops.
         if (_ticks % 10 == 0) _server.refreshPictures();
         if (_ticks % 5 == 0) _health.check(_server.cameras);
+        if (_ticks % 1800 == 0) _registerWithWebApps();
         if (mounted) setState(() {});
       });
     } catch (e) {
@@ -195,6 +213,7 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
         message: 'Browsers signed in to the web dashboard stay signed in until they sign out. New sign-ins need the new code.',
         action: 'Change')) {
       await _registry.changeHubCode();
+      unawaited(_registerWithWebApps());
       if (mounted) setState(() {});
     }
   }

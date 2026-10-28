@@ -1,6 +1,6 @@
 // Keeps the VYRO web app shells available offline (they only need to open
 // the main phone's dashboard on the home Wi-Fi).
-const CACHE = "vyro-app-v1";
+const CACHE = "vyro-app-v2";
 const SHELL = [
   "/app/app-mobile/", "/app/app-desktop/", "/app/connect.js", "/app/app.css",
   "/assets/vyro-mark.png", "/assets/apple-touch-icon.png", "/assets/icon-192.png", "/assets/icon-512.png",

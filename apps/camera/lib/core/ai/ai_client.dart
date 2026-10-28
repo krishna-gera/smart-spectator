@@ -221,6 +221,30 @@ class AiClient {
     }
   }
 
+  /// Lets the VYRO web apps find this main phone by its dashboard code: the
+  /// cloud service stores the phone's local address under a hash of the code.
+  /// Returns true when registered.
+  Future<bool> registerHub({required String code, required String address, required int port, required String name, String? previousCode}) async {
+    final base = config.proxyUrl;
+    if (!config.isConfigured || base == null) return false;
+    try {
+      final res = await _http
+          .post(base.resolve('/v1/hub/register'),
+              headers: {'Authorization': 'Bearer ${config.token}', 'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'code': code,
+                'address': address,
+                'port': port,
+                'name': name,
+                if (previousCode != null && previousCode != code) 'previous_code': previousCode,
+              }))
+          .timeout(const Duration(seconds: 15));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<AiResult> analyze({required Uint8List jpeg, required String cameraId, required String cameraName}) async {
     final base = config.proxyUrl;
     if (!config.isConfigured || base == null) return const AiResult.failed('AI is not set up in this build.');

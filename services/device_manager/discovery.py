@@ -6,7 +6,7 @@ Follows docs/04_NETWORK_ARCHITECTURE.md
 
 import socket
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 try:
     from zeroconf import Zeroconf, ServiceInfo

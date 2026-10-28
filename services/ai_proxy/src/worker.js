@@ -23,6 +23,10 @@
  *   TASK_DAILY_LIMIT                 optional, default 1000 watch-task checks per day (separate cap)
  *   TASK_MIN_INTERVAL_SECONDS        optional, default 10 between checks of the same task
  *
+ * Main-phone directory (KV binding HUBS):
+ *   POST /v1/hub/register  Bearer PROXY_TOKEN  {code, address, port, name, previous_code?}
+ *   POST /v1/hub/lookup    public, CORS (ALLOWED_ORIGINS), rate limited  {code} → {address, port, name}
+ *
  * Endpoints (all POST, Bearer PROXY_TOKEN, body includes image_jpeg_base64):
  *   /v1/analyze     describe a motion snapshot
  *   /v1/plan-task   turn a plain-language watch task into a precise visual question
@@ -383,6 +387,7 @@ async function checkTask(request, env, now) {
 }
 
 export function resetLimitsForTests() {
+  lookupBuckets.clear();
   for (const bucket of Object.values(state)) {
     bucket.day = '';
     bucket.count = 0;
@@ -392,6 +397,76 @@ export function resetLimitsForTests() {
 
 const ROUTES = { '/v1/analyze': analyze, '/v1/plan-task': planTask, '/v1/check-task': checkTask };
 
+// ---------------------------------------------------------------- main-phone directory
+//
+// The VYRO web apps (smart-vyro.vercel.app/app/...) cannot search a home
+// network, so a main phone registers its local address here under its
+// dashboard code. Keys are an HMAC of the code (keyed with PROXY_TOKEN), so the
+// stored keys cannot be turned back into codes. Lookups are public but limited
+// per visitor; signing in still needs the code on the phone itself.
+
+const HUB_TTL_SECONDS = 2 * 24 * 3600;
+const LOOKUPS_PER_MINUTE = 12;
+const lookupBuckets = new Map(); // ip -> {minute, count}
+
+async function hubKey(env, code) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.PROXY_TOKEN), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`vyro-hub:${code}`));
+  return 'hub:' + [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const validCode = code => typeof code === 'string' && /^\d{6}$/.test(code);
+const validAddress = a => typeof a === 'string' && /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(a);
+
+function corsHeaders(request, env) {
+  const origin = request.headers.get('origin') ?? '';
+  const allowed = String(env.ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!allowed.includes(origin)) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  };
+}
+
+/** Main phone: {code, address, port, name} (Bearer PROXY_TOKEN). */
+async function hubRegister(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json(400, { error: 'invalid_json' }); }
+  const port = Number(body?.port ?? 8000);
+  if (!validCode(body?.code)) return json(422, { error: 'code must be 6 digits' });
+  if (!validAddress(body?.address)) return json(422, { error: 'address must be an IPv4 address' });
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return json(422, { error: 'invalid port' });
+  const name = String(body?.name ?? 'Main phone').slice(0, 64);
+  const previous = validCode(body?.previous_code) && body.previous_code !== body.code ? body.previous_code : null;
+  await env.HUBS.put(await hubKey(env, body.code), JSON.stringify({ address: body.address, port, name, updated: Date.now() }),
+    { expirationTtl: HUB_TTL_SECONDS });
+  if (previous) await env.HUBS.delete(await hubKey(env, previous));
+  return json(200, { status: 'registered', expires_in_seconds: HUB_TTL_SECONDS });
+}
+
+/** Web apps: {code} → {address, port, name} (public, CORS, rate limited). */
+async function hubLookup(request, env, now) {
+  const cors = corsHeaders(request, env);
+  const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...cors } });
+  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  const minute = Math.floor(now / 60000);
+  const bucket = lookupBuckets.get(ip);
+  if (bucket && bucket.minute === minute && bucket.count >= LOOKUPS_PER_MINUTE) return reply(429, { error: 'too_many_lookups' });
+  lookupBuckets.set(ip, { minute, count: bucket && bucket.minute === minute ? bucket.count + 1 : 1 });
+  if (lookupBuckets.size > 5000) lookupBuckets.clear();
+
+  let body;
+  try { body = await request.json(); } catch { return reply(400, { error: 'invalid_json' }); }
+  if (!validCode(body?.code)) return reply(422, { error: 'code must be 6 digits' });
+  const raw = await env.HUBS.get(await hubKey(env, body.code));
+  if (!raw) return reply(404, { error: 'not_found' });
+  const hub = JSON.parse(raw);
+  return reply(200, { address: hub.address, port: hub.port, name: hub.name, updated: hub.updated });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -399,8 +474,15 @@ export default {
       const p = providerConfig(env);
       return json(200, { status: 'ok', service: 'smart-spectator-ai-proxy', provider: p.name, model: p.model, configured: Boolean(p.key && env.PROXY_TOKEN) });
     }
-    const handler = ROUTES[url.pathname];
+    if (url.pathname === '/v1/hub/lookup') {
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request, env) });
+      if (request.method !== 'POST') return json(404, { error: 'not_found' });
+      if (!env.HUBS || !env.PROXY_TOKEN) return json(503, { error: 'directory_not_configured' });
+      return hubLookup(request, env, Date.now());
+    }
+    const handler = url.pathname === '/v1/hub/register' ? hubRegister : ROUTES[url.pathname];
     if (!handler || request.method !== 'POST') return json(404, { error: 'not_found' });
+    if (handler === hubRegister && !env.HUBS) return json(503, { error: 'directory_not_configured' });
     if (!providerConfig(env).key || !env.PROXY_TOKEN) return json(503, { error: 'proxy_not_configured' });
 
     const auth = request.headers.get('authorization') ?? '';

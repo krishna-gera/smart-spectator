@@ -201,3 +201,65 @@ test('task input limits', async () => {
   assert.equal((await taskCall('/v1/plan-task', { task: 'no image' })).status, 400);
   assert.equal(seen.length, 0);
 });
+
+// ---------------------------------------------------------------- main-phone directory
+
+function memoryKv() {
+  const m = new Map();
+  return {
+    m,
+    get: async k => (m.has(k) ? m.get(k) : null),
+    put: async (k, v) => { m.set(k, v); },
+    delete: async k => { m.delete(k); },
+  };
+}
+
+const hubCall = (path, body, { token = env.PROXY_TOKEN, e, origin, ip = '1.2.3.4', method = 'POST' } = {}) =>
+  worker.fetch(
+    new Request(`http://proxy${path}`, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(origin ? { origin } : {}),
+        'cf-connecting-ip': ip,
+      },
+      body: method === 'POST' ? JSON.stringify(body) : undefined,
+    }),
+    e,
+  );
+
+test('main-phone directory: register, look up by code, codes are not stored', async () => {
+  const kv = memoryKv();
+  const e = { ...env, HUBS: kv, ALLOWED_ORIGINS: 'https://smart-vyro.vercel.app' };
+  assert.equal((await hubCall('/v1/hub/register', { code: '617088', address: '192.168.1.22', port: 8000, name: 'Main phone' }, { token: 'wrong', e })).status, 401);
+  assert.equal((await hubCall('/v1/hub/register', { code: '61708', address: '192.168.1.22' }, { e })).status, 422);
+  assert.equal((await hubCall('/v1/hub/register', { code: '617088', address: 'evil.example' }, { e })).status, 422);
+  assert.equal((await hubCall('/v1/hub/register', { code: '617088', address: '192.168.1.22', port: 8000, name: 'Main phone' }, { e })).status, 200);
+  assert.ok(![...kv.m.keys()].some(k => k.includes('617088')), 'the code itself is never a key');
+
+  const found = await hubCall('/v1/hub/lookup', { code: '617088' }, { token: null, e, origin: 'https://smart-vyro.vercel.app' });
+  assert.equal(found.status, 200);
+  assert.equal(found.headers.get('access-control-allow-origin'), 'https://smart-vyro.vercel.app');
+  assert.deepEqual((({ address, port, name }) => ({ address, port, name }))(await found.json()), { address: '192.168.1.22', port: 8000, name: 'Main phone' });
+
+  const other = await hubCall('/v1/hub/lookup', { code: '111111' }, { token: null, e, origin: 'https://evil.example' });
+  assert.equal(other.status, 404);
+  assert.equal(other.headers.get('access-control-allow-origin'), null, 'other sites get no CORS access');
+
+  // Changing the code moves the entry.
+  await hubCall('/v1/hub/register', { code: '222333', previous_code: '617088', address: '192.168.1.22' }, { e });
+  assert.equal((await hubCall('/v1/hub/lookup', { code: '617088' }, { token: null, e })).status, 404);
+  assert.equal((await hubCall('/v1/hub/lookup', { code: '222333' }, { token: null, e })).status, 200);
+});
+
+test('main-phone directory: lookups are rate limited per visitor and preflight is answered', async () => {
+  const e = { ...env, HUBS: memoryKv(), ALLOWED_ORIGINS: 'https://smart-vyro.vercel.app' };
+  const pre = await hubCall('/v1/hub/lookup', null, { token: null, e, origin: 'https://smart-vyro.vercel.app', method: 'OPTIONS' });
+  assert.equal(pre.status, 204);
+  assert.match(pre.headers.get('access-control-allow-methods'), /POST/);
+  let last;
+  for (let i = 0; i < 13; i++) last = await hubCall('/v1/hub/lookup', { code: '000000' }, { token: null, e, ip: '9.9.9.9' });
+  assert.equal(last.status, 429);
+  assert.equal((await hubCall('/v1/hub/lookup', { code: '000000' }, { token: null, e, ip: '8.8.8.8' })).status, 404);
+});

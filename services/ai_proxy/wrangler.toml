@@ -12,3 +12,10 @@ AI_PROVIDER = "groq"
 AI_MODEL = "qwen/qwen3.8-27b"
 DAILY_REQUEST_LIMIT = "300"
 PER_CAMERA_MIN_INTERVAL_SECONDS = "20"
+# Web pages allowed to look up a main phone by its dashboard code.
+ALLOWED_ORIGINS = "https://smart-vyro.vercel.app,http://localhost:5173,http://127.0.0.1:5173"
+
+# Main-phone directory: the web apps find a main phone by its dashboard code.
+[[kv_namespaces]]
+binding = "HUBS"
+id = "1a2254901261477089f8d2ffc3ba40b7"

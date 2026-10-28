@@ -64,23 +64,28 @@
     <h1>Your cameras, <em>on the big screen.</em></h1>
     <p class="lead">Live video, events and AI tasks from your VYRO main phone — in a full desktop dashboard on any computer on the same Wi-Fi.</p>
 
-    <form id="connect" style="display:grid; gap:10px">
-      <label class="faint" for="addr">Main phone address</label>
-      <div class="row">
-        <input id="addr" class="field" placeholder="192.168.1.22" autocomplete="off" aria-label="Main phone address">
-        <button class="btn primary" type="submit" style="padding:0 26px">Open dashboard</button>
-      </div>
-      <div id="err" class="err"></div>
-    </form>
+    <div style="display:grid; gap:10px; max-width:520px">
+      <label class="faint" for="code">Dashboard code</label>
+      <input id="code" class="code-box" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="one-time-code" aria-label="Dashboard code">
+      <div id="status" class="status" style="text-align:left">On the main phone: VYRO → Settings → Web dashboard code</div>
+      <button id="by-address" class="linkish" type="button" style="justify-self:start">Use the phone's address instead</button>
+      <form id="connect" hidden>
+        <div class="row">
+          <input id="addr" class="field" placeholder="192.168.1.22" autocomplete="off" aria-label="Main phone address">
+          <button class="btn primary" type="submit" style="padding:0 26px">Open dashboard</button>
+        </div>
+        <div id="err" class="err"></div>
+      </form>
+    </div>
 
     <div id="phones"></div>
 
     <div class="card" style="margin-top:22px">
       <b>How to connect</b>
       <ol class="steps" style="margin-top:14px">
-        <li><span>On the main phone open <b>VYRO → Settings → Web dashboard</b>.</span></li>
-        <li><span>Type the address shown there and press <kbd>Enter</kbd>.</span></li>
-        <li><span>Sign in with the <b>Web dashboard code</b> from the same screen.</span></li>
+        <li><span>On the main phone open <b>VYRO → Settings</b>.</span></li>
+        <li><span>Type the <b>Web dashboard code</b> here — VYRO finds the phone by itself.</span></li>
+        <li><span>The dashboard opens, already signed in. Keep this computer on the same Wi-Fi.</span></li>
       </ol>
     </div>
   </section>
@@ -105,6 +110,7 @@
 
 <script src="/app/connect.js"></script>
 <script>
+  if (vyroDeviceGuard("desktop")) throw new Error("Desktop web app opened on a phone");
   function renderPhones() {
     const root = document.getElementById("phones");
     root.replaceChildren();
@@ -131,6 +137,19 @@
     }
   }
 
+  const codeBox = document.getElementById("code"), status = document.getElementById("status");
+  vyroCodeInput(codeBox, async code => {
+    codeBox.disabled = true; status.className = "status"; status.style.textAlign = "left"; status.textContent = "Finding your main phone…";
+    const found = await vyroFind(code);
+    if (found.addr) { status.textContent = `Opening ${found.name}…`; vyroOpenWithCode(found.addr, code, found.name); return; }
+    status.className = "status err"; status.textContent = found.error;
+    codeBox.disabled = false; codeBox.focus(); codeBox.select();
+  });
+  document.getElementById("by-address").onclick = () => {
+    const form = document.getElementById("connect");
+    form.hidden = !form.hidden;
+    if (!form.hidden) document.getElementById("addr").focus();
+  };
   document.getElementById("connect").addEventListener("submit", e => {
     e.preventDefault();
     const addr = vyroParse(document.getElementById("addr").value);
@@ -146,7 +165,7 @@
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferred = e; install.hidden = false; });
   install.onclick = () => { if (deferred) { deferred.prompt(); install.hidden = true; } };
 
-  document.getElementById("addr").focus();
+  document.getElementById("code").focus();
   renderPhones();
 </script>
 </body>

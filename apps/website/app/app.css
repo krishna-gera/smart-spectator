@@ -38,3 +38,21 @@ svg.i { width:20px; height:20px; fill:currentColor; flex:none; }
 .steps b { color:var(--text); }
 .note { display:flex; gap:10px; background:rgba(167,139,250,.1); color:var(--muted); border-radius:16px; padding:12px 14px; font-size:14px; }
 .note svg { color:var(--ai); margin-top:1px; }
+
+/* Wrong-device screen */
+.device-wall { min-height:100vh; display:grid; place-items:center; padding:24px; }
+.device-card { max-width:440px; width:100%; background:var(--surface); border-radius:28px; padding:34px 28px; text-align:center; display:grid; gap:12px; }
+.device-card img { width:76px; height:76px; margin:0 auto 4px; filter:drop-shadow(0 0 18px rgba(250,204,46,.35)); }
+.device-card h1 { margin:0; font-size:26px; letter-spacing:-.3px; }
+.device-card p { margin:0 0 6px; }
+
+/* 6-digit code box */
+.code-box { width:100%; background:var(--surface-high); border:2px solid transparent; border-radius:18px; padding:16px; text-align:center;
+  font-size:32px; font-weight:800; letter-spacing:.45em; color:var(--primary); }
+.code-box:focus { outline:none; border-color:var(--primary); }
+.code-box:disabled { opacity:.6; }
+.status { min-height:22px; font-size:14px; color:var(--muted); text-align:center; }
+.status.err { color:var(--danger); }
+.linkish { background:none; border:0; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:14px; padding:4px; }
+
+[hidden] { display:none !important; }
