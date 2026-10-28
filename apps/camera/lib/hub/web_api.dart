@@ -5,6 +5,8 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import '../core/ai/ai_client.dart';
+import 'brand_assets.dart';
+import 'camera_adder.dart';
 import 'event_store.dart';
 import 'hub_server.dart';
 import 'watch_tasks.dart';
@@ -34,6 +36,9 @@ class WebApi {
   static const sessionTtl = Duration(hours: 12);
   static const frameCacheFor = Duration(milliseconds: 800);
 
+  /// Served without signing in (home-screen icon and manifest).
+  static const publicFiles = {'/manifest.webmanifest', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png'};
+
   final HubServer server;
   final Map<String, DateTime> _sessions = {};
   final Map<String, (DateTime, Uint8List)> _frames = {};
@@ -47,6 +52,9 @@ class WebApi {
   /// AI watch tasks (set by the app once the watcher is running).
   TaskWatcher? tasks;
 
+  /// Adds a camera by its code (tests replace the Wi-Fi search).
+  Future<String> Function(String code)? addCamera;
+
   WebApi(this.server);
 
   Future<void> handle(HttpRequest req) async {
@@ -57,6 +65,38 @@ class WebApi {
     if (path == '/' && req.method == 'GET') {
       res.headers.contentType = ContentType.html;
       res.write(dashboardHtml);
+      return res.close();
+    }
+    // "Add to Home Screen": VYRO name and icon.
+    if (path == '/manifest.webmanifest' && req.method == 'GET') {
+      res.headers.contentType = ContentType('application', 'manifest+json', charset: 'utf-8');
+      res.write(jsonEncode({
+        'name': 'VYRO',
+        'short_name': 'VYRO',
+        'description': 'Your VYRO cameras, events and AI tasks.',
+        'start_url': '/',
+        'display': 'standalone',
+        'background_color': '#1C1E24',
+        'theme_color': '#1C1E24',
+        'icons': [
+          {'src': '/icon-192.png', 'sizes': '192x192', 'type': 'image/png'},
+          {'src': '/icon-512.png', 'sizes': '512x512', 'type': 'image/png'},
+          {'src': '/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'maskable'},
+        ],
+      }));
+      return res.close();
+    }
+    final icon = switch (path) {
+      '/apple-touch-icon.png' => vyroIcon180Base64,
+      '/icon-192.png' => vyroIcon192Base64,
+      '/icon-512.png' => vyroIcon512Base64,
+      _ => null,
+    };
+    if (icon != null && req.method == 'GET') {
+      res.headers
+        ..contentType = ContentType('image', 'png')
+        ..set(HttpHeaders.cacheControlHeader, 'public, max-age=604800');
+      res.add(base64Decode(icon));
       return res.close();
     }
     if (path == '/api/v1/web/login' && req.method == 'POST') return _login(req);
@@ -76,6 +116,8 @@ class WebApi {
 
     final parts = path.split('/'); // ['', 'api', 'v1', 'web', kind, id, action]
     if (parts.length >= 5 && parts[4] == 'tasks') return _tasks(req, parts);
+    if (path == '/api/v1/web/cameras/add' && req.method == 'POST') return _addCamera(req);
+    if (parts.length == 6 && parts[4] == 'cameras' && req.method == 'DELETE') return _removeCamera(res, parts[5]);
     if (parts.length == 7 && parts[4] == 'cameras') {
       final id = parts[5];
       if (!server.cameras.any((c) => c.cameraId == id)) return _json(res, 404, {'detail': 'Unknown camera'});
@@ -88,6 +130,8 @@ class WebApi {
           return _settings(req, id);
         case ('ask-ai', 'POST'):
           return _askAi(res, id);
+        case ('rename', 'POST'):
+          return _rename(req, id);
       }
     }
     if (parts.length == 7 && parts[4] == 'events' && parts[6] == 'snapshot' && req.method == 'GET') {
@@ -300,6 +344,49 @@ class WebApi {
       ..set(HttpHeaders.cacheControlHeader, 'no-store');
     res.add(jpeg);
     return res.close();
+  }
+
+  Future<Map<String, dynamic>?> _body(HttpRequest req) async {
+    try {
+      final raw = await utf8.decoder.bind(req).join();
+      if (raw.length > 4096) return null;
+      return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Adds a camera by the 6-digit code shown on the camera phone.
+  Future<void> _addCamera(HttpRequest req) async {
+    final body = await _body(req);
+    final code = (body?['code'] as String? ?? '').trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) return _json(req.response, 422, {'detail': 'The camera code has 6 digits.'});
+    final port = server.boundPort;
+    if (port == null) return _json(req.response, 503, {'detail': 'The main phone is not ready.'});
+    String name;
+    try {
+      name = await (addCamera ??
+          (c) => CameraAdder.addByCode(code: c, registry: server.registry, hubPort: port, hubName: server.displayName))(code);
+    } on AddCameraError catch (e) {
+      return _json(req.response, 404, {'detail': e.message});
+    }
+    return _json(req.response, 200, {'name': name});
+  }
+
+  Future<void> _rename(HttpRequest req, String cameraId) async {
+    final name = (await _body(req))?['name'];
+    if (name is! String || !await server.renameCamera(cameraId, name)) {
+      return _json(req.response, 422, {'detail': 'Use a name of 1–40 characters.'});
+    }
+    return _json(req.response, 200, {'name': name.trim()});
+  }
+
+  Future<void> _removeCamera(HttpResponse res, String cameraId) async {
+    final cam = server.cameras.where((c) => c.cameraId == cameraId).firstOrNull;
+    if (cam == null) return _json(res, 404, {'detail': 'Unknown camera'});
+    await server.revokeDevice(cam.deviceId);
+    await tasks?.forgetCamera(cameraId);
+    return _json(res, 200, {'status': 'removed'});
   }
 
   Future<void> _settings(HttpRequest req, String cameraId) async {

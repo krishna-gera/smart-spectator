@@ -7,6 +7,7 @@ import 'package:smart_spectator_camera/core/ai/ai_client.dart';
 import 'package:smart_spectator_camera/core/control/control_client.dart';
 import 'package:smart_spectator_camera/core/motion/motion_reporter.dart';
 import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
+import 'package:smart_spectator_camera/hub/camera_adder.dart';
 import 'package:smart_spectator_camera/hub/device_registry.dart';
 import 'package:smart_spectator_camera/hub/event_store.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
@@ -189,6 +190,45 @@ void main() {
     expect(aiStatus, 200);
     expect(ai['summary'], 'Empty hallway.');
     control.stop();
+  });
+
+  test('home-screen icon and manifest are served without signing in', () async {
+    final (mStatus, mHeaders, mBody) = await browser.send('GET', '/manifest.webmanifest');
+    expect(mStatus, 200);
+    expect(jsonDecode(utf8.decode(mBody))['name'], 'VYRO');
+    final (iStatus, iHeaders, iBody) = await browser.send('GET', '/apple-touch-icon.png');
+    expect((iStatus, iHeaders.contentType?.mimeType), (200, 'image/png'));
+    expect(iBody.sublist(1, 4), utf8.encode('PNG'));
+    final (_, _, page) = await browser.send('GET', '/');
+    expect(utf8.decode(page), contains('apple-touch-icon'));
+  });
+
+  test('cameras: add by code, rename and remove from the browser', () async {
+    final cam = await PairingClient.pairWithCode(
+        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'iPhone', code: registry.hubCode);
+    final codes = <String>[];
+    server.web.addCamera = (code) async {
+      codes.add(code);
+      if (code != '482913') throw const AddCameraError('No camera accepted that code.');
+      return 'Garage';
+    };
+    await signIn();
+
+    expect((await browser.json('POST', '/api/v1/web/cameras/add', {'code': '12'})).$1, 422);
+    final (badStatus, bad) = await browser.json('POST', '/api/v1/web/cameras/add', {'code': '000000'});
+    expect((badStatus, bad['detail']), (404, 'No camera accepted that code.'));
+    final (okStatus, ok) = await browser.json('POST', '/api/v1/web/cameras/add', {'code': '482913'});
+    expect((okStatus, ok['name']), (200, 'Garage'));
+    expect(codes, ['000000', '482913']);
+
+    final path = '/api/v1/web/cameras/${cam.cameraId}';
+    expect((await browser.json('POST', '$path/rename', {'name': '  Front door '})).$1, 200);
+    expect(server.cameras.single.deviceName, 'Front door');
+    expect((await browser.json('POST', '$path/rename', {'name': ''})).$1, 422);
+
+    expect((await browser.json('DELETE', path)).$1, 200);
+    expect(server.cameras, isEmpty);
+    expect((await browser.json('DELETE', path)).$1, 404);
   });
 
   test('sign out ends the session', () async {

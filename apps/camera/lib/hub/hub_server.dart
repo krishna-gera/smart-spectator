@@ -283,7 +283,7 @@ class HubServer {
   Future<void> _handle(HttpRequest req) async {
     final path = req.uri.path;
     try {
-      if (path == '/' || path.startsWith('/api/v1/web/')) {
+      if (path == '/' || path.startsWith('/api/v1/web/') || WebApi.publicFiles.contains(path)) {
         return await web.handle(req);
       }
       if (path == '/api/v1/health' && req.method == 'GET') {

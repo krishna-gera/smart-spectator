@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VYRO — spare phones become smart cameras</title>
+<meta name="description" content="VYRO turns spare phones into smart cameras. Live video stays on your Wi-Fi, and AI watches for exactly what you ask — like the washing machine filling up or a download finishing.">
+<meta name="theme-color" content="#1C1E24">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta property="og:title" content="VYRO — spare phones become smart cameras">
+<meta property="og:description" content="Live video on your Wi-Fi. AI that watches for what you ask.">
+<meta property="og:image" content="assets/og-image.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  /* Same tokens as the VYRO app and dashboard. */
+  :root {
+    --bg:#1C1E24; --bg-deep:#16171C; --surface:#262932; --surface-high:#30343E; --border:#373B47;
+    --primary:#FACC2E; --on-primary:#15161A; --text:#F5F6F8; --muted:#9CA0AB; --faint:#6B7080;
+    --success:#4ADE80; --warning:#FBBF24; --danger:#F25C70; --ai:#A78BFA; --ring:#8B7CF6; --radius:22px;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; scroll-padding-top:80px; }
+  body { margin:0; background:var(--bg); color:var(--text); font:17px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:inherit; }
+  img { max-width:100%; display:block; }
+  .wrap { max-width:1160px; margin:0 auto; padding:0 24px; }
+  .muted { color:var(--muted); }
+  .wordmark { font-weight:900; letter-spacing:.3em; margin-right:-.3em; }
+  svg.i { width:22px; height:22px; fill:currentColor; flex:none; }
+
+  /* nav */
+  nav { position:sticky; top:0; z-index:10; background:rgba(28,30,36,.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-bottom:1px solid rgba(55,59,71,.55); }
+  nav .wrap { display:flex; align-items:center; gap:24px; height:68px; }
+  .brand { display:flex; align-items:center; gap:10px; text-decoration:none; font-size:19px; }
+  .brand img { width:32px; height:32px; }
+  .links { display:flex; gap:22px; margin-left:auto; }
+  .links a { text-decoration:none; color:var(--muted); font-weight:600; font-size:15px; }
+  .links a:hover { color:var(--text); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:999px; padding:13px 22px; font:inherit; font-weight:700; font-size:16px;
+    text-decoration:none; cursor:pointer; background:var(--surface-high); color:var(--text); transition:filter .15s, transform .05s; white-space:nowrap; }
+  .btn:hover { filter:brightness(1.12); } .btn:active { transform:scale(.98); }
+  .btn.primary { background:var(--primary); color:var(--on-primary); }
+  .btn.small { padding:9px 16px; font-size:14px; }
+  .menu-btn { display:none; margin-left:auto; background:transparent; border:0; color:var(--text); cursor:pointer; padding:8px; }
+
+  /* hero */
+  .hero { position:relative; overflow:hidden; padding:76px 0 90px; }
+  .hero::before { content:""; position:absolute; width:900px; height:900px; left:-380px; top:-420px; border-radius:50%; background:radial-gradient(circle, rgba(250,204,46,.10), transparent 62%); }
+  .hero .wrap { position:relative; display:grid; grid-template-columns:1.05fr .95fr; gap:56px; align-items:center; }
+  .eyebrow { display:inline-flex; align-items:center; gap:8px; background:var(--surface); border-radius:999px; padding:6px 14px 6px 8px; color:var(--muted); font-size:14px; font-weight:600; }
+  .eyebrow b { background:rgba(167,139,250,.16); color:var(--ai); border-radius:999px; padding:2px 10px; font-size:12.5px; }
+  h1 { font-size:clamp(40px, 6vw, 66px); line-height:1.04; letter-spacing:-1.6px; margin:20px 0 18px; }
+  h1 em { font-style:normal; color:var(--primary); }
+  .lead { font-size:20px; color:var(--muted); max-width:560px; margin:0 0 30px; }
+  .cta { display:flex; gap:12px; flex-wrap:wrap; }
+  .trust { display:flex; gap:20px; flex-wrap:wrap; margin-top:30px; color:var(--faint); font-size:14px; }
+  .trust span { display:inline-flex; align-items:center; gap:7px; }
+  .trust svg { width:18px; height:18px; color:var(--success); }
+
+  /* product mock */
+  .mock { position:relative; display:grid; gap:16px; }
+  .phone { background:var(--bg-deep); border:10px solid #0d0e11; border-radius:44px; padding:18px 16px 22px; box-shadow:0 40px 90px rgba(0,0,0,.55); max-width:380px; margin-left:auto; width:100%; }
+  .phone-top { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .phone-top img { width:22px; height:22px; }
+  .phone-top .sub { color:var(--muted); font-size:13px; margin-left:auto; }
+  .m-card { background:var(--surface); border-radius:20px; overflow:hidden; }
+  .m-video { position:relative; aspect-ratio:16/10; background:linear-gradient(135deg,#3a3f4b,#1b1d23 70%); }
+  .m-video .scene { position:absolute; inset:0; background:
+      radial-gradient(circle at 70% 60%, rgba(250,204,46,.22), transparent 28%),
+      radial-gradient(ellipse at 30% 75%, rgba(167,139,250,.18), transparent 40%),
+      linear-gradient(180deg, transparent 55%, rgba(0,0,0,.35)); }
+  .m-video .washer { position:absolute; right:18%; top:20%; width:34%; aspect-ratio:1; border-radius:50%; border:6px solid #c7cad3; background:radial-gradient(circle, #5b8bd6 0 38%, #2a3447 39% 100%); box-shadow:inset 0 0 0 8px #8b909c; }
+  .chips { position:absolute; top:10px; left:10px; display:flex; gap:6px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; font-size:11.5px; font-weight:800; background:rgba(21,22,26,.75); }
+  .chip::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .chip.live { background:var(--danger); color:#fff; } .chip.live::before { background:#fff; }
+  .chip.ai { color:var(--ai); }
+  .m-body { padding:12px 14px; }
+  .m-body b { font-size:16px; }
+  .m-status { color:var(--success); font-size:13px; margin-top:2px; }
+  .m-task { background:var(--surface); border-radius:20px; padding:14px; margin-top:12px; }
+  .m-task .row { display:flex; gap:10px; align-items:flex-start; }
+  .ringi { width:36px; height:36px; flex:none; }
+  .m-task .t { font-weight:700; font-size:14.5px; line-height:1.3; }
+  .m-task .c { color:var(--faint); font-size:12.5px; }
+  .track { height:6px; background:var(--surface-high); border-radius:6px; margin-top:10px; overflow:hidden; }
+  .track div { width:72%; height:100%; background:var(--ai); border-radius:6px; }
+  .m-task .o { font-size:13px; margin-top:8px; }
+  .toast { position:absolute; left:-30px; bottom:-28px; background:rgba(48,52,62,.96); backdrop-filter:blur(8px); border-radius:18px; padding:12px 14px; display:flex; gap:10px; align-items:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.5); max-width:300px; }
+  .toast img { width:34px; height:34px; border-radius:9px; }
+  .toast b { display:block; font-size:14px; } .toast span { font-size:13px; color:var(--muted); }
+
+  /* sections */
+  section.block { padding:92px 0; }
+  section.alt { background:var(--bg-deep); }
+  .kicker { color:var(--primary); font-weight:800; font-size:14px; letter-spacing:.12em; text-transform:uppercase; }
+  h2 { font-size:clamp(30px, 4vw, 44px); line-height:1.1; letter-spacing:-.8px; margin:10px 0 14px; }
+  .intro { color:var(--muted); font-size:19px; max-width:640px; margin:0 0 44px; }
+  .center { text-align:center; } .center .intro { margin-left:auto; margin-right:auto; }
+
+  .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+  .step { background:var(--surface); border-radius:var(--radius); padding:28px; }
+  .num { width:44px; height:44px; border-radius:50%; background:var(--primary); color:var(--on-primary); display:grid; place-items:center; font-weight:900; font-size:19px; margin-bottom:18px; }
+  .step h3 { margin:0 0 8px; font-size:21px; }
+  .step p { margin:0; color:var(--muted); }
+  .code { margin-top:18px; background:var(--surface-high); border-radius:16px; padding:14px; text-align:center; color:var(--primary); font-weight:900; font-size:28px; letter-spacing:.3em; }
+
+  .features { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+  .feature { background:var(--surface); border-radius:var(--radius); padding:26px; }
+  .feature .ic { width:48px; height:48px; border-radius:15px; display:grid; place-items:center; margin-bottom:16px; }
+  .feature h3 { margin:0 0 6px; font-size:19px; }
+  .feature p { margin:0; color:var(--muted); font-size:15.5px; }
+  .ic.y { background:rgba(250,204,46,.14); color:var(--primary); }
+  .ic.p { background:rgba(167,139,250,.16); color:var(--ai); }
+  .ic.r { background:rgba(242,92,112,.14); color:var(--danger); }
+  .ic.g { background:rgba(74,222,128,.13); color:var(--success); }
+
+  .ai-grid { display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center; }
+  .prompts { display:grid; gap:14px; }
+  .prompt { background:var(--surface); border-radius:20px; padding:16px 18px; }
+  .prompt .q { font-weight:700; }
+  .prompt .a { margin-top:8px; display:flex; align-items:center; gap:8px; color:var(--muted); font-size:14.5px; }
+  .pill { border-radius:999px; padding:2px 10px; font-size:12px; font-weight:800; }
+  .pill.done { background:rgba(74,222,128,.15); color:var(--success); }
+  .pill.watch { background:rgba(167,139,250,.16); color:var(--ai); }
+  .list { display:grid; gap:14px; margin:0; padding:0; list-style:none; }
+  .list li { display:flex; gap:12px; color:var(--muted); }
+  .list li b { color:var(--text); }
+  .list svg { color:var(--primary); margin-top:3px; }
+
+  .privacy { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+
+  .dash { background:var(--surface); border-radius:28px; padding:40px; display:grid; grid-template-columns:1.1fr .9fr; gap:36px; align-items:center; }
+  .dash form { display:grid; gap:12px; }
+  .dash input { background:var(--surface-high); border:2px solid transparent; border-radius:16px; padding:14px 16px; font:inherit; color:var(--text); width:100%; }
+  .dash input:focus { outline:none; border-color:var(--primary); }
+  .hint { color:var(--faint); font-size:14px; }
+  .err { color:var(--danger); font-size:14px; min-height:20px; }
+
+  .get { text-align:center; }
+  .get .logo { width:96px; height:96px; margin:0 auto 18px; filter:drop-shadow(0 0 24px rgba(250,204,46,.35)); }
+  .platforms { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-top:26px; }
+  .platform { background:var(--surface); border-radius:20px; padding:16px 22px; min-width:220px; text-align:left; }
+  .platform b { display:block; } .platform span { color:var(--muted); font-size:14px; }
+
+  details { background:var(--surface); border-radius:18px; padding:4px 20px; margin-bottom:12px; }
+  summary { cursor:pointer; padding:16px 0; font-weight:700; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  summary::-webkit-details-marker { display:none; }
+  summary::after { content:"+"; color:var(--primary); font-size:24px; font-weight:400; transition:transform .2s; }
+  details[open] summary::after { transform:rotate(45deg); }
+  details p { margin:0 0 18px; color:var(--muted); }
+  .faq { max-width:820px; margin:0 auto; }
+
+  footer { border-top:1px solid var(--border); padding:36px 0 50px; color:var(--faint); font-size:14px; }
+  footer .wrap { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+  footer .brand { color:var(--text); font-size:16px; }
+  footer .brand img { width:26px; height:26px; }
+  footer .links { margin-left:auto; }
+
+  @media (max-width:960px) {
+    .hero .wrap, .ai-grid, .dash { grid-template-columns:1fr; }
+    .phone { margin:0 auto; } .toast { left:0; }
+    .steps, .features, .privacy { grid-template-columns:1fr 1fr; }
+  }
+  @media (max-width:720px) {
+    .links { display:none; } .menu-btn { display:block; }
+    nav.open .links { display:flex; flex-direction:column; position:absolute; top:68px; left:0; right:0; background:var(--bg); padding:16px 24px 22px; gap:16px; border-bottom:1px solid var(--border); }
+    nav .btn.small { display:none; }
+    .steps, .features, .privacy { grid-template-columns:1fr; }
+    .hero { padding:44px 0 64px; } section.block { padding:68px 0; } .dash { padding:24px; }
+    footer .links { margin-left:0; display:flex; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 24 24"><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></symbol>
+  <symbol id="i-web" viewBox="0 0 24 24"><path d="M20 3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h6v2H8v2h8v-2h-2v-2h6c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 13H4V5h16v11z"/></symbol>
+  <symbol id="i-battery" viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4zM11 20v-5.5H9L13 7v5.5h2L11 20z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></symbol>
+  <symbol id="i-phones" viewBox="0 0 24 24"><path d="M17 1H7c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14z"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></symbol>
+</svg>
+
+<nav id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/vyro-mark.png" alt=""><span class="wordmark">VYRO</span></a>
+    <div class="links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#ai">AI tasks</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <a class="btn primary small" href="#dashboard">Open dashboard</a>
+    <button class="menu-btn" aria-label="Menu" onclick="document.getElementById('nav').classList.toggle('open')"><svg class="i"><use href="#i-menu"/></svg></button>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow"><b>New</b> AI watch tasks — just say what to look for</span>
+      <h1>Spare phones become <em>smart cameras.</em></h1>
+      <p class="lead">VYRO streams live video from an old phone to your main phone over your own Wi-Fi — and lets AI watch for exactly what you care about, like the washing machine filling up or a download finishing.</p>
+      <div class="cta">
+        <a class="btn primary" href="#get">Get VYRO</a>
+        <a class="btn" href="#how">See how it works</a>
+      </div>
+      <div class="trust">
+        <span><svg class="i"><use href="#i-check"/></svg>No account</span>
+        <span><svg class="i"><use href="#i-check"/></svg>Video stays on your Wi-Fi</span>
+        <span><svg class="i"><use href="#i-check"/></svg>Pair with one code</span>
+      </div>
+    </div>
+    <div class="mock" aria-hidden="true">
+      <div class="phone">
+        <div class="phone-top"><img src="assets/vyro-mark.png" alt=""><b class="wordmark" style="font-size:14px">VYRO</b><span class="sub">Main phone</span></div>
+        <div class="m-card">
+          <div class="m-video"><div class="scene"></div><div class="washer"></div>
+            <div class="chips"><span class="chip live">LIVE</span><span class="chip ai">AI watching</span></div></div>
+          <div class="m-body"><b>Laundry room</b><div class="m-status">● Live · 1.9 Mbps</div></div>
+        </div>
+        <div class="m-task">
+          <div class="row">
+            <svg class="ringi" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="none" stroke="#A78BFA" stroke-opacity=".22" stroke-width="3.5"/><circle cx="20" cy="20" r="17" fill="none" stroke="#A78BFA" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="77 107" transform="rotate(-90 20 20)"/><use href="#i-ai" x="11" y="11" width="18" height="18" fill="#fff"/></svg>
+            <div><div class="t">Tell me when the water reaches the MAX line</div><div class="c">Laundry room · ~72%</div></div>
+          </div>
+          <div class="track"><div></div></div>
+          <div class="o">“The water is about three quarters of the way up the window.”</div>
+        </div>
+      </div>
+      <div class="toast"><img src="assets/apple-touch-icon.png" alt=""><div><b>✅ Laundry room: done</b><span>The water is at the MAX line.</span></div></div>
+    </div>
+  </div>
+</header>
+
+<section class="block alt" id="how">
+  <div class="wrap center">
+    <div class="kicker">How it works</div>
+    <h2>Set up in under a minute</h2>
+    <p class="intro">No IP addresses, no accounts, no cables. Just two phones on the same Wi-Fi.</p>
+    <div class="steps" style="text-align:left">
+      <div class="step"><div class="num">1</div><h3>Open VYRO on a spare phone</h3><p>Choose <b>Camera</b>. It shows a permanent 6-digit code and waits.</p><div class="code">482 913</div></div>
+      <div class="step"><div class="num">2</div><h3>Type the code on your main phone</h3><p>Tap <b>Add camera</b> and enter the code. VYRO finds the camera on your Wi-Fi and connects it by itself.</p></div>
+      <div class="step"><div class="num">3</div><h3>Watch live — or let AI watch</h3><p>See live video, get motion alerts, and give the camera a job in plain words. VYRO tells you when it happens.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="features">
+  <div class="wrap">
+    <div class="kicker">Features</div>
+    <h2>Everything a home camera needs</h2>
+    <p class="intro">Built for the phones you already have. One main phone sees everything; any number of spare phones become cameras.</p>
+    <div class="features">
+      <div class="feature"><div class="ic y"><svg class="i"><use href="#i-cam"/></svg></div><h3>Live video on your Wi-Fi</h3><p>Hardware H.264 streaming straight to your main phone. Video never goes to a server.</p></div>
+      <div class="feature"><div class="ic p"><svg class="i"><use href="#i-ai"/></svg></div><h3>AI watch tasks</h3><p>“Tell me when the kettle stops steaming.” The AI checks the picture and alerts you when it happens.</p></div>
+      <div class="feature"><div class="ic r"><svg class="i"><use href="#i-bell"/></svg></div><h3>Motion alerts</h3><p>Motion detection runs on the camera phone, with optional AI descriptions like “a person at the door”.</p></div>
+      <div class="feature"><div class="ic y"><svg class="i"><use href="#i-web"/></svg></div><h3>Web dashboard</h3><p>Open your cameras, events and AI tasks on any computer on the same Wi-Fi. Add it to your home screen.</p></div>
+      <div class="feature"><div class="ic g"><svg class="i"><use href="#i-battery"/></svg></div><h3>Camera health</h3><p>Battery, charging and connection for every camera — with alerts when a battery runs low or a camera drops off.</p></div>
+      <div class="feature"><div class="ic p"><svg class="i"><use href="#i-moon"/></svg></div><h3>Power saver</h3><p>Camera phones stay awake but black out the screen, so an old phone can watch all day.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block alt" id="ai">
+  <div class="wrap ai-grid">
+    <div>
+      <div class="kicker">AI watch tasks</div>
+      <h2>Tell it what to watch for, in your own words</h2>
+      <p class="intro" style="margin-bottom:26px">VYRO turns your words into a precise question, checks the camera picture, and only alerts you when it is confident.</p>
+      <ul class="list">
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>Test it first.</b> See how the AI understands the task on the live picture before you start.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>Progress you can see.</b> Gradual jobs show a progress ring — “~72% full”.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>Catches quick moments.</b> Motion on the camera triggers an instant check.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>Reminders until handled</b>, and tasks stop by themselves after a few hours.</span></li>
+      </ul>
+    </div>
+    <div class="prompts">
+      <div class="prompt"><div class="q">“Tell me when the water in the washing machine reaches MAX”</div><div class="a"><span class="pill watch">Watching</span>About two thirds up the window</div></div>
+      <div class="prompt"><div class="q">“Notify me when the laptop download says 100%”</div><div class="a"><span class="pill done">Done</span>“100% – Download complete”</div></div>
+      <div class="prompt"><div class="q">“Tell me when someone waves at the camera”</div><div class="a"><span class="pill done">Done</span>A hand is raised with fingers spread</div></div>
+      <div class="prompt"><div class="q">“Tell me when the parcel is taken from the doorstep”</div><div class="a"><span class="pill watch">Watching</span>The parcel is still by the door</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="privacy">
+  <div class="wrap">
+    <div class="kicker">Privacy</div>
+    <h2>Your video stays home</h2>
+    <p class="intro">VYRO is local-first. There is no VYRO account and no cloud video storage.</p>
+    <div class="privacy">
+      <div class="feature"><div class="ic g"><svg class="i"><use href="#i-wifi"/></svg></div><h3>Live video stays on Wi-Fi</h3><p>Cameras stream directly to your main phone. Events and snapshots are stored on the main phone.</p></div>
+      <div class="feature"><div class="ic p"><svg class="i"><use href="#i-ai"/></svg></div><h3>AI only when you ask</h3><p>Single pictures go to the AI service only for tasks or descriptions you turn on — and the camera shows an “AI watching” badge.</p></div>
+      <div class="feature"><div class="ic y"><svg class="i"><use href="#i-lock"/></svg></div><h3>Codes, not passwords</h3><p>Cameras join with their own code; the web dashboard needs a separate code; wrong guesses are locked out.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block alt" id="dashboard">
+  <div class="wrap">
+    <div class="dash">
+      <div>
+        <div class="kicker">Web dashboard</div>
+        <h2 style="margin-bottom:10px">Open your cameras on a computer</h2>
+        <p class="muted" style="margin:0">Your main phone runs the dashboard itself. On the main phone open <b>VYRO → Settings → Web dashboard</b> to find its address and sign-in code, then open it from any browser on the same Wi-Fi.</p>
+      </div>
+      <form id="open-dash">
+        <label class="hint" for="addr">Main phone address</label>
+        <input id="addr" placeholder="e.g. 192.168.1.22" autocomplete="off" inputmode="url">
+        <button class="btn primary" type="submit">Open my dashboard</button>
+        <div id="addr-err" class="err"></div>
+        <div class="hint">Tip: once it is open, use “Add to Home Screen” — the dashboard installs with the VYRO icon.</div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="get">
+  <div class="wrap get">
+    <img class="logo" src="assets/vyro-mark.png" alt="VYRO logo">
+    <h2>Get VYRO</h2>
+    <p class="intro" style="margin:0 auto">VYRO is in private testing for iPhone and Android. One app does both jobs — choose Main phone or Camera when it opens.</p>
+    <div class="platforms">
+      <div class="platform"><b>iPhone</b><span>Private test build</span></div>
+      <div class="platform"><b>Android</b><span>Private test build</span></div>
+      <div class="platform"><b>Any browser</b><span>Dashboard on your Wi-Fi</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block alt" id="faq">
+  <div class="wrap">
+    <div class="center"><div class="kicker">FAQ</div><h2 style="margin-bottom:34px">Questions</h2></div>
+    <div class="faq">
+      <details><summary>Which phones can be cameras?</summary><p>Any iPhone or Android phone that runs VYRO. Old phones work well — plug them in and turn on Power saver.</p></details>
+      <details><summary>Do both phones need to be on the same Wi-Fi?</summary><p>Yes. Video goes straight from the camera to the main phone over your network, which keeps it private and fast.</p></details>
+      <details><summary>What if my Wi-Fi or the main phone's address changes?</summary><p>Cameras find their main phone again by themselves. If a camera is removed on the main phone, it goes back to showing its code.</p></details>
+      <details><summary>How does the AI work, and what does it cost?</summary><p>For AI tasks and descriptions, VYRO sends a single, reduced picture to an online AI model through the VYRO AI service. Live video is never sent. The AI shares a per-minute budget, so several tasks take turns.</p></details>
+      <details><summary>Can several main phones watch the same camera?</summary><p>Yes. Type the same camera code on each main phone; the camera streams to all of them.</p></details>
+      <details><summary>Does VYRO work when the app is closed?</summary><p>Keep VYRO open on the main phone and the cameras. Camera phones stay awake and black out their screen to save power.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/vyro-mark.png" alt=""><span class="wordmark">VYRO</span></a>
+    <span>Spare phones become smart cameras.</span>
+    <div class="links"><a href="#how">How it works</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a></div>
+  </div>
+</footer>
+
+<script>
+  // "Open my dashboard": the dashboard lives on the main phone at port 8000.
+  document.getElementById("open-dash").addEventListener("submit", e => {
+    e.preventDefault();
+    const raw = document.getElementById("addr").value.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    const err = document.getElementById("addr-err");
+    const m = raw.match(/^([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.local)(?::([0-9]{2,5}))?$/i);
+    if (!m) { err.textContent = "Use the address shown in VYRO → Settings, e.g. 192.168.1.22"; return; }
+    err.textContent = "";
+    window.location.href = `http://${m[1]}:${m[2] || 8000}/`;
+  });
+  document.querySelectorAll(".links a").forEach(a => a.addEventListener("click", () => document.getElementById("nav").classList.remove("open")));
+</script>
+</body>
+</html>

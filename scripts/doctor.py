@@ -70,7 +70,7 @@ class SystemDoctor:
             )
 
     def check_directories(self):
-        dirs = ["recordings", "snapshots", "logs", "backups", "data", "ai/models/releases", "apps/client"]
+        dirs = ["recordings", "snapshots", "logs", "backups", "data", "ai/models/releases"]
         all_ok = True
         for d in dirs:
             p = root_path / d
