@@ -118,6 +118,7 @@ void main() {
     expect(state['hub']['name'], 'Main phone (test)');
     expect(state['cameras'].single['name'], 'Front door');
     expect(state['cameras'].single['status'], 'offline');
+    expect((await browser.json('GET', '/api/v1/web/cameras/${cam.cameraId}/picture')).$1, 404, reason: 'no picture yet');
     expect(state['cameras'].single['settings']['motion_enabled'], isTrue);
     expect(state['events'].single['ai_summary'], 'A person at the door.');
     expect(state['unseen'], 1);
@@ -169,6 +170,15 @@ void main() {
     expect(status, 200);
     expect(headers.contentType?.mimeType, 'image/jpeg');
     expect(bytes, _jpeg);
+
+    // The picture is kept for the dashboard after the camera stops streaming.
+    final (pStatus, _, pBytes) = await browser.send('GET', '/api/v1/web/cameras/${cam.cameraId}/picture');
+    expect(pStatus, 200);
+    expect(pBytes, _jpeg);
+    final (_, state) = await browser.json('GET', '/api/v1/web/state');
+    expect(state['cameras'].single['status'], 'online');
+    expect(state['cameras'].single['last_seen'], isNotNull);
+    expect(state['cameras'].single['picture_at'], isNotNull);
 
     expect((await browser.json('POST', '/api/v1/web/cameras/${cam.cameraId}/ask-ai')).$1, 503, reason: 'AI not available yet');
     server.web

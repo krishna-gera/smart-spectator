@@ -7,15 +7,20 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/ai/ai_client.dart';
 import '../../core/platform/system_bridge.dart';
+import '../../core/storage/app_prefs.dart';
 import '../../core/video/live_video_controller.dart';
 import '../../hub/alert_service.dart';
+import '../../hub/camera_health.dart';
 import '../../hub/device_registry.dart';
 import '../../hub/event_store.dart';
 import '../../hub/hub_server.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 import '../../hub/watch_tasks.dart';
+import '../onboarding/onboarding_screen.dart';
 import 'add_camera_screen.dart';
+import 'camera_card.dart';
+import 'settings_screen.dart';
 import 'task_editor_screen.dart';
 import 'events_view.dart';
 
@@ -40,6 +45,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
   StreamSubscription<void>? _tasksSub;
   StreamSubscription<void>? _changesSub;
   Timer? _ticker;
+  int _ticks = 0;
+  late final CameraHealthMonitor _health = CameraHealthMonitor(notify: SystemBridge.notify);
   String? _localIp;
   String? _error;
   bool _ready = false;
@@ -100,7 +107,12 @@ class _ViewerScreenState extends State<ViewerScreen> {
         if (mounted) setState(() {});
       });
       _syncLiveVideo();
+      _health.enabled = await AppPrefs.healthAlerts();
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        _ticks++;
+        // Keep a recent picture of each live camera for when it stops.
+        if (_ticks % 10 == 0) _server.refreshPictures();
+        if (_ticks % 5 == 0) _health.check(_server.cameras);
         if (mounted) setState(() {});
       });
     } catch (e) {
@@ -183,6 +195,68 @@ class _ViewerScreenState extends State<ViewerScreen> {
     }
   }
 
+  Future<void> _renameCamera(CameraLink cam) async {
+    final controller = TextEditingController(text: cam.deviceName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename camera', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(hintText: 'e.g. Laundry room'),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty || name.trim() == cam.deviceName) return;
+    if (await _server.renameCamera(cam.cameraId, name)) {
+      HapticFeedback.lightImpact();
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _showGuide() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (ctx) => OnboardingScreen(onDone: () => Navigator.of(ctx).pop()),
+    ));
+  }
+
+  Future<void> _openSettingsScreen() async {
+    final address = _localIp != null && _server.boundPort != null ? '$_localIp:${_server.boundPort}' : null;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SettingsScreen(
+        cameras: () => _server.cameras,
+        pairingCode: () => _registry.hubCode,
+        onChangeCode: _changeCode,
+        onCameraSettings: _openSettings,
+        onRename: _renameCamera,
+        onRemove: _removeCamera,
+        healthAlerts: _health.enabled,
+        onHealthAlerts: (on) {
+          _health.enabled = on;
+          AppPrefs.setHealthAlerts(on);
+        },
+        dashboardAddress: address,
+        aiConfigured: _ai.config.isConfigured,
+        onShowGuide: _showGuide,
+        onChangeRole: () {
+          Navigator.of(context).pop();
+          widget.onChangeRole();
+        },
+      ),
+    ));
+    if (mounted) setState(() {});
+  }
+
   void _openSettings(CameraLink cam) {
     showModalBottomSheet<void>(
       context: context,
@@ -242,22 +316,15 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ),
         title: VyroTitle(subtitle: _tab == 0 ? 'Main phone' : 'Events'),
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_horiz_rounded),
-            onSelected: (v) {
-              if (v == 'role') widget.onChangeRole();
-              if (v == 'code') _changeCode();
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'code', child: Text('Change pairing code')),
-              PopupMenuItem(value: 'role', child: Text('Use this phone as a camera')),
-            ],
-          ),
+          IconButton(icon: const Icon(Icons.settings_outlined), tooltip: 'Settings', onPressed: _ready ? _openSettingsScreen : null),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
+        onDestinationSelected: (i) {
+          if (i != _tab) HapticFeedback.selectionClick();
+          setState(() => _tab = i);
+        },
         destinations: [
           const NavigationDestination(icon: Icon(Icons.videocam_outlined), selectedIcon: Icon(Icons.videocam), label: 'Cameras'),
           NavigationDestination(
@@ -346,40 +413,35 @@ class _ViewerScreenState extends State<ViewerScreen> {
             onChange: _changeCode,
           ),
         ],
-        if (live.isNotEmpty) ...[
-          const CenteredLabel('Live now', icon: Icons.sensors_rounded, iconColor: AppColors.danger),
+        if (cameras.isNotEmpty) ...[
+          const CenteredLabel('Cameras', icon: Icons.videocam_outlined),
           LayoutBuilder(builder: (context, c) {
-            final columns = c.maxWidth > 700 ? 3 : (live.length == 1 ? 1 : 2);
-            return GridView.count(
-              crossAxisCount: columns,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: columns == 1 ? 16 / 10 : 3 / 4,
-              children: [
-                for (final cam in live)
-                  GestureDetector(onTap: () => _openLive(cam), child: _LiveTile(camera: cam, controller: _live[cam.cameraId]!)),
-              ],
-            );
+            final columns = c.maxWidth > 760 ? 2 : 1;
+            final cards = [
+              for (final cam in cameras)
+                CameraCard(
+                  key: ValueKey(cam.cameraId),
+                  camera: cam,
+                  controller: _live[cam.cameraId],
+                  settings: _events?.settingsFor(cam.cameraId) ?? const CameraSettings(),
+                  aiConfigured: _ai.config.isConfigured,
+                  onOpen: _live.containsKey(cam.cameraId) ? () => _openLive(cam) : null,
+                  onSettings: () => _openSettings(cam),
+                  onRename: () => _renameCamera(cam),
+                  onRemove: () => _removeCamera(cam),
+                  onWatch: _ai.config.isConfigured ? () => _newTask(cameraId: cam.cameraId) : null,
+                ),
+            ];
+            if (columns == 1) {
+              return Column(children: [for (final card in cards) Padding(padding: const EdgeInsets.only(bottom: 14), child: card)]);
+            }
+            return Wrap(spacing: 14, runSpacing: 14, children: [
+              for (final card in cards) SizedBox(width: (c.maxWidth - 14) / 2, child: card),
+            ]);
           }),
         ],
         if (cameras.isNotEmpty && _tasks != null) ..._aiTasksSection(),
         if (cameras.isNotEmpty) ...[
-          const CenteredLabel('All cameras', icon: Icons.videocam_outlined),
-          for (final cam in cameras)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _CameraCard(
-                camera: cam,
-                settings: _events?.settingsFor(cam.cameraId) ?? const CameraSettings(),
-                aiConfigured: _ai.config.isConfigured,
-                onOpen: _live.containsKey(cam.cameraId) ? () => _openLive(cam) : null,
-                onSettings: () => _openSettings(cam),
-                onRemove: () => _removeCamera(cam),
-                onWatch: _ai.config.isConfigured ? () => _newTask(cameraId: cam.cameraId) : null,
-              ),
-            ),
           const CenteredLabel('Pairing code', icon: Icons.key_rounded),
           CodeDisplay(code: _registry.hubCode, caption: 'Enter this on a camera phone to connect it', compact: true, onChange: _changeCode),
         ],
@@ -443,49 +505,6 @@ class _VideoMessage extends StatelessWidget {
           Text(text, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
         ]),
       );
-}
-
-class _LiveTile extends StatelessWidget {
-  final CameraLink camera;
-  final LiveVideoController controller;
-  const _LiveTile({required this.camera, required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: ColoredBox(
-        color: Colors.black,
-        child: Stack(fit: StackFit.expand, children: [
-          LiveVideo(camera: camera, controller: controller),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(10, 18, 10, 8),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87]),
-              ),
-              child: Text(camera.deviceName,
-                  overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            ),
-          ),
-          Positioned(
-            left: 8,
-            top: 8,
-            child: Row(children: [
-              const StatusChip('LIVE', color: AppColors.danger, filled: true),
-              if (camera.motionActive) ...[
-                const SizedBox(width: 6),
-                const StatusChip('Motion', color: AppColors.warning, filled: true, icon: Icons.directions_run),
-              ],
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
 }
 
 /// Full-screen live view. Rotates with the phone; landscape fills the screen.
@@ -619,95 +638,6 @@ class AiResultSheet extends StatelessWidget {
   }
 }
 
-class _CameraCard extends StatelessWidget {
-  final CameraLink camera;
-  final CameraSettings settings;
-  final bool aiConfigured;
-  final VoidCallback? onOpen;
-  final VoidCallback onSettings;
-  final VoidCallback onRemove;
-  final VoidCallback? onWatch;
-
-  const _CameraCard({
-    required this.camera,
-    required this.settings,
-    required this.aiConfigured,
-    required this.onOpen,
-    required this.onSettings,
-    required this.onRemove,
-    this.onWatch,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final last = camera.lastPacketAt;
-    final live = camera.streaming && last != null && DateTime.now().difference(last).inSeconds < 3;
-    final (status, statusColor, icon) = live
-        ? ('Live now · ${camera.bitrateKbps.toStringAsFixed(0)} kbps', AppColors.success, Icons.sensors_rounded)
-        : camera.streaming
-            ? ('Connecting video…', AppColors.warning, Icons.schedule_rounded)
-            : camera.controlConnected
-                ? ('Online · not streaming', AppColors.textMuted, Icons.schedule_rounded)
-                : ('Offline', AppColors.danger, Icons.error_outline_rounded);
-    final battery = camera.batteryLevel != null
-        ? '${camera.batteryLevel!.round()}%${camera.isCharging == true ? ' · charging' : ''}'
-        : 'unknown';
-    final motion = !settings.motionEnabled ? 'off' : (camera.motionActive ? 'detected now' : 'watching');
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 6, 14),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: (live ? AppColors.ringCameras : AppColors.surfaceHigh).withValues(alpha: live ? 0.22 : 1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.videocam_rounded, color: live ? AppColors.ringCameras : AppColors.textMuted),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(camera.deviceName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text('Battery: $battery', style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5)),
-                  Text('Motion: $motion${aiConfigured && settings.aiEnabled ? ' · AI on' : ''}',
-                      style: TextStyle(color: camera.motionActive ? AppColors.warning : AppColors.textMuted, fontSize: 13.5)),
-                ]),
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, color: AppColors.textMuted),
-                onSelected: (v) => switch (v) { 'settings' => onSettings(), 'watch' => onWatch?.call(), _ => onRemove() },
-                itemBuilder: (_) => [
-                  if (onWatch != null) const PopupMenuItem(value: 'watch', child: Text('Watch for something…')),
-                  const PopupMenuItem(value: 'settings', child: Text('Motion, alerts & AI')),
-                  const PopupMenuItem(value: 'remove', child: Text('Remove camera')),
-                ],
-              ),
-            ]),
-          ),
-          const Divider(indent: 18, endIndent: 18),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 16, 14),
-            child: Row(children: [
-              Icon(icon, size: 18, color: statusColor),
-              const SizedBox(width: 8),
-              Expanded(child: Text(status, style: TextStyle(color: statusColor, fontSize: 14))),
-              CheckCircle(checked: live),
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
 /// One AI watch task: progress ring, status, the AI's latest observation, actions.
 class _TaskCard extends StatelessWidget {
   final WatchTask task;
@@ -740,7 +670,11 @@ class _TaskCard extends StatelessWidget {
         );
 
     final actions = <Widget>[
-      if (t.needsAcknowledgement) action('Handled', Icons.check_rounded, () => watcher.acknowledge(t), primary: true),
+      if (t.needsAcknowledgement)
+        action('Handled', Icons.check_rounded, () {
+          HapticFeedback.mediumImpact();
+          watcher.acknowledge(t);
+        }, primary: true),
       if (active) action('Pause', Icons.pause_rounded, () => watcher.pause(t)),
       if (t.status == TaskStatus.paused) action('Resume', Icons.play_arrow_rounded, () => watcher.resume(t), primary: true),
       if (!active && t.status != TaskStatus.paused && !t.needsAcknowledgement)

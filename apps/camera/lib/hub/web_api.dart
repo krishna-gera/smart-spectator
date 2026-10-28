@@ -82,6 +82,8 @@ class WebApi {
       switch ((parts[6], req.method)) {
         case ('frame', 'GET'):
           return _frame(res, id);
+        case ('picture', 'GET'):
+          return _lastPicture(res, id);
         case ('settings', 'PUT'):
           return _settings(req, id);
         case ('ask-ai', 'POST'):
@@ -158,6 +160,10 @@ class WebApi {
             'status': _status(c),
             'battery': c.batteryLevel?.round(),
             'charging': c.isCharging,
+            'battery_low': c.batteryLow,
+            'last_seen': c.lastSeenAt?.toUtc().toIso8601String(),
+            'picture_at': c.lastPictureAt?.toUtc().toIso8601String(),
+            'picture_rotation': c.lastPictureRotation,
             'motion_active': c.motionActive,
             'rotation': c.rotationDegrees,
             'bitrate_kbps': c.bitrateKbps.round(),
@@ -165,7 +171,7 @@ class WebApi {
           }
       ],
       'events': [
-        for (final e in (store?.events ?? const <CameraEvent>[]).take(100))
+        for (final e in (store?.events ?? const <CameraEvent>[]).take(300))
           {
             'id': e.id,
             'camera_id': e.cameraId,
@@ -259,12 +265,17 @@ class WebApi {
     return _json(res, 404, {'detail': 'Not found'});
   }
 
-  static String _status(CameraLink c) {
-    final last = c.lastPacketAt;
-    if (c.streaming && last != null && DateTime.now().difference(last).inSeconds < 3) return 'live';
-    if (c.streaming) return 'connecting';
-    if (c.controlConnected) return 'online';
-    return 'offline';
+  static String _status(CameraLink c) => c.health().name;
+
+  /// The camera's most recent picture, kept after it stops streaming.
+  Future<void> _lastPicture(HttpResponse res, String cameraId) async {
+    final jpeg = server.cameras.where((c) => c.cameraId == cameraId).firstOrNull?.lastPicture;
+    if (jpeg == null) return _json(res, 404, {'detail': 'No picture yet'});
+    res.headers
+      ..contentType = ContentType('image', 'jpeg')
+      ..set(HttpHeaders.cacheControlHeader, 'no-store');
+    res.add(jpeg);
+    return res.close();
   }
 
   /// Current picture. Several browsers share one camera snapshot per ~0.8 s.

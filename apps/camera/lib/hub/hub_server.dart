@@ -8,8 +8,29 @@ import 'device_registry.dart';
 import 'event_store.dart';
 import 'web_api.dart';
 
+/// How a camera looks from the main phone right now.
+enum CameraHealth {
+  /// Video packets arrived in the last few seconds.
+  live,
+
+  /// The video socket is open but no picture yet.
+  connecting,
+
+  /// Control channel up (battery, settings) but not streaming.
+  online,
+
+  /// Lost the connection recently; the camera usually comes back by itself.
+  reconnecting,
+
+  /// Not connected.
+  offline,
+}
+
 /// Live state of one camera phone as seen by the main phone.
 class CameraLink {
+  /// After this long without a connection a camera counts as offline.
+  static const reconnectGrace = Duration(seconds: 60);
+
   final String cameraId;
   final String deviceId;
   String deviceName;
@@ -31,6 +52,19 @@ class CameraLink {
   /// Clockwise rotation needed to show the camera's picture upright.
   int rotationDegrees = 0;
 
+  /// Last time anything arrived from this camera (telemetry or video).
+  DateTime? lastSeenAt;
+
+  /// When the control channel dropped, and whether video was flowing then.
+  DateTime? disconnectedAt;
+  bool droppedWhileStreaming = false;
+
+  /// Most recent JPEG from the camera (kept for the card and the dashboard
+  /// after the camera stops streaming), with its time and rotation.
+  Uint8List? lastPicture;
+  DateTime? lastPictureAt;
+  int lastPictureRotation = 0;
+
   /// Motion currently reported by this camera, and the event it belongs to.
   bool motionActive = false;
   String? activeEventId;
@@ -41,6 +75,19 @@ class CameraLink {
   int _windowBytes = 0;
 
   CameraLink({required this.cameraId, required this.deviceId, required this.deviceName});
+
+  CameraHealth health([DateTime? at]) {
+    final now = at ?? DateTime.now();
+    final last = lastPacketAt;
+    if (streaming && last != null && now.difference(last).inSeconds < 3) return CameraHealth.live;
+    if (streaming) return CameraHealth.connecting;
+    if (controlConnected) return CameraHealth.online;
+    final dropped = disconnectedAt;
+    if (dropped != null && now.difference(dropped) < reconnectGrace) return CameraHealth.reconnecting;
+    return CameraHealth.offline;
+  }
+
+  bool get batteryLow => batteryLevel != null && batteryLevel! <= 15 && isCharging != true;
 
   void _recordPacket(PacketHeader h, int wireBytes) {
     final now = DateTime.now();
@@ -53,6 +100,7 @@ class CameraLink {
     }
     _lastSequence = h.sequenceNumber;
     lastPacketAt = now;
+    lastSeenAt = now;
 
     _windowPackets++;
     _windowBytes += wireBytes;
@@ -342,7 +390,11 @@ class HubServer {
     final ws = await WebSocketTransformer.upgrade(req);
     await _controlSockets[device.deviceId]?.close(WebSocketStatus.normalClosure, 'replaced');
     _controlSockets[device.deviceId] = ws;
-    final link = _linkFor(device)..controlConnected = true;
+    final link = _linkFor(device)
+      ..controlConnected = true
+      ..lastSeenAt = DateTime.now()
+      ..disconnectedAt = null
+      ..droppedWhileStreaming = false;
     _notify();
     // The camera applies the settings chosen on this phone.
     _pushMotionSettings(device.deviceId, device.cameraId);
@@ -361,7 +413,8 @@ class HubServer {
           case 'telemetry_report':
             final m = data['metrics'];
             if (m is Map) {
-              link.batteryLevel = (m['battery_level_percent'] as num?)?.toDouble();
+              link.lastSeenAt = DateTime.now();
+              link.batteryLevel = (m['battery_level_percent'] as num?)?.toDouble() ?? link.batteryLevel;
               link.isCharging = m['is_charging'] as bool?;
               link.cameraFps = (m['encoder_fps'] as num?)?.toDouble();
               final rotation = (m['sensor_orientation'] as num?)?.toInt();
@@ -375,7 +428,12 @@ class HubServer {
       onDone: () {
         if (identical(_controlSockets[device.deviceId], ws)) {
           _controlSockets.remove(device.deviceId);
-          link.controlConnected = false;
+          final now = DateTime.now();
+          final lastVideo = link.lastPacketAt;
+          link
+            ..controlConnected = false
+            ..disconnectedAt = now
+            ..droppedWhileStreaming = link.streaming || (lastVideo != null && now.difference(lastVideo).inSeconds < 10);
           _endMotion(link);
           _notify();
         }
@@ -475,10 +533,41 @@ class HubServer {
       return null;
     }
     try {
-      return await completer.future.timeout(timeout, onTimeout: () => null);
+      final snap = await completer.future.timeout(timeout, onTimeout: () => null);
+      if (snap != null) {
+        link
+          ..lastPicture = snap.jpeg
+          ..lastPictureAt = DateTime.now()
+          ..lastPictureRotation = link.rotationDegrees;
+      }
+      return snap;
     } finally {
       _snapshotRequests.remove(requestId);
     }
+  }
+
+  /// Keeps each streaming camera's [CameraLink.lastPicture] at most [maxAge]
+  /// old, so cards and the dashboard can show it once the camera stops.
+  Future<void> refreshPictures({Duration maxAge = const Duration(seconds: 20)}) async {
+    final now = DateTime.now();
+    await Future.wait([
+      for (final c in cameras)
+        if (c.health(now) == CameraHealth.live && (c.lastPictureAt == null || now.difference(c.lastPictureAt!) >= maxAge))
+          requestFrame(c.cameraId, timeout: const Duration(seconds: 4)),
+    ]);
+  }
+
+  /// Renames a camera on this main phone (the camera keeps its own name).
+  Future<bool> renameCamera(String cameraId, String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 40) return false;
+    final link = _links[cameraId];
+    final device = registry.devices.where((d) => d.cameraId == cameraId).firstOrNull;
+    if (device == null) return false;
+    await registry.rename(device.deviceId, trimmed);
+    link?.deviceName = trimmed;
+    _notify();
+    return true;
   }
 
   Future<void> _snapshotUpload(HttpRequest req) async {

@@ -72,6 +72,14 @@ const String _html = r'''<!doctype html>
   .chip.s-online { color:var(--primary); background:rgba(79,140,255,.12); }
   .chip.s-connecting { color:var(--warning); background:rgba(251,191,36,.12); }
   .chip.s-offline { color:var(--faint); background:rgba(100,116,139,.15); }
+  .chip.s-reconnecting { color:var(--warning); background:rgba(251,191,36,.12); }
+  .chip.low { background:var(--danger); color:#fff; } .chip.low::before { background:#fff; }
+  .video canvas.stale { filter:brightness(.45); }
+  .filters { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:4px 0 6px; }
+  .filters select { background:var(--surface); color:var(--text); border:1.5px solid transparent; border-radius:999px; padding:8px 14px; font:inherit; font-size:14px; }
+  .filters select:focus { outline:none; border-color:var(--primary); }
+  .empty-filter { text-align:center; padding:28px 12px; }
+  header .btn { white-space:nowrap; }
   .chip.ai { color:var(--ai); background:rgba(167,139,250,.14); }
   .card-body { padding:14px 16px 16px; }
   .row { display:flex; align-items:center; gap:10px; }
@@ -161,7 +169,15 @@ const String _html = r'''<!doctype html>
 <script>
 "use strict";
 const LABELS = { person:"Person", vehicle:"Vehicle", animal:"Animal", package:"Package", motion_other:"Motion", no_activity:"No activity", camera_problem:"Camera problem" };
-const state = { data:null, tab:"cameras", openSettings:new Set(), answers:{}, frameTimers:{} };
+const state = { data:null, tab:"cameras", openSettings:new Set(), answers:{}, frameTimers:{}, filters:{ camera:"", type:"", period:"" } };
+const STATUS = { live:"Live", connecting:"Connecting", online:"Online", reconnecting:"Reconnecting…", offline:"Offline" };
+function ago(iso) {
+  if (!iso) return "not yet";
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 10) return "just now"; if (s < 60) return `${Math.round(s)}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`; if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} days ago`;
+}
 
 function el(tag, attrs, ...children) {
   const n = document.createElement(tag);
@@ -307,19 +323,39 @@ function updateCard(card, cam, aiAvailable) {
     card.append(el("div", { class:"video" }, card.canvas, card.msg, card.overlay), card.body);
   }
   const live = cam.status === "live";
-  card.overlay.replaceChildren(live ? el("span", { class:"chip live" }, "LIVE") : "", cam.motion_active ? el("span", { class:"chip motion" }, "Motion") : "");
-  card.msg.textContent = live ? (card.hasFrame ? "" : "Loading picture…") : (cam.status === "offline" ? "Camera offline" : "Camera is not streaming");
-  card.canvas.classList.toggle("hidden", !live || !card.hasFrame);
-  if (live && !state.frameTimers[cam.camera_id]) pollFrame(card, cam.camera_id);
+  card.overlay.replaceChildren(live ? el("span", { class:"chip live" }, "LIVE") : "",
+    cam.status === "reconnecting" ? el("span", { class:"chip s-reconnecting" }, "Reconnecting") : "",
+    cam.motion_active ? el("span", { class:"chip motion" }, "Motion") : "",
+    cam.battery_low ? el("span", { class:"chip low" }, "Low battery") : "");
+  if (live) {
+    card.stalePicture = null;
+    card.canvas.classList.remove("stale");
+    card.msg.textContent = card.hasFrame ? "" : "Loading picture…";
+    card.canvas.classList.toggle("hidden", !card.hasFrame);
+    if (!state.frameTimers[cam.camera_id]) pollFrame(card, cam.camera_id);
+  } else if (cam.picture_at) {
+    // Not streaming: show the last picture, dimmed, with its age.
+    card.canvas.classList.add("stale");
+    card.msg.textContent = `Last picture · ${ago(cam.picture_at)}`;
+    if (card.stalePicture !== cam.picture_at) {
+      card.stalePicture = cam.picture_at;
+      loadInto(card.canvas, `/api/v1/web/cameras/${encodeURIComponent(cam.camera_id)}/picture`, cam.picture_rotation)
+        .then(() => card.canvas.classList.remove("hidden")).catch(() => {});
+    }
+  } else {
+    card.canvas.classList.add("hidden");
+    card.msg.textContent = cam.status === "online" ? "Tap Start streaming on the camera phone" : (STATUS[cam.status] || "Camera offline");
+  }
 
   const details = [cam.battery != null ? `${cam.battery}% battery${cam.charging ? " ⚡" : ""}` : null,
     live ? `${cam.bitrate_kbps} kbps` : null,
+    cam.status === "offline" || cam.status === "reconnecting" ? `last seen ${ago(cam.last_seen)}` : null,
     cam.settings.motion_enabled ? (cam.motion_active ? "motion now" : "motion on") : "motion off",
     aiAvailable && cam.settings.ai_enabled ? "AI on" : null].filter(Boolean).join(" · ");
   const open = state.openSettings.has(cam.camera_id);
   const answer = state.answers[cam.camera_id];
   card.body.replaceChildren(
-    el("div", { class:"row" }, el("span", { class:"name" }, cam.name), el("span", { class:`chip s-${cam.status}` }, cam.status[0].toUpperCase() + cam.status.slice(1))),
+    el("div", { class:"row" }, el("span", { class:"name" }, cam.name), el("span", { class:`chip s-${cam.status}` }, STATUS[cam.status] || cam.status)),
     el("div", { class:"faint", style:"margin-top:4px" }, details),
     el("div", { class:"actions" },
       aiAvailable ? el("button", { class:"btn ai", disabled:!live || answer === "…", onclick:() => askAi(cam) }, answer === "…" ? "Asking AI…" : "✦ Ask AI") : "",
@@ -330,7 +366,7 @@ function updateCard(card, cam, aiAvailable) {
 function pollFrame(card, id) {
   const tick = async () => {
     const cam = state.data && state.data.cameras.find(c => c.camera_id === id);
-    if (!cam || cam.status !== "live" || document.getElementById("app").classList.contains("hidden")) { delete state.frameTimers[id]; card.hasFrame = false; return; }
+    if (!cam || cam.status !== "live" || document.getElementById("app").classList.contains("hidden")) { delete state.frameTimers[id]; card.hasFrame = false; card.stalePicture = null; return; }
     try { await loadInto(card.canvas, `/api/v1/web/cameras/${encodeURIComponent(id)}/frame`, cam.rotation); card.hasFrame = true; card.msg.textContent = ""; card.canvas.classList.remove("hidden"); } catch (_) {}
     state.frameTimers[id] = setTimeout(tick, 1000);
   };
@@ -438,11 +474,21 @@ function syncTaskFormCameras(d) {
 function eventTitle(e) { if (e.type === "task_done") return "Task done"; return e.ai_category ? (LABELS[e.ai_category] || "Motion") : (e.type === "ai_check" ? "AI check" : "Motion"); }
 function renderEvents(d) {
   const root = document.getElementById("tab-events");
+  // Redraw only when something changed, so an open filter menu stays open.
+  const sig = JSON.stringify([d.unseen, state.filters, d.events.map(e => [e.id, e.seen, e.ended_at, e.ai_summary])]);
+  if (root.sig === sig) return;
+  root.sig = sig;
   const header = ringHeader("🔔", "#f25c70", d.events.length ? (d.events.length - d.unseen) / d.events.length : 0,
     d.events.length ? "Activity" : "All quiet", d.events.length ? String(d.unseen) : "", d.events.length ? (d.unseen === 1 ? "new event" : "new events") : "Motion and AI checks appear here");
   if (!d.events.length) { root.replaceChildren(header); return; }
-  const out = [header]; let last = null;
-  for (const e of d.events) {
+  const f = state.filters;
+  const since = f.period === "today" ? new Date(new Date().toDateString()).getTime() : f.period === "week" ? Date.now() - 7 * 864e5 : 0;
+  const shown = d.events.filter(e => (!f.camera || e.camera_id === f.camera)
+    && (!f.type || (f.type === "ai" ? !!e.ai_summary : e.type === f.type))
+    && new Date(e.started_at).getTime() >= since);
+  const out = [header, eventFilters(d)]; let last = null;
+  if (!shown.length) out.push(el("div", { class:"faint empty-filter" }, "No events match these filters."));
+  for (const e of shown) {
     const dd = day(e.started_at);
     if (dd !== last) { out.push(el("div", { class:"section-title", style:"margin-top:18px" }, dd)); last = dd; }
     const rot = e.rotation ? `transform:rotate(${e.rotation}deg)` : "";
@@ -454,6 +500,16 @@ function renderEvents(d) {
         e.ai_summary ? el("div", { class:"summary" }, e.ai_summary) : "")));
   }
   root.replaceChildren(el("div", { class:"events" }, out));
+}
+function eventFilters(d) {
+  const f = state.filters;
+  const cams = new Map(d.events.map(e => [e.camera_id, e.camera_name]));
+  const pick = (key, options) => el("select", { "aria-label":key, onchange:e => { f[key] = e.target.value; renderEvents(state.data); } },
+    ...options.map(([v, l]) => el("option", { value:v, selected: f[key] === v }, l)));
+  return el("div", { class:"filters" },
+    pick("camera", [["", "All cameras"], ...[...cams].map(([id, name]) => [id, name])]),
+    pick("type", [["", "All events"], ["motion", "Motion"], ["ai", "With AI description"], ["ai_check", "AI checks"], ["task_done", "Tasks done"]]),
+    pick("period", [["", "Any time"], ["today", "Today"], ["week", "Last 7 days"]]));
 }
 async function openEvent(e) {
   const dlg = document.getElementById("dlg"), canvas = document.getElementById("dlg-canvas");

@@ -308,6 +308,14 @@ class DeviceRegistry {
     return null;
   }
 
+  Future<bool> rename(String deviceId, String name) async {
+    final d = _devices[deviceId];
+    if (d == null) return false;
+    _devices[deviceId] = d.copyWith(deviceName: name);
+    await store.saveDevices(devices);
+    return true;
+  }
+
   Future<bool> revoke(String deviceId) async {
     final d = _devices[deviceId];
     if (d == null) return false;

@@ -13,6 +13,7 @@ import '../../core/motion/motion_reporter.dart';
 import '../../core/pairing/pairing_client.dart';
 import '../../core/platform/system_bridge.dart';
 import '../../core/protocol/packet_encoder.dart';
+import '../../core/storage/app_prefs.dart';
 import '../../core/storage/credential_store.dart';
 import '../../core/streaming/media_transport.dart';
 import '../../ui/theme.dart';
@@ -25,6 +26,10 @@ class _HubConnection {
   final ControlClient control;
   final MotionReporter reporter;
   TransportStatus status = TransportStatus.disconnected;
+
+  /// Control channel (battery, settings, snapshots) is up. It stays open
+  /// while not streaming so the main phone always knows this camera's state.
+  bool controlUp = false;
   Future<String?>? motionEventId;
   StreamSubscription<TransportStatus>? statusSub;
 
@@ -35,10 +40,8 @@ class _HubConnection {
     await control.start();
   }
 
-  void disconnect() {
-    media.disconnect();
-    control.stop();
-  }
+  /// Stops the video only; the control channel stays connected.
+  void disconnect() => media.disconnect();
 
   void dispose() {
     statusSub?.cancel();
@@ -85,6 +88,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   // "Ask AI now" requests waiting for the next frame: (connection key, request id).
   final List<(String, String)> _snapshotRequests = [];
 
+  // Power saver: a black screen while streaming untouched (OLED pixels off).
+  static const _dimAfter = Duration(seconds: 30);
+  bool _powerSaver = true;
+  bool _dimmed = false;
+  Timer? _dimTimer;
+
   @override
   void initState() {
     super.initState();
@@ -92,12 +101,26 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     widget.service.addListener(_syncHubs);
     _syncHubs();
     _initCamera();
+    AppPrefs.powerSaver().then((on) => _powerSaver = on);
+  }
+
+  void _wake() {
+    _dimTimer?.cancel();
+    if (_dimmed && mounted) setState(() => _dimmed = false);
+    if (_streaming && _powerSaver) _dimTimer = Timer(_dimAfter, () => mounted ? setState(() => _dimmed = true) : null);
+  }
+
+  Future<void> _setPowerSaver(bool on) async {
+    await AppPrefs.setPowerSaver(on);
+    setState(() => _powerSaver = on);
+    _wake();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.service.removeListener(_syncHubs);
+    _dimTimer?.cancel();
     _stopStreaming();
     for (final h in _hubs.values) {
       h.dispose();
@@ -171,13 +194,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void _syncHubs() {
     final links = {for (final l in widget.service.hubs) l.key: l};
     for (final key in _hubs.keys.where((k) => !links.containsKey(k)).toList()) {
-      _hubs.remove(key)!
-        ..disconnect()
-        ..dispose();
+      _hubs.remove(key)!.dispose();
     }
     final deviceId = widget.service.credentials?.deviceId ?? '';
     for (final link in links.values.where((l) => !_hubs.containsKey(l.key))) {
-      final conn = _HubConnection(
+      late final _HubConnection conn;
+      conn = _HubConnection(
         link,
         MediaTransport(hubIp: link.hubHost, hubPort: link.hubPort, cameraId: link.cameraId, deviceToken: link.deviceToken),
         ControlClient(
@@ -189,6 +211,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           rotationProvider: _rotationForViewer,
           fpsProvider: () => _streaming ? _fps : null,
           onCommand: (cmd) => _onCommand(link.key, cmd),
+          onConnectionChanged: (up) {
+            conn.controlUp = up;
+            if (mounted) setState(() {});
+          },
         ),
         MotionReporter(hub: HubAddress(link.hubHost, link.hubPort), deviceToken: link.deviceToken),
       );
@@ -197,7 +223,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         if (mounted) setState(() {});
       });
       _hubs[link.key] = conn;
-      if (_streaming) conn.connect();
+      if (_streaming) {
+        conn.connect();
+      } else {
+        conn.control.start();
+      }
     }
     if (mounted) setState(() {});
   }
@@ -239,7 +269,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
     try {
       await cam.startImageStream(_onFrame);
+      HapticFeedback.mediumImpact();
       if (mounted) setState(() => _streaming = true);
+      _wake();
     } catch (_) {
       await _encoder.stop();
       if (mounted) _showMessage('Could not start the camera stream.');
@@ -340,9 +372,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       h.disconnect();
     }
     await SystemBridge.keepScreenOn(false);
+    _dimTimer?.cancel();
     if (mounted) {
       setState(() {
         _streaming = false;
+        _dimmed = false;
         _fps = 0;
       });
     }
@@ -469,7 +503,29 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: OrientationBuilder(builder: (context, orientation) {
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => _wake(),
+        child: Stack(children: [
+          Positioned.fill(child: _layout(connected, total)),
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !_dimmed,
+              child: AnimatedOpacity(
+                opacity: _dimmed ? 1 : 0,
+                duration: const Duration(milliseconds: 600),
+                child: _PowerSaverView(connected: connected, total: total, motionActive: _motionActive),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _layout(int connected, int total) {
+    return Builder(builder: (context) {
+      return OrientationBuilder(builder: (context, orientation) {
         final landscape = orientation == Orientation.landscape;
         final preview = _CameraView(camera: _camera, ready: _cameraReady, error: _cameraError);
         final controls = _ControlsPanel(
@@ -479,7 +535,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           megabytes: _bytesSent / (1024 * 1024),
           connected: connected,
           total: total,
-          onToggle: _streaming ? _stopStreaming : _startStreaming,
+          onToggle: () {
+            if (_streaming) HapticFeedback.lightImpact();
+            _streaming ? _stopStreaming() : _startStreaming();
+          },
+          powerSaver: _powerSaver,
+          onPowerSaver: _setPowerSaver,
           onMainPhones: _openMainPhones,
           onCameraCode: _openCameraCode,
           vertical: landscape,
@@ -490,6 +551,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           motionEnabled: _motionEnabled,
           motionActive: _motionActive,
           aiWatching: _aiWatch.values.expand((t) => t).toList(),
+          reconnecting: _streaming && _hubs.values.any((h) => h.status == TransportStatus.reconnecting || h.status == TransportStatus.failed),
+          mainPhoneOffline: total > 0 && !_streaming && !_hubs.values.any((h) => h.controlUp),
           onChangeRole: widget.onChangeRole,
         );
 
@@ -503,9 +566,41 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           Expanded(child: Stack(fit: StackFit.expand, children: [preview, SafeArea(bottom: false, child: topBar)])),
           SafeArea(top: false, child: controls),
         ]);
-      }),
-    );
+      });
+    });
   }
+}
+
+/// Black screen shown while streaming untouched; OLED screens use almost no
+/// power for black. Any tap wakes the normal view.
+class _PowerSaverView extends StatelessWidget {
+  final int connected;
+  final int total;
+  final bool motionActive;
+  const _PowerSaverView({required this.connected, required this.total, required this.motionActive});
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+        color: Colors.black,
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Opacity(opacity: 0.55, child: VyroLogo(size: 54)),
+            const SizedBox(height: 18),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              Text('Streaming to $connected of $total main phone${total == 1 ? '' : 's'}',
+                  style: const TextStyle(color: AppColors.textFaint, fontSize: 14)),
+            ]),
+            if (motionActive) ...[
+              const SizedBox(height: 8),
+              const Text('Motion detected', style: TextStyle(color: AppColors.warning, fontSize: 13)),
+            ],
+            const SizedBox(height: 26),
+            const Text('Power saver · tap to wake', style: TextStyle(color: Color(0xFF4A4E58), fontSize: 12.5)),
+          ]),
+        ),
+      );
 }
 
 class _CameraView extends StatelessWidget {
@@ -532,6 +627,8 @@ class _TopBar extends StatelessWidget {
   final bool motionEnabled;
   final bool motionActive;
   final List<String> aiWatching;
+  final bool reconnecting;
+  final bool mainPhoneOffline;
   final VoidCallback onChangeRole;
   const _TopBar({
     required this.name,
@@ -539,6 +636,8 @@ class _TopBar extends StatelessWidget {
     required this.motionEnabled,
     required this.motionActive,
     required this.aiWatching,
+    required this.reconnecting,
+    required this.mainPhoneOffline,
     required this.onChangeRole,
   });
 
@@ -560,7 +659,14 @@ class _TopBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ],
-          if (streaming)
+          if (reconnecting) ...[
+            const StatusChip('Reconnecting…', color: AppColors.warning, icon: Icons.sync_rounded),
+            const SizedBox(width: 8),
+          ] else if (mainPhoneOffline) ...[
+            const StatusChip('Main phone offline', color: AppColors.textMuted, icon: Icons.wifi_off_rounded),
+            const SizedBox(width: 8),
+          ],
+          if (streaming && !reconnecting)
             StatusChip(
               !motionEnabled ? 'Motion off' : (motionActive ? 'Motion' : 'Watching'),
               color: motionActive ? AppColors.warning : AppColors.textMuted,
@@ -594,6 +700,8 @@ class _ControlsPanel extends StatelessWidget {
   final VoidCallback onMainPhones;
   final VoidCallback onCameraCode;
   final bool vertical;
+  final bool powerSaver;
+  final ValueChanged<bool> onPowerSaver;
 
   const _ControlsPanel({
     required this.streaming,
@@ -606,6 +714,8 @@ class _ControlsPanel extends StatelessWidget {
     required this.onMainPhones,
     required this.onCameraCode,
     required this.vertical,
+    required this.powerSaver,
+    required this.onPowerSaver,
   });
 
   @override
@@ -647,6 +757,15 @@ class _ControlsPanel extends StatelessWidget {
           cameraCode,
         ] else
           Row(children: [Expanded(child: mainPhones), const SizedBox(width: 10), Expanded(child: cameraCode)]),
+        const SizedBox(height: 2),
+        SwitchListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          title: const Text('Power saver'),
+          subtitle: const Text('Black screen after 30 s while streaming', style: TextStyle(color: AppColors.textFaint, fontSize: 12)),
+          value: powerSaver,
+          onChanged: onPowerSaver,
+        ),
       ]),
     );
   }

@@ -4,9 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_spectator_camera/main.dart';
 
 void main() {
-  testWidgets('first launch asks which mode this phone uses', (WidgetTester tester) async {
+  testWidgets('first launch shows the welcome guide, then asks which mode this phone uses', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const SmartSpectatorApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spare phones become cameras'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Get started'));
     await tester.pumpAndSettle();
 
     expect(find.text('How will this phone be used?'), findsOneWidget);

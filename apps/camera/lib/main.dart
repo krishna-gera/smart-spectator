@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'camera/camcorder_service.dart';
+import 'core/storage/app_prefs.dart';
 import 'core/storage/role_store.dart';
 import 'features/camera/camera_screen.dart';
+import 'features/onboarding/onboarding_screen.dart';
 import 'features/pairing/pairing_screen.dart';
 import 'features/role/role_select_screen.dart';
 import 'features/viewer/viewer_screen.dart';
@@ -24,6 +26,7 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
   final _navigator = GlobalKey<NavigatorState>();
   AppRole? _role;
   bool _loading = true;
+  bool _onboarded = true;
   CamcorderService? _camcorder;
 
   @override
@@ -40,6 +43,8 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
 
   Future<void> _load() async {
     final role = await RoleStore.load();
+    // Existing installs (a role is already chosen) skip the first-run guide.
+    final onboarded = role != null || await AppPrefs.onboarded();
     if (role == AppRole.camcorder) {
       await _startCamcorder();
     } else {
@@ -48,6 +53,7 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
     if (!mounted) return;
     setState(() {
       _role = role;
+      _onboarded = onboarded;
       _loading = false;
     });
   }
@@ -96,6 +102,12 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
 
   Widget _home() {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (!_onboarded) {
+      return OnboardingScreen(onDone: () async {
+        await AppPrefs.setOnboarded();
+        setState(() => _onboarded = true);
+      });
+    }
     switch (_role) {
       case null:
         return RoleSelectScreen(onSelected: _selectRole);

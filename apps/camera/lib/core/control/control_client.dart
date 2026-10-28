@@ -26,6 +26,13 @@ class ControlClient {
   /// Current measured capture FPS (null when not streaming).
   final double? Function()? fpsProvider;
 
+  /// Called when the control channel connects or drops.
+  final void Function(bool connected)? onConnectionChanged;
+
+  /// Retry delays after a failed or dropped connection (the last repeats).
+  static const retryDelays = [Duration(seconds: 2), Duration(seconds: 4), Duration(seconds: 8), Duration(seconds: 15)];
+  int _failures = 0;
+
   WebSocketChannel? _channel;
   Timer? _telemetryTimer;
   Timer? _retryTimer;
@@ -42,11 +49,13 @@ class ControlClient {
     this.sensorOrientation = 0,
     this.rotationProvider,
     this.fpsProvider,
+    this.onConnectionChanged,
   });
 
   bool get isConnected => _channel != null;
 
   Future<void> start() async {
+    if (_isRunning) return;
     _isRunning = true;
     await _connect();
   }
@@ -75,6 +84,8 @@ class ControlClient {
         return;
       }
       _channel = channel;
+      _failures = 0;
+      onConnectionChanged?.call(true);
       _startTelemetryLoop();
 
       channel.stream.listen(
@@ -133,11 +144,15 @@ class ControlClient {
   }
 
   void _retry() {
+    final wasConnected = _channel != null;
     _channel = null;
     _telemetryTimer?.cancel();
     _retryTimer?.cancel();
+    if (wasConnected) onConnectionChanged?.call(false);
     if (_isRunning) {
-      _retryTimer = Timer(const Duration(seconds: 3), _connect);
+      final delay = retryDelays[_failures.clamp(0, retryDelays.length - 1)];
+      _failures++;
+      _retryTimer = Timer(delay, _connect);
     }
   }
 
@@ -146,6 +161,9 @@ class ControlClient {
     _telemetryTimer?.cancel();
     _retryTimer?.cancel();
     _channel?.sink.close();
+    final wasConnected = _channel != null;
     _channel = null;
+    _failures = 0;
+    if (wasConnected) onConnectionChanged?.call(false);
   }
 }
