@@ -187,8 +187,8 @@ def test_system_telemetry_and_audit_apis(admin_headers):
 
 
 def test_client_dashboard_serving():
-    """Verify Phase 5 Client index.html is served at root GET / (Section 34)."""
+    """Root GET / answers. The legacy PC-hub web client (apps/client) was
+    retired for VYRO, so the hub falls back to its built-in status page."""
     res = client.get("/")
     assert res.status_code == 200
     assert "Smart Spectator" in res.text
-    assert "main-content" in res.text

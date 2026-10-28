@@ -1,0 +1,17 @@
+{
+  "name": "VYRO",
+  "short_name": "VYRO",
+  "description": "VYRO mobile web app — open your cameras from your phone.",
+  "id": "/app/app-mobile/",
+  "start_url": "/app/app-mobile/",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1C1E24",
+  "theme_color": "#1C1E24",
+  "icons": [
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

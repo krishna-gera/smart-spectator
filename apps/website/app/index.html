@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VYRO web app</title>
+<meta name="theme-color" content="#1C1E24">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  body { min-height:100vh; display:grid; place-items:center; padding:24px; text-align:center; }
+  img { width:80px; height:80px; margin:0 auto 16px; display:block; }
+  .choices { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:20px; }
+</style>
+<script>
+  // Phones go to the mobile web app, computers to the desktop one.
+  const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
+  location.replace(mobile ? "/app/app-mobile/" : "/app/app-desktop/");
+</script>
+</head>
+<body>
+  <div>
+    <img src="/assets/vyro-mark.png" alt="VYRO logo">
+    <h1 class="wordmark" style="margin:0 0 6px">VYRO</h1>
+    <div class="muted">Choose your web app</div>
+    <div class="choices">
+      <a class="btn primary" href="/app/app-mobile/">Mobile web app</a>
+      <a class="btn" href="/app/app-desktop/">Desktop web app</a>
+    </div>
+  </div>
+</body>
+</html>

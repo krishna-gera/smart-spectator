@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VYRO — Desktop</title>
+<meta name="description" content="VYRO desktop web app — your cameras, events and AI tasks on a computer.">
+<meta name="theme-color" content="#1C1E24">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/app/app-desktop/manifest.webmanifest">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  body { min-height:100vh; display:flex; flex-direction:column; }
+  header { border-bottom:1px solid rgba(55,59,71,.6); }
+  .bar { max-width:1200px; margin:0 auto; padding:14px 28px; display:flex; align-items:center; gap:12px; }
+  .bar img { width:32px; height:32px; }
+  .bar .tag { font-size:12.5px; font-weight:700; color:var(--muted); background:var(--surface); border-radius:999px; padding:5px 12px; }
+  .bar .right { margin-left:auto; display:flex; gap:10px; }
+  main { flex:1; max-width:1200px; width:100%; margin:0 auto; padding:44px 28px 60px; display:grid; grid-template-columns:1.05fr .95fr; gap:40px; align-items:start; }
+  h1 { font-size:46px; line-height:1.06; letter-spacing:-1px; margin:0 0 14px; }
+  h1 em { font-style:normal; color:var(--primary); }
+  .lead { font-size:19px; color:var(--muted); margin:0 0 28px; max-width:540px; }
+  .row { display:flex; gap:12px; }
+  .row .field { flex:1; }
+  #phones { display:grid; gap:10px; margin-top:22px; }
+  .side { display:grid; gap:16px; }
+  .preview { background:var(--surface); border-radius:26px; overflow:hidden; }
+  .pv-bar { display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); }
+  .pv-bar img { width:22px; height:22px; }
+  .pv-bar .tab { margin-left:10px; font-size:12px; font-weight:700; border-radius:999px; padding:4px 10px; color:var(--muted); }
+  .pv-bar .tab.on { background:var(--primary); color:var(--on-primary); }
+  .pv-body { display:grid; grid-template-columns:1.4fr 1fr; gap:12px; padding:14px; }
+  .pv-cam { background:#000; border-radius:16px; aspect-ratio:16/10; position:relative; overflow:hidden;
+    background:radial-gradient(circle at 68% 52%, rgba(91,139,214,.9) 0 14%, #2a3447 15% 22%, #c7cad3 23% 25%, transparent 26%), linear-gradient(135deg,#3a3f4b,#1b1d23 70%); }
+  .pv-cam span { position:absolute; top:8px; left:8px; background:var(--danger); color:#fff; font-size:10px; font-weight:800; border-radius:999px; padding:2px 8px; }
+  .pv-task { background:var(--surface-high); border-radius:16px; padding:10px; font-size:12px; }
+  .pv-task b { display:block; font-size:12.5px; margin-bottom:6px; }
+  .pv-track { height:5px; background:var(--bg); border-radius:5px; overflow:hidden; } .pv-track div { width:72%; height:100%; background:var(--ai); }
+  kbd { background:var(--surface-high); border-radius:6px; padding:1px 7px; font:inherit; font-size:13px; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } h1 { font-size:36px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M17 1H7c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14z"/></symbol>
+  <symbol id="i-go" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+  <symbol id="i-install" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></symbol>
+</svg>
+
+<header><div class="bar">
+  <img src="/assets/vyro-mark.png" alt=""><span class="wordmark">VYRO</span>
+  <span class="tag">Desktop web app</span>
+  <div class="right">
+    <button id="install" class="btn" hidden><svg class="i"><use href="#i-install"/></svg>Install app</button>
+    <a class="btn ghost" href="/">Website</a>
+  </div>
+</div></header>
+
+<main>
+  <section>
+    <h1>Your cameras, <em>on the big screen.</em></h1>
+    <p class="lead">Live video, events and AI tasks from your VYRO main phone — in a full desktop dashboard on any computer on the same Wi-Fi.</p>
+
+    <form id="connect" style="display:grid; gap:10px">
+      <label class="faint" for="addr">Main phone address</label>
+      <div class="row">
+        <input id="addr" class="field" placeholder="192.168.1.22" autocomplete="off" aria-label="Main phone address">
+        <button class="btn primary" type="submit" style="padding:0 26px">Open dashboard</button>
+      </div>
+      <div id="err" class="err"></div>
+    </form>
+
+    <div id="phones"></div>
+
+    <div class="card" style="margin-top:22px">
+      <b>How to connect</b>
+      <ol class="steps" style="margin-top:14px">
+        <li><span>On the main phone open <b>VYRO → Settings → Web dashboard</b>.</span></li>
+        <li><span>Type the address shown there and press <kbd>Enter</kbd>.</span></li>
+        <li><span>Sign in with the <b>Web dashboard code</b> from the same screen.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div class="preview" aria-hidden="true">
+      <div class="pv-bar"><img src="/assets/vyro-mark.png" alt=""><b class="wordmark" style="font-size:12px">VYRO</b>
+        <span class="tab on">Cameras</span><span class="tab">Events</span></div>
+      <div class="pv-body">
+        <div class="pv-cam"><span>LIVE</span></div>
+        <div style="display:grid; gap:8px">
+          <div class="pv-task"><b>Water at the MAX line</b><div class="pv-track"><div></div></div><div class="muted" style="margin-top:6px">~72% · AI checked 8s ago</div></div>
+          <div class="pv-task"><b>Download finished</b><div class="muted">✓ Done · 100%</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><svg class="i"><use href="#i-info"/></svg>
+      <span>The dashboard runs on your main phone and only on your Wi-Fi — browsers do not let websites reach phones on your home network, so VYRO opens the phone's dashboard directly. Video never goes through the internet.</span></div>
+    <div class="faint">On a phone? <a href="/app/app-mobile/">Open the mobile web app</a>.</div>
+  </aside>
+</main>
+
+<script src="/app/connect.js"></script>
+<script>
+  function renderPhones() {
+    const root = document.getElementById("phones");
+    root.replaceChildren();
+    const list = vyroPhones();
+    if (list.length) {
+      const h = document.createElement("div"); h.className = "faint"; h.textContent = "Recent main phones"; root.append(h);
+    }
+    for (const p of list) {
+      const row = document.createElement("div");
+      row.className = "phone-row"; row.setAttribute("role", "button"); row.tabIndex = 0;
+      const ic = document.createElement("div"); ic.className = "ic"; ic.innerHTML = '<svg class="i"><use href="#i-phone"/></svg>';
+      const text = document.createElement("div");
+      const t = document.createElement("div"); t.className = "t"; t.textContent = p.name || "Main phone";
+      const s = document.createElement("div"); s.className = "s"; s.textContent = `${p.host}:${p.port} · ${vyroAgo(p.last || Date.now())}`;
+      text.append(t, s);
+      const forget = document.createElement("button");
+      forget.className = "btn ghost icon-btn"; forget.title = "Forget"; forget.setAttribute("aria-label", "Forget"); forget.innerHTML = '<svg class="i"><use href="#i-close"/></svg>';
+      forget.onclick = e => { e.stopPropagation(); vyroForget(p); renderPhones(); };
+      const go = document.createElement("span"); go.className = "go"; go.innerHTML = '<svg class="i"><use href="#i-go"/></svg>';
+      row.append(ic, text, forget, go);
+      row.onclick = () => vyroOpen(p, p.name);
+      row.onkeydown = e => { if (e.key === "Enter") vyroOpen(p, p.name); };
+      root.append(row);
+    }
+  }
+
+  document.getElementById("connect").addEventListener("submit", e => {
+    e.preventDefault();
+    const addr = vyroParse(document.getElementById("addr").value);
+    const err = document.getElementById("err");
+    if (!addr) { err.textContent = "Use the address shown in VYRO → Settings, e.g. 192.168.1.22"; return; }
+    err.textContent = "";
+    vyroOpen(addr);
+  });
+
+  // Chrome / Edge offer installing the desktop app.
+  let deferred = null;
+  const install = document.getElementById("install");
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferred = e; install.hidden = false; });
+  install.onclick = () => { if (deferred) { deferred.prompt(); install.hidden = true; } };
+
+  document.getElementById("addr").focus();
+  renderPhones();
+</script>
+</body>
+</html>

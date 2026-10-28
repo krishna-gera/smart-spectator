@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VYRO</title>
+<meta name="description" content="VYRO mobile web app — open your cameras from your phone's browser.">
+<meta name="theme-color" content="#1C1E24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VYRO">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/app/app-mobile/manifest.webmanifest">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  body { min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  .top { display:flex; align-items:center; gap:10px; padding:14px 18px; }
+  .top img { width:30px; height:30px; }
+  .top .badge { margin-left:auto; font-size:12px; font-weight:700; color:var(--muted); background:var(--surface); border-radius:999px; padding:5px 10px; }
+  main { flex:1; padding:6px 18px 24px; display:grid; gap:16px; align-content:start; max-width:520px; width:100%; margin:0 auto; }
+  .hero { text-align:center; padding:18px 0 4px; }
+  .hero img { width:84px; height:84px; margin:0 auto 14px; display:block; filter:drop-shadow(0 0 20px rgba(250,204,46,.35)); }
+  .hero h1 { margin:0 0 6px; font-size:28px; letter-spacing:-.4px; }
+  #phones { display:grid; gap:10px; }
+  .install { display:none; }
+  .install.show { display:flex; }
+  .tabbar { display:none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M17 1H7c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14z"/></symbol>
+  <symbol id="i-go" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+</svg>
+
+<header class="top">
+  <img src="/assets/vyro-mark.png" alt=""><span class="wordmark">VYRO</span>
+  <span class="badge">Mobile web app</span>
+</header>
+
+<main>
+  <div class="hero">
+    <img src="/assets/vyro-mark.png" alt="VYRO logo">
+    <h1>Your cameras</h1>
+    <div class="muted">Open the dashboard from your main phone — on this phone's browser.</div>
+  </div>
+
+  <div id="phones"></div>
+
+  <form id="connect" class="card" style="display:grid; gap:12px">
+    <b id="form-title">Connect to your main phone</b>
+    <input id="addr" class="field" placeholder="192.168.1.22" inputmode="decimal" autocomplete="off" autocapitalize="off" aria-label="Main phone address">
+    <button class="btn primary block" type="submit">Open dashboard</button>
+    <div id="err" class="err"></div>
+    <ol class="steps">
+      <li><span>On the main phone open <b>VYRO → Settings → Web dashboard</b>.</span></li>
+      <li><span>Type the address shown there (like <b>192.168.1.22</b>).</span></li>
+      <li><span>Sign in with the <b>Web dashboard code</b>.</span></li>
+    </ol>
+  </form>
+
+  <div class="note"><svg class="i"><use href="#i-info"/></svg>
+    <span>This phone must be on the same Wi-Fi as the main phone. Your video never goes through the internet.</span></div>
+
+  <div id="install" class="note install"><svg class="i"><use href="#i-phone"/></svg>
+    <span id="install-text">Add VYRO to your home screen: tap <b>Share</b> → <b>Add to Home Screen</b>.</span></div>
+
+  <div class="faint" style="text-align:center">Using a computer? <a href="/app/app-desktop/">Open the desktop web app</a> · <a href="/">vyro website</a></div>
+</main>
+
+<script src="/app/connect.js"></script>
+<script>
+  function renderPhones() {
+    const root = document.getElementById("phones");
+    root.replaceChildren();
+    const list = vyroPhones();
+    document.getElementById("form-title").textContent = list.length ? "Another main phone" : "Connect to your main phone";
+    for (const p of list) {
+      const row = document.createElement("div");
+      row.className = "phone-row"; row.setAttribute("role", "button"); row.tabIndex = 0;
+      const ic = document.createElement("div"); ic.className = "ic"; ic.innerHTML = '<svg class="i"><use href="#i-phone"/></svg>';
+      const text = document.createElement("div");
+      const t = document.createElement("div"); t.className = "t"; t.textContent = p.name || "Main phone";
+      const s = document.createElement("div"); s.className = "s"; s.textContent = `${p.host}:${p.port} · ${vyroAgo(p.last || Date.now())}`;
+      text.append(t, s);
+      const forget = document.createElement("button");
+      forget.className = "btn ghost icon-btn"; forget.setAttribute("aria-label", "Forget"); forget.innerHTML = '<svg class="i"><use href="#i-close"/></svg>';
+      forget.onclick = e => { e.stopPropagation(); vyroForget(p); renderPhones(); };
+      const go = document.createElement("span"); go.className = "go"; go.innerHTML = '<svg class="i"><use href="#i-go"/></svg>';
+      row.append(ic, text, forget, go);
+      row.onclick = () => vyroOpen(p, p.name);
+      row.onkeydown = e => { if (e.key === "Enter") vyroOpen(p, p.name); };
+      root.append(row);
+    }
+  }
+
+  document.getElementById("connect").addEventListener("submit", e => {
+    e.preventDefault();
+    const addr = vyroParse(document.getElementById("addr").value);
+    const err = document.getElementById("err");
+    if (!addr) { err.textContent = "Use the address shown in VYRO → Settings, e.g. 192.168.1.22"; return; }
+    err.textContent = "";
+    vyroOpen(addr);
+  });
+
+  // Install hint: iOS Safari has no install prompt; Android Chrome does.
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const install = document.getElementById("install");
+  if (!standalone && /iphone|ipad|ipod/i.test(navigator.userAgent)) install.classList.add("show");
+  let deferred = null;
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault(); deferred = e;
+    document.getElementById("install-text").innerHTML = "<b>Install VYRO</b> on this phone — tap here.";
+    install.classList.add("show"); install.style.cursor = "pointer";
+    install.onclick = () => { deferred.prompt(); install.classList.remove("show"); };
+  });
+
+  renderPhones();
+</script>
+</body>
+</html>

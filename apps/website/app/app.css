@@ -1,0 +1,40 @@
+/* Shared styles for the VYRO web apps — same tokens as the app and dashboard. */
+:root {
+  --bg:#1C1E24; --bg-deep:#16171C; --surface:#262932; --surface-high:#30343E; --border:#373B47;
+  --primary:#FACC2E; --on-primary:#15161A; --text:#F5F6F8; --muted:#9CA0AB; --faint:#6B7080;
+  --success:#4ADE80; --danger:#F25C70; --ai:#A78BFA; --ring:#8B7CF6; --radius:22px;
+}
+* { box-sizing:border-box; }
+html, body { margin:0; background:var(--bg); color:var(--text); }
+body { font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+a { color:inherit; }
+button, input { font:inherit; color:inherit; }
+.muted { color:var(--muted); } .faint { color:var(--faint); font-size:14px; }
+.wordmark { font-weight:900; letter-spacing:.3em; margin-right:-.3em; }
+svg.i { width:20px; height:20px; fill:currentColor; flex:none; }
+
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:999px; padding:13px 20px; cursor:pointer;
+  background:var(--surface-high); color:var(--text); font-weight:700; text-decoration:none; transition:filter .15s, transform .05s; white-space:nowrap; }
+.btn:hover { filter:brightness(1.12); } .btn:active { transform:scale(.98); }
+.btn.primary { background:var(--primary); color:var(--on-primary); }
+.btn.block { width:100%; padding:16px; font-size:17px; }
+.btn.ghost { background:transparent; color:var(--muted); }
+.icon-btn { width:40px; height:40px; padding:0; border-radius:50%; }
+
+.field { width:100%; background:var(--surface-high); border:2px solid transparent; border-radius:16px; padding:15px 16px; font-size:18px; }
+.field:focus { outline:none; border-color:var(--primary); }
+.err { color:var(--danger); font-size:14px; min-height:20px; }
+
+.card { background:var(--surface); border-radius:var(--radius); padding:20px; }
+.phone-row { display:flex; align-items:center; gap:12px; background:var(--surface-high); border-radius:18px; padding:12px 12px 12px 14px; cursor:pointer; border:2px solid transparent; width:100%; text-align:left; }
+.phone-row:hover { border-color:var(--primary); }
+.phone-row .ic { width:42px; height:42px; border-radius:14px; background:rgba(250,204,46,.14); color:var(--primary); display:grid; place-items:center; flex:none; }
+.phone-row .t { font-weight:700; } .phone-row .s { color:var(--faint); font-size:13px; }
+.phone-row .go { margin-left:auto; color:var(--primary); }
+.steps { display:grid; gap:12px; margin:0; padding:0; list-style:none; counter-reset:s; }
+.steps li { display:flex; gap:12px; color:var(--muted); }
+.steps li::before { counter-increment:s; content:counter(s); width:28px; height:28px; border-radius:50%; background:var(--primary); color:var(--on-primary);
+  display:grid; place-items:center; font-weight:900; font-size:14px; flex:none; }
+.steps b { color:var(--text); }
+.note { display:flex; gap:10px; background:rgba(167,139,250,.1); color:var(--muted); border-radius:16px; padding:12px 14px; font-size:14px; }
+.note svg { color:var(--ai); margin-top:1px; }

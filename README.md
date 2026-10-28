@@ -33,7 +33,7 @@ Camera phone(s) ──H.264 over Wi-Fi──▶ Main phone (hub + web dashboard)
 |---|---|
 | `apps/camera` | The VYRO app (Flutter; iOS + Android). Camera mode, main-phone hub, web dashboard (`lib/hub/web_dashboard.dart`). |
 | `services/ai_proxy` | VYRO AI service (Cloudflare Worker) — holds the AI key; plan/check watch tasks, describe snapshots. |
-| `apps/website` | Public website (static, Cloudflare Pages). |
+| `apps/website` | Website, downloads and the mobile/desktop web apps — **https://smart-vyro.vercel.app** (Vercel). |
 | `services/hub_backend`, `services/*_engine`, `ai/`, `docs/` | Legacy PC-hub design (Python, Snapdragon). Not used by VYRO; kept for reference. |
 
 ## Develop
@@ -50,8 +50,8 @@ cd services/ai_proxy && npm test
 npm run dev            # local, port 8787
 npm run deploy         # Cloudflare
 
-# Website
-python3 -m http.server 5173 --directory apps/website
+# Website (deploys to smart-vyro.vercel.app)
+apps/website/deploy.sh
 ```
 
 ## Privacy

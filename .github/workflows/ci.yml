@@ -1,94 +1,129 @@
-name: Smart Spectator Comprehensive CI
+name: VYRO CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  backend-and-ai-verify:
-    name: Backend, Stream Ingest & AI Tests
+  app:
+    name: VYRO app (Flutter) — analyze, test, Android APK
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/camera
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Java 17 (Android build)
+        uses: actions/setup-java@v4
         with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-glx ffmpeg
-
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio flake8 bandit
-
-      - name: Code Quality & Syntax Check
-        run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=apps/camera
-
-      - name: Security Scan (Bandit & Secret Checks)
-        run: |
-          # Bandit AST security scanner for high severity vulnerabilities
-          bandit -r services/ shared/ -ll -ii --exclude services/hub_backend/database/migrations.py
-          # Verify no committed private keys or unrevoked active credentials
-          ! grep -rn "PRIVATE KEY" services/ shared/ ai/ apps/client/
-          ! grep -rn "ss_tok_v1_" services/hub_backend/config.py
-
-      - name: Run Test Suite
-        env:
-          SMART_SPECTATOR_ENV: test
-          PYTHONPATH: .
-        run: |
-          pytest -v tests/
-
-  android-camera-verify:
-    name: Android Camera App Flutter Analysis
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+          distribution: temurin
+          java-version: "17"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.x"
-          channel: "stable"
+          flutter-version: "3.47.8"
+          channel: stable
           cache: true
 
-      - name: Verify Flutter Dependencies & Analyze
-        working-directory: apps/camera
-        run: |
-          flutter pub get
-          flutter analyze .
+      - name: Dependencies
+        run: flutter pub get
 
-  windows-arm-snapdragon-verify:
-    name: Snapdragon ARM64 & QNN Acceleration Validation
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      # AI features are enabled only when the repository has the AI service
+      # settings (vars.AI_PROXY_URL / secrets.AI_PROXY_TOKEN); otherwise the
+      # APK is built with AI turned off.
+      - name: Build Android APK
+        env:
+          AI_PROXY_URL: ${{ vars.AI_PROXY_URL }}
+          AI_PROXY_TOKEN: ${{ secrets.AI_PROXY_TOKEN }}
+        run: |
+          flutter build apk --release \
+            --dart-define=AI_PROXY_URL="$AI_PROXY_URL" \
+            --dart-define=AI_PROXY_TOKEN="$AI_PROXY_TOKEN"
+          cp build/app/outputs/flutter-apk/app-release.apk build/vyro-android.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vyro-android-apk
+          path: apps/camera/build/vyro-android.apk
+          retention-days: 14
+
+  ai-service:
+    name: VYRO AI service (Cloudflare Worker) — tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai_proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/ai_proxy/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test
+
+  website:
+    name: VYRO website (Vercel) — links and assets
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check pages, links and assets
+        run: node scripts/check_website.mjs apps/website
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+  secrets:
+    name: No committed secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan tracked files
+        run: |
+          if git ls-files | grep -E '(^|/)\.(dev\.vars|env)$'; then echo "::error::A secrets file is committed"; exit 1; fi
+          if git grep -nE 'gsk_[A-Za-z0-9]{20,}|xai-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' -- . ':!**/package-lock.json'; then
+            echo "::error::Something that looks like an API key or private key is committed"; exit 1
+          fi
+
+  legacy-hub:
+    name: Legacy PC-hub backend (Python) — tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install Dependencies
+          cache: pip
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 ffmpeg
+      - name: Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install onnxruntime numpy pydantic pytest
-
-      - name: Validate Snapdragon QNN Manifest & Precision
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio flake8
+      - name: Syntax check
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=apps,node_modules,.venv
+      - name: Tests
         env:
+          SMART_SPECTATOR_ENV: test
           PYTHONPATH: .
-        run: |
-          pytest -v tests/test_phase7_snapdragon_inference.py tests/test_phase8_model_integrity.py
+        run: pytest -q tests/

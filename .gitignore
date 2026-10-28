@@ -41,3 +41,7 @@ artifacts/runs/**/*.pt
 # Node / Cloudflare Wrangler
 node_modules/
 .wrangler/
+
+# Website download binaries are uploaded to Vercel, not committed
+apps/website/downloads/*.apk
+.vercel/

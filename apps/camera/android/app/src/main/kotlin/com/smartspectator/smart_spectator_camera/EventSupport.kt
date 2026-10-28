@@ -51,11 +51,11 @@ object SnapshotJpeg {
         val scale = maxSize.toFloat() / longSide
         val scaled = android.graphics.Bitmap.createScaledBitmap(
             bitmap, (width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1), true)
-        val out = ByteArrayOutputStream()
-        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality.coerceIn(30, 95), out)
+        val small = ByteArrayOutputStream()
+        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality.coerceIn(30, 95), small)
         bitmap.recycle()
         scaled.recycle()
-        return out.toByteArray()
+        return small.toByteArray()
     }
 }
 
