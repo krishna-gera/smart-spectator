@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_spectator_camera/main.dart';
@@ -27,7 +28,9 @@ void main() {
 
     expect(find.text('Connect camera'), findsOneWidget);
     expect(find.text("Enter the main phone's code"), findsOneWidget);
-    expect(find.text('MAIN PHONES ON THIS WI-FI'), findsOneWidget);
+    expect(find.text('Main phones on this Wi-Fi'), findsOneWidget);
+    // The camera's own code is further down the list.
+    await tester.scrollUntilVisible(find.text('482 913'), 300, scrollable: find.byType(Scrollable).first);
     expect(find.text('482 913'), findsOneWidget, reason: "this camera's own code is shown");
   });
 }

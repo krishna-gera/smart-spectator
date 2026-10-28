@@ -52,46 +52,46 @@ class EventsView extends StatelessWidget {
     final s = store;
     if (s == null) return const Center(child: CircularProgressIndicator());
     final events = s.events;
+    final unseen = s.unseenCount;
+
+    final rows = <Widget>[
+      RingHeader(
+        icon: Icons.notifications_rounded,
+        color: AppColors.ringEvents,
+        progress: events.isEmpty ? 0 : (events.length - unseen) / events.length,
+        title: events.isEmpty ? 'All quiet' : 'Activity',
+        countStrong: events.isEmpty ? null : '$unseen',
+        countRest: events.isEmpty ? 'No events yet' : (unseen == 1 ? 'new event' : 'new events'),
+      ),
+    ];
     if (events.isEmpty) {
-      return const EmptyState(
-        icon: Icons.notifications_none,
-        title: 'No events yet',
-        message: 'When a camera sees motion it appears here with a snapshot'
-            ' and, if you turn it on, an AI description.',
-      );
-    }
-
-    final rows = <Widget>[];
-    String? lastDay;
-    for (final e in events) {
-      final day = _day(e.startedAt);
-      if (day != lastDay) {
-        rows.add(SectionHeader(day));
-        lastDay = day;
-      }
-      rows.add(Padding(padding: const EdgeInsets.only(bottom: 10), child: _EventTile(store: s, event: e, onChanged: onChanged)));
-    }
-
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 8, 0),
-        child: Row(children: [
-          Expanded(
-            child: Text('${events.length} events · ${s.unseenCount} new',
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+      rows.add(const Card(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Text(
+            'When a camera sees motion it appears here with a snapshot and, if you turn it on, an AI description.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textMuted, height: 1.4),
           ),
-          TextButton(
-            onPressed: s.unseenCount == 0
+        ),
+      ));
+    } else {
+      rows.add(Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: unseen == 0
                 ? null
                 : () async {
                     await s.markSeen(events.map((e) => e.id));
                     onChanged();
                   },
-            child: const Text('Mark all seen'),
+            icon: const Icon(Icons.done_all_rounded, size: 18),
+            label: const Text('Mark all seen'),
           ),
-          IconButton(
-            tooltip: 'Delete all events',
-            icon: const Icon(Icons.delete_sweep_outlined),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
             onPressed: () async {
               if (await confirm(context,
                   title: 'Delete all events?',
@@ -102,11 +102,24 @@ class EventsView extends StatelessWidget {
                 onChanged();
               }
             },
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: const Text('Clear history'),
           ),
-        ]),
-      ),
-      Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: rows)),
-    ]);
+        ),
+      ]));
+      String? lastDay;
+      for (final e in events) {
+        final day = _day(e.startedAt);
+        if (day != lastDay) {
+          rows.add(CenteredLabel(day,
+              icon: day == 'Today' ? Icons.wb_sunny_rounded : Icons.history_rounded,
+              iconColor: day == 'Today' ? AppColors.primary : AppColors.textMuted));
+          lastDay = day;
+        }
+        rows.add(Padding(padding: const EdgeInsets.only(bottom: 12), child: _EventTile(store: s, event: e, onChanged: onChanged)));
+      }
+    }
+    return ListView(padding: const EdgeInsets.fromLTRB(18, 4, 18, 28), children: rows);
   }
 }
 
@@ -140,6 +153,7 @@ class _EventTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final urgent = !event.seen || event.aiThreatLevel == 'high' || event.aiThreatLevel == 'medium';
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -151,40 +165,56 @@ class _EventTile extends StatelessWidget {
             builder: (_) => EventDetailScreen(store: store, event: event, onChanged: onChanged),
           ));
         },
-        child: IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            SizedBox(width: 120, child: _Snapshot(store: store, event: event)),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(width: 92, height: 68, child: _Snapshot(store: store, event: event)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    if (!event.seen) ...[
-                      Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.code, shape: BoxShape.circle)),
-                      const SizedBox(width: 6),
-                    ],
-                    Text(_title(event), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                    const Spacer(),
-                    Text(_time(event.startedAt), style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                  ]),
+                  Text(_title(event), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
-                  Text('${event.cameraName} · ${_duration(event)}', style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                  if (event.aiSummary != null) ...[
-                    const SizedBox(height: 6),
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Icon(Icons.auto_awesome, size: 14, color: _threatColor(event.aiThreatLevel)),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(event.aiSummary!,
-                            maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.3)),
-                      ),
-                    ]),
-                  ],
+                  Text('Camera: ${event.cameraName}', style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5)),
+                  if (event.aiSummary != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(Icons.auto_awesome, size: 14, color: _threatColor(event.aiThreatLevel)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(event.aiSummary!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13.5, height: 1.3, color: AppColors.textMuted)),
+                        ),
+                      ]),
+                    )
+                  else
+                    Text('Duration: ${_duration(event)}', style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5)),
                 ]),
               ),
-            ),
-          ]),
-        ),
+            ]),
+          ),
+          const Divider(indent: 16, endIndent: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Row(children: [
+              Icon(Icons.schedule_rounded, size: 18, color: urgent ? AppColors.danger : AppColors.textMuted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${event.seen ? 'Seen' : 'New'} · at ${_time(event.startedAt)}',
+                  style: TextStyle(color: urgent ? AppColors.danger : AppColors.textMuted, fontSize: 14),
+                ),
+              ),
+              CheckCircle(checked: event.seen),
+            ]),
+          ),
+        ]),
       ),
     );
   }

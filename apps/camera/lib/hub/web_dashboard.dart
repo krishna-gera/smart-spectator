@@ -9,9 +9,9 @@ const String dashboardHtml = r'''<!doctype html>
 <title>Smart Spectator</title>
 <style>
   :root {
-    --bg:#0a0f1c; --surface:#111827; --surface-high:#1a2335; --border:#243049;
-    --primary:#4f8cff; --code:#f5b544; --success:#34d399; --warning:#fbbf24; --danger:#f87171;
-    --ai:#a78bfa; --text:#e8edf6; --muted:#94a3b8; --faint:#64748b;
+    --bg:#1c1e24; --surface:#262932; --surface-high:#30343e; --border:#373b47;
+    --primary:#facc2e; --on-primary:#15161a; --code:#facc2e; --success:#4ade80; --warning:#fbbf24; --danger:#f25c70;
+    --ring-cameras:#8b7cf6; --ring-events:#f25c70; --ai:#a78bfa; --text:#f5f6f8; --muted:#9ca0ab; --faint:#6b7080;
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
@@ -20,40 +20,48 @@ const String dashboardHtml = r'''<!doctype html>
   .muted { color:var(--muted); } .faint { color:var(--faint); font-size:13px; }
   /* login */
   #login { min-height:100vh; display:grid; place-items:center; padding:24px; }
-  .login-card { width:100%; max-width:420px; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:32px; }
-  .logo { width:56px; height:56px; border-radius:16px; background:linear-gradient(135deg,var(--primary),var(--ai)); display:grid; place-items:center; font-size:28px; margin-bottom:18px; }
+  .login-card { width:100%; max-width:420px; background:var(--surface); border-radius:28px; padding:32px; }
+  .logo { width:56px; height:56px; border-radius:50%; background:var(--surface-high); box-shadow:0 0 0 5px rgba(139,124,246,.9); display:grid; place-items:center; font-size:26px; margin:6px 0 20px; }
   h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.4px; }
-  .code-input { width:100%; margin:22px 0 12px; padding:14px; border-radius:14px; border:1.5px solid var(--border); background:var(--surface-high);
+  .code-input { width:100%; margin:22px 0 12px; padding:14px; border-radius:18px; border:1.5px solid transparent; background:var(--surface-high);
     color:var(--code); font-size:32px; font-weight:800; letter-spacing:12px; text-align:center; outline:none; }
   .code-input:focus { border-color:var(--primary); }
-  .btn { border:0; border-radius:12px; padding:12px 18px; font-weight:600; background:var(--surface-high); color:var(--text); border:1px solid var(--border); }
+  .btn { border-radius:14px; padding:11px 18px; font-weight:600; background:var(--surface-high); color:var(--text); border:1px solid transparent; }
   .btn:hover { border-color:var(--primary); }
-  .btn.primary { background:var(--primary); border-color:var(--primary); color:#fff; width:100%; padding:14px; font-size:16px; }
+  .btn.primary { background:var(--primary); border-color:var(--primary); color:var(--on-primary); width:100%; padding:16px; font-size:17px; font-weight:800; border-radius:18px; }
   .btn.ai { background:var(--ai); border-color:var(--ai); color:#111; }
   .btn:disabled { opacity:.5; cursor:default; }
   .error { color:var(--danger); min-height:22px; margin-top:10px; font-size:14px; }
   /* app */
-  header { position:sticky; top:0; z-index:5; background:rgba(10,15,28,.92); backdrop-filter:blur(8px); border-bottom:1px solid var(--border); }
+  header { position:sticky; top:0; z-index:5; background:rgba(28,30,36,.92); backdrop-filter:blur(8px); }
   .bar { max-width:1200px; margin:0 auto; padding:14px 20px; display:flex; align-items:center; gap:16px; }
   .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:18px; }
-  .brand .logo { width:34px; height:34px; border-radius:10px; font-size:17px; margin:0; }
+  .brand .logo { width:32px; height:32px; font-size:15px; margin:0 4px 0 0; box-shadow:0 0 0 3px rgba(139,124,246,.9); }
   .tabs { display:flex; gap:6px; margin-left:12px; }
   .tab { background:none; border:0; color:var(--muted); padding:8px 14px; border-radius:10px; font-weight:600; }
-  .tab.active { background:rgba(79,140,255,.16); color:var(--text); }
-  .badge { background:var(--code); color:#111; border-radius:999px; font-size:11px; padding:1px 7px; margin-left:6px; font-weight:800; }
+  .tab.active { background:var(--primary); color:var(--on-primary); }
+  .badge { background:var(--danger); color:#fff; border-radius:999px; font-size:11px; padding:1px 7px; margin-left:6px; font-weight:800; }
   .spacer { flex:1; }
   main { max-width:1200px; margin:0 auto; padding:20px; }
-  .section-title { text-transform:uppercase; letter-spacing:1.1px; font-size:12px; font-weight:700; color:var(--muted); margin:8px 4px 12px; }
+  .section-title { text-align:center; font-size:18px; font-weight:600; color:var(--text); margin:22px 4px 14px; }
+  .section-title::before { content:"☀  "; color:var(--primary); }
+  .ring-header { text-align:center; margin:8px 0 22px; }
+  .ring-header svg { display:block; margin:0 auto 12px; }
+  .ring-header h2 { margin:0; font-size:30px; font-weight:800; letter-spacing:-.4px; }
+  .ring-header .count { color:var(--muted); margin-top:4px; } .ring-header .count b { color:var(--text); }
+  .banner { display:flex; align-items:center; gap:14px; background:var(--primary); color:var(--on-primary); border-radius:22px; padding:18px 16px 18px 22px; margin-bottom:8px; }
+  .banner b { font-size:19px; font-weight:800; display:block; } .banner span { opacity:.75; font-size:14px; }
+  .banner .round { margin-left:auto; width:46px; height:46px; border-radius:50%; background:var(--on-primary); color:#fff; display:grid; place-items:center; font-size:22px; flex:none; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:18px; overflow:hidden; }
+  .card { background:var(--surface); border-radius:22px; overflow:hidden; }
   .video { position:relative; aspect-ratio:16/10; background:#000; display:grid; place-items:center; }
   .video canvas { max-width:100%; max-height:100%; }
   .video .msg { position:absolute; color:var(--muted); font-size:14px; text-align:center; padding:16px; }
   .overlay { position:absolute; top:10px; left:10px; display:flex; gap:6px; }
   .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; }
   .chip::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
-  .chip.live { background:var(--danger); color:#111; } .chip.live::before { background:#111; }
-  .chip.motion { background:var(--warning); color:#111; } .chip.motion::before { background:#111; }
+  .chip.live { background:var(--danger); color:#fff; } .chip.live::before { background:#fff; }
+  .chip.motion { background:var(--primary); color:var(--on-primary); } .chip.motion::before { background:var(--on-primary); }
   .chip.s-live { color:var(--success); background:rgba(52,211,153,.12); }
   .chip.s-online { color:var(--primary); background:rgba(79,140,255,.12); }
   .chip.s-connecting { color:var(--warning); background:rgba(251,191,36,.12); }
@@ -65,23 +73,25 @@ const String dashboardHtml = r'''<!doctype html>
   .actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
   .settings { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); display:grid; gap:10px; }
   .toggle { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  .toggle input[type=checkbox] { width:42px; height:24px; accent-color:var(--primary); }
+  .toggle input[type=checkbox] { appearance:none; width:30px; height:30px; border-radius:50%; border:1.6px solid var(--faint); cursor:pointer; flex:none; }
+  .toggle input[type=checkbox]:checked { background:#fff; border-color:#fff; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='%2315161a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-size:62%; background-position:center; background-repeat:no-repeat; }
+  .toggle input[type=checkbox]:disabled { opacity:.4; }
   input[type=range] { width:100%; accent-color:var(--primary); }
   .ai-answer { margin-top:12px; padding:12px 14px; border-radius:12px; background:rgba(167,139,250,.10); border:1px solid rgba(167,139,250,.3); }
   .empty { text-align:center; padding:60px 20px; color:var(--muted); }
   .empty .big { font-size:20px; color:var(--text); font-weight:700; margin-bottom:6px; }
-  .code-box { display:inline-block; margin-top:14px; padding:12px 20px; border-radius:14px; background:var(--surface); border:1px solid var(--border); color:var(--code); font-size:32px; font-weight:800; letter-spacing:6px; }
+  .code-box { display:inline-block; margin-top:14px; padding:12px 20px; border-radius:18px; background:var(--surface); color:var(--code); font-size:32px; font-weight:800; letter-spacing:6px; }
   /* events */
   .events { display:grid; gap:10px; }
-  .event { display:flex; gap:14px; background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; cursor:pointer; }
+  .event { display:flex; gap:14px; background:var(--surface); border:1px solid transparent; border-radius:22px; overflow:hidden; cursor:pointer; padding:12px; }
   .event:hover { border-color:var(--primary); }
-  .thumb { width:140px; min-height:92px; background:var(--surface-high); flex:none; overflow:hidden; display:grid; place-items:center; }
+  .thumb { width:120px; height:84px; border-radius:14px; background:var(--surface-high); flex:none; overflow:hidden; display:grid; place-items:center; }
   .thumb img { width:100%; height:100%; object-fit:cover; }
-  .event .info { padding:12px 14px 12px 0; flex:1; min-width:0; }
-  .dot { width:8px; height:8px; border-radius:50%; background:var(--code); display:inline-block; margin-right:6px; }
+  .event .info { padding:2px 6px 2px 0; flex:1; min-width:0; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--danger); display:inline-block; margin-right:6px; }
   .summary { margin-top:6px; font-size:14px; }
   .summary::before { content:"✦ "; color:var(--ai); }
-  dialog { border:1px solid var(--border); border-radius:20px; background:var(--surface); color:var(--text); padding:0; max-width:min(860px,94vw); width:100%; }
+  dialog { border:0; border-radius:26px; background:var(--surface); color:var(--text); padding:0; max-width:min(860px,94vw); width:100%; }
   dialog::backdrop { background:rgba(0,0,0,.7); }
   .dlg-body { padding:18px 20px 22px; }
   .dlg-img { background:#000; display:grid; place-items:center; max-height:60vh; }
@@ -223,15 +233,31 @@ function render() {
   badge.textContent = d.unseen; badge.classList.toggle("hidden", !d.unseen);
   renderCameras(d); renderEvents(d);
 }
+function svg(tag, attrs) { const n = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; }
+function ringHeader(icon, color, progress, title, strong, rest) {
+  const r = 34, c = 2 * Math.PI * r;
+  const s = svg("svg", { width:"76", height:"76", viewBox:"0 0 76 76" });
+  s.append(svg("circle", { cx:"38", cy:"38", r:String(r), fill:"none", stroke:color, "stroke-opacity":"0.22", "stroke-width":"6" }));
+  // An empty arc with round caps would still draw a dot, so skip it at 0%.
+  if (progress > 0) s.append(svg("circle", { cx:"38", cy:"38", r:String(r), fill:"none", stroke:color, "stroke-width":"6", "stroke-linecap":"round",
+      "stroke-dasharray":`${c * Math.min(1, progress)} ${c}`, transform:"rotate(-90 38 38)" }));
+  s.append(svg("circle", { cx:"38", cy:"38", r:"25", fill:"#30343e" }));
+  const t = svg("text", { x:"38", y:"46", "text-anchor":"middle", "font-size":"22" }); t.textContent = icon; s.append(t);
+  return el("div", { class:"ring-header" }, s, el("h2", {}, title), el("div", { class:"count" }, strong ? el("b", {}, strong) : "", rest ? ` ${rest}` : ""));
+}
 function renderCameras(d) {
   const root = document.getElementById("tab-cameras");
+  const live = d.cameras.filter(c => c.status === "live").length;
+  const header = ringHeader("📹", "#8b7cf6", d.cameras.length ? live / d.cameras.length : 0,
+    d.cameras.length ? "Camera status" : "No cameras yet", d.cameras.length ? `${live}/${d.cameras.length}` : "", d.cameras.length ? "cameras live" : "Turn a spare phone into a camera");
+  const top = root.querySelector(".ring-header");
+  if (top) top.replaceWith(header); else root.prepend(header);
   if (!d.cameras.length) {
-    root.replaceChildren(el("div", { class:"empty" },
-      el("div", { class:"big" }, "No cameras yet"),
-      "On another phone open Smart Spectator, choose Camera, and enter the main phone's pairing code."));
+    root.replaceChildren(header, el("div", { class:"banner" }, el("div", {}, el("b", {}, "Add a camera"),
+      el("span", {}, "On another phone open Smart Spectator, choose Camera, and enter the main phone's pairing code.")), el("div", { class:"round" }, "+")));
     return;
   }
-  const grid = root.querySelector(".grid") || (() => { const g = el("div", { class:"grid" }); root.replaceChildren(el("div", { class:"section-title" }, "Cameras"), g); return g; })();
+  const grid = root.querySelector(".grid") || (() => { const g = el("div", { class:"grid" }); root.replaceChildren(header, el("div", { class:"section-title" }, "All cameras"), g); return g; })();
   const ids = new Set(d.cameras.map(c => c.camera_id));
   for (const id of Object.keys(cards)) if (!ids.has(id)) { cards[id].remove(); delete cards[id]; clearTimeout(state.frameTimers[id]); }
   for (const cam of d.cameras) {
@@ -315,8 +341,10 @@ function settingsPanel(cam, aiAvailable) {
 function eventTitle(e) { return e.ai_category ? (LABELS[e.ai_category] || "Motion") : (e.type === "ai_check" ? "AI check" : "Motion"); }
 function renderEvents(d) {
   const root = document.getElementById("tab-events");
-  if (!d.events.length) { root.replaceChildren(el("div", { class:"empty" }, el("div", { class:"big" }, "No events yet"), "Motion and AI checks appear here with snapshots.")); return; }
-  const out = []; let last = null;
+  const header = ringHeader("🔔", "#f25c70", d.events.length ? (d.events.length - d.unseen) / d.events.length : 0,
+    d.events.length ? "Activity" : "All quiet", d.events.length ? String(d.unseen) : "", d.events.length ? (d.unseen === 1 ? "new event" : "new events") : "Motion and AI checks appear here");
+  if (!d.events.length) { root.replaceChildren(header); return; }
+  const out = [header]; let last = null;
   for (const e of d.events) {
     const dd = day(e.started_at);
     if (dd !== last) { out.push(el("div", { class:"section-title", style:"margin-top:18px" }, dd)); last = dd; }

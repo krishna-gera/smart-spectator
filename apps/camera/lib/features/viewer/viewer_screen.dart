@@ -204,18 +204,15 @@ class _ViewerScreenState extends State<ViewerScreen> {
     final unseen = _events?.unseenCount ?? 0;
     return Scaffold(
       appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_tab == 0 ? 'Cameras' : 'Events'),
-          const SizedBox(height: 2),
-          Text(
-            _server.isRunning ? 'Main phone · ${_server.cameras.where((c) => c.streaming).length} live' : 'Starting…',
-            style: const TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500),
-          ),
-        ]),
+        leading: IconButton(
+          icon: const Icon(Icons.swap_horiz_rounded),
+          tooltip: 'Use this phone as a camera',
+          onPressed: widget.onChangeRole,
+        ),
+        title: Text(_tab == 0 ? 'Main phone' : 'Event history'),
         actions: [
-          if (_tab == 0 && _server.isRunning)
-            IconButton(icon: const Icon(Icons.add_circle_outline), tooltip: 'Add camera', onPressed: _addCamera),
           PopupMenuButton<String>(
+            icon: const Icon(Icons.more_horiz_rounded),
             onSelected: (v) {
               if (v == 'role') widget.onChangeRole();
               if (v == 'code') _changeCode();
@@ -253,35 +250,49 @@ class _ViewerScreenState extends State<ViewerScreen> {
     final address = _localIp != null && _server.boundPort != null ? '$_localIp:${_server.boundPort}' : null;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 28),
       children: [
         if (_error != null)
-          Card(
-            color: AppColors.danger.withValues(alpha: 0.12),
-            child: Padding(padding: const EdgeInsets.all(16), child: Text(_error!, style: const TextStyle(color: AppColors.danger))),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Card(
+              color: AppColors.danger.withValues(alpha: 0.14),
+              child: Padding(padding: const EdgeInsets.all(16), child: Text(_error!, style: const TextStyle(color: AppColors.danger))),
+            ),
+          ),
+        RingHeader(
+          icon: Icons.videocam_rounded,
+          color: AppColors.ringCameras,
+          progress: cameras.isEmpty ? 0 : live.length / cameras.length,
+          title: cameras.isEmpty ? 'No cameras yet' : 'Camera status',
+          countStrong: cameras.isEmpty ? null : '${live.length}/${cameras.length}',
+          countRest: cameras.isEmpty ? 'Turn a spare phone into a camera' : 'cameras live',
+        ),
+        if (_server.isRunning)
+          ActionBanner(
+            title: 'Add camera',
+            subtitle: cameras.isEmpty ? 'Pair a phone with this code or by its camera code' : 'Pair another phone in seconds',
+            icon: Icons.add_rounded,
+            onTap: _addCamera,
           ),
         if (cameras.isEmpty && _server.isRunning) ...[
-          const SizedBox(height: 12),
-          const EmptyState(
-            icon: Icons.videocam_outlined,
-            title: 'Add your first camera',
-            message: 'Open Smart Spectator on another phone, choose Camera, and enter this code. '
-                'Phones on the same Wi-Fi find each other automatically.',
+          const SizedBox(height: 16),
+          CodeDisplay(
+            code: _registry.hubCode,
+            caption: 'On the camera phone choose Camera and enter this code',
+            onChange: _changeCode,
           ),
-          CodeDisplay(code: _registry.hubCode, caption: 'Pairing code for this main phone', onChange: _changeCode),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(onPressed: _addCamera, icon: const Icon(Icons.pin_outlined), label: const Text('Add a camera by its code')),
         ],
         if (live.isNotEmpty) ...[
-          const SectionHeader('Live'),
+          const CenteredLabel('Live now', icon: Icons.sensors_rounded, iconColor: AppColors.danger),
           LayoutBuilder(builder: (context, c) {
             final columns = c.maxWidth > 700 ? 3 : (live.length == 1 ? 1 : 2);
             return GridView.count(
               crossAxisCount: columns,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
               childAspectRatio: columns == 1 ? 16 / 10 : 3 / 4,
               children: [
                 for (final cam in live)
@@ -291,11 +302,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
           }),
         ],
         if (cameras.isNotEmpty) ...[
-          SectionHeader('All cameras (${cameras.length})',
-              trailing: TextButton.icon(onPressed: _addCamera, icon: const Icon(Icons.add, size: 18), label: const Text('Add'))),
+          const CenteredLabel('All cameras', icon: Icons.videocam_outlined),
           for (final cam in cameras)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 12),
               child: _CameraCard(
                 camera: cam,
                 settings: _events?.settingsFor(cam.cameraId) ?? const CameraSettings(),
@@ -305,16 +315,16 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 onRemove: () => _removeCamera(cam),
               ),
             ),
-          const SectionHeader('Connect more cameras'),
-          CodeDisplay(code: _registry.hubCode, caption: 'Pairing code for this main phone', compact: true, onChange: _changeCode),
+          const CenteredLabel('Pairing code', icon: Icons.key_rounded),
+          CodeDisplay(code: _registry.hubCode, caption: 'Enter this on a camera phone to connect it', compact: true, onChange: _changeCode),
         ],
         if (address != null)
           Padding(
-            padding: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.only(top: 18),
             child: Text(
-              'Keep Smart Spectator open while cameras stream. Address for manual setup: $address',
+              'Keep Smart Spectator open while cameras stream.\nWeb dashboard and manual setup: http://$address',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textFaint, fontSize: 12),
+              style: const TextStyle(color: AppColors.textFaint, fontSize: 12, height: 1.5),
             ),
           ),
       ],
@@ -565,51 +575,66 @@ class _CameraCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final last = camera.lastPacketAt;
     final live = camera.streaming && last != null && DateTime.now().difference(last).inSeconds < 3;
-    final (label, color) = live
-        ? ('Live', AppColors.success)
+    final (status, statusColor, icon) = live
+        ? ('Live now · ${camera.bitrateKbps.toStringAsFixed(0)} kbps', AppColors.success, Icons.sensors_rounded)
         : camera.streaming
-            ? ('Connecting', AppColors.warning)
+            ? ('Connecting video…', AppColors.warning, Icons.schedule_rounded)
             : camera.controlConnected
-                ? ('Online', AppColors.primary)
-                : ('Offline', AppColors.textFaint);
-    final details = <String>[
-      if (camera.batteryLevel != null) '${camera.batteryLevel!.round()}% battery${camera.isCharging == true ? ' ⚡' : ''}',
-      if (live) '${camera.bitrateKbps.toStringAsFixed(0)} kbps',
-      settings.motionEnabled ? (camera.motionActive ? 'motion now' : 'motion on') : 'motion off',
-      if (aiConfigured && settings.aiEnabled) 'AI on',
-    ];
+                ? ('Online · not streaming', AppColors.textMuted, Icons.schedule_rounded)
+                : ('Offline', AppColors.danger, Icons.error_outline_rounded);
+    final battery = camera.batteryLevel != null
+        ? '${camera.batteryLevel!.round()}%${camera.isCharging == true ? ' · charging' : ''}'
+        : 'unknown';
+    final motion = !settings.motionEnabled ? 'off' : (camera.motionActive ? 'detected now' : 'watching');
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(12)),
-              child: Icon(Icons.videocam, color: color),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Flexible(
-                    child: Text(camera.deviceName,
-                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                  ),
-                  const SizedBox(width: 8),
-                  StatusChip(label, color: color),
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 6, 14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: (live ? AppColors.ringCameras : AppColors.surfaceHigh).withValues(alpha: live ? 0.22 : 1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.videocam_rounded, color: live ? AppColors.ringCameras : AppColors.textMuted),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(camera.deviceName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text('Battery: $battery', style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5)),
+                  Text('Motion: $motion${aiConfigured && settings.aiEnabled ? ' · AI on' : ''}',
+                      style: TextStyle(color: camera.motionActive ? AppColors.warning : AppColors.textMuted, fontSize: 13.5)),
                 ]),
-                const SizedBox(height: 4),
-                Text(details.join(' · '), style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-              ]),
-            ),
-            IconButton(icon: const Icon(Icons.tune), tooltip: 'Camera settings', onPressed: onSettings),
-            IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Remove camera', onPressed: onRemove),
-          ]),
-        ),
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, color: AppColors.textMuted),
+                onSelected: (v) => v == 'settings' ? onSettings() : onRemove(),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'settings', child: Text('Motion, alerts & AI')),
+                  PopupMenuItem(value: 'remove', child: Text('Remove camera')),
+                ],
+              ),
+            ]),
+          ),
+          const Divider(indent: 18, endIndent: 18),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 16, 14),
+            child: Row(children: [
+              Icon(icon, size: 18, color: statusColor),
+              const SizedBox(width: 8),
+              Expanded(child: Text(status, style: TextStyle(color: statusColor, fontSize: 14))),
+              CheckCircle(checked: live),
+            ]),
+          ),
+        ]),
       ),
     );
   }
