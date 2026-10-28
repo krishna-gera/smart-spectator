@@ -342,6 +342,70 @@ class EventEngine:
             self.action_dispatcher.dispatch(act_name, action_ctx)
 
         self.broadcast_ws("event_created", self._event_to_dict(event))
+        self._evaluate_phase10_intelligence(event)
+
+    def _evaluate_phase10_intelligence(self, event: Event) -> None:
+        """
+        Integrates Phase 10 Macro Intelligence:
+        Context Engine -> Event Relationship Engine -> Incident Engine -> Anomaly Detector.
+        Evaluates context, causal event relationships, macro incidents, and statistical anomalies.
+        """
+        try:
+            from services.event_engine.context_engine.engine import context_engine
+            from services.event_engine.event_relationships.engine import relationship_engine
+            from services.event_engine.incident_engine.engine import incident_engine
+            from services.event_engine.anomaly.detector import anomaly_detector
+
+            event_dict = self._event_to_dict(event)
+
+            # 1. Build environmental context
+            context = context_engine.build_context(
+                camera_id=event.camera_id,
+                event_time=event.timestamp,
+                zone_id=event.zone_id,
+            )
+
+            # 2. Query recent events from DB for relationship matching (within past 30 min)
+            recent_events = []
+            try:
+                with db_session() as conn:
+                    cursor = conn.execute(
+                        "SELECT * FROM events WHERE timestamp >= datetime('now', '-30 minutes') ORDER BY timestamp DESC LIMIT 50"
+                    )
+                    cols = [c[0] for c in cursor.description]
+                    for r in cursor.fetchall():
+                        recent_events.append(dict(zip(cols, r)))
+            except Exception:
+                pass
+
+            # 3. Discover event relationships
+            relationships = relationship_engine.evaluate_relationships(
+                event_dict, recent_events, persist=True
+            )
+            for rel in relationships:
+                self.broadcast_ws("relationship_discovered", rel.to_dict())
+
+            # 4. Evaluate macro incidents
+            incident = incident_engine.evaluate_incident(
+                event_dict, context=context, relationships=relationships, persist=True
+            )
+            if incident:
+                self.broadcast_ws("incident_created", incident.to_dict())
+
+            # 5. Evaluate frequency anomaly
+            hourly_count = len([e for e in recent_events if e.get("camera_id") == event.camera_id])
+            report = anomaly_detector.evaluate_frequency_anomaly(
+                observed_count=float(hourly_count),
+                hour_of_day=event.timestamp.hour,
+                camera_id=event.camera_id,
+                source_event_ids=[event.event_id],
+                persist=True,
+            )
+            if report:
+                self.broadcast_ws("anomaly_detected", report.to_dict())
+
+        except Exception as e:
+            print(f"[EventEngine] Phase 10 intelligence pipeline error: {e}")
 
     def _handle_observation(self, observation: Observation) -> None:
         """Evaluates zone intrusions and loitering from spatial observations."""
@@ -403,6 +467,7 @@ class EventEngine:
         self.action_dispatcher.dispatch("CLIENT_NOTIFICATION", action_ctx)
         self.action_dispatcher.dispatch("LOG_EVENT", action_ctx)
         self.broadcast_ws("system_event", self._event_to_dict(event))
+        self._evaluate_phase10_intelligence(event)
 
     def _trigger_recording(self, event: Event) -> None:
         """Signals recording manager to start clip capture."""

@@ -6,7 +6,7 @@ Conforms to Sections 14, 15, 16, 21, 23, 72 of Phase 6/7 Specification.
 import os
 from pathlib import Path
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Settings(BaseModel):
@@ -39,9 +39,18 @@ class Settings(BaseModel):
     
     # Security & Auth
     PAIRING_PIN_LENGTH: int = 6
-    PAIRING_PIN_TTL_SECONDS: int = 300  # 5 minutes
-    AUTH_TOKEN_TTL_DAYS: int = 30
+    PAIRING_PIN_TTL_SECONDS: int = int(os.getenv("PAIRING_PIN_TTL_SECONDS", os.getenv("PAIRING_CODE_EXPIRATION_SECONDS", "300")))  # 5 minutes
+    AUTH_TOKEN_TTL_DAYS: int = int(os.getenv("AUTH_TOKEN_TTL_DAYS", os.getenv("AUTH_TOKEN_EXPIRATION_DAYS", "30")))
+    SESSION_TOKEN_TTL_MINUTES: int = int(os.getenv("SESSION_TOKEN_TTL_MINUTES", "480"))  # 8 hours
     HMAC_SECRET: str = os.getenv("HUB_HMAC_SECRET", "smart-spectator-local-secret-key-change-in-prod")
+    DEFAULT_ADMIN_USERNAME: str = os.getenv("HUB_ADMIN_USERNAME", "admin")
+    DEFAULT_ADMIN_PASSWORD: str = os.getenv("HUB_ADMIN_PASSWORD", "admin123")
+    ALLOWED_ORIGINS: List[str] = Field(default_factory=lambda: [
+        x.strip() for x in os.getenv(
+            "ALLOWED_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
+        ).split(",") if x.strip()
+    ])
     MAX_PIN_ATTEMPTS: int = int(os.getenv("MAX_PIN_ATTEMPTS", "5"))
     PIN_LOCKOUT_SECONDS: int = int(os.getenv("PIN_LOCKOUT_SECONDS", "60"))
     MAX_REQUEST_BODY_BYTES: int = 10 * 1024 * 1024  # 10 MB safety cap
@@ -92,6 +101,30 @@ class Settings(BaseModel):
     @property
     def is_testing(self) -> bool:
         return self.ENVIRONMENT == "test"
+
+    @model_validator(mode="after")
+    def resolve_paths(self):
+        base = self.BASE_DIR
+        for attr in [
+            "DATABASE_PATH", "RECORDINGS_DIR", "SNAPSHOTS_DIR", "BACKUP_DIR", "LOGS_DIR",
+            "DETECTOR_MODEL_PATH", "SPECTATORNET_MODEL_PATH", "SPECTATORNET_INT8_MODEL_PATH",
+            "SPECTATORNET_NORMALIZATION_PATH"
+        ]:
+            val = getattr(self, attr, None)
+            if val is not None and isinstance(val, Path) and not val.is_absolute():
+                setattr(self, attr, (base / val).resolve())
+        return self
+
+    @model_validator(mode="after")
+    def validate_production_security(self):
+        if self.ENVIRONMENT == "production":
+            if self.HMAC_SECRET == "smart-spectator-local-secret-key-change-in-prod":
+                raise ValueError("Production mode requires an explicit HUB_HMAC_SECRET environment variable")
+            if self.DEFAULT_ADMIN_PASSWORD == "admin123":
+                raise ValueError("Production mode requires an explicit HUB_ADMIN_PASSWORD environment variable")
+            if "*" in self.ALLOWED_ORIGINS:
+                raise ValueError("Wildcard '*' CORS origin is not permitted in production mode")
+        return self
 
 
 settings = Settings()

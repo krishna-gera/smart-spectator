@@ -67,7 +67,7 @@ class StreamSession:
             self._bytes_in_window = 0
 
         # Decode NAL unit
-        decoded_frames = self.decoder.decode_packet(payload)
+        decoded_frames = self.decoder.decode_packet(payload, is_keyframe=header.is_keyframe)
         if decoded_frames:
             self.latest_frame = decoded_frames[-1]
             self.latest_frame_pts = header.pts_us
@@ -77,15 +77,17 @@ class StreamSession:
 
     def get_metrics(self) -> Dict[str, Any]:
         """Returns real-time session telemetry."""
-        return {
+        metrics = {
             "camera_id": self.camera_id,
             "session_duration_seconds": round(time.time() - self.start_time, 1),
             "fps": self.current_fps,
             "bitrate_kbps": self.current_bitrate_kbps,
             "frames_received": self.frames_received,
             "dropped_packets": self.dropped_packets,
-            "has_decoded_frame": self.latest_frame is not None
+            "has_decoded_frame": self.latest_frame is not None,
         }
+        metrics.update(self.decoder.get_metrics())
+        return metrics
 
     def close(self):
         self.decoder.reset()

@@ -4,8 +4,9 @@ Handles device lifecycle: discovery registration, pairing PIN verification,
 token issuance, session authentication, and revocation.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
+import hmac
 import uuid
 
 from ..hub_backend.database.connection import db_session
@@ -29,9 +30,11 @@ class DeviceManager:
         """
         Processes an incoming pairing request from an Android camera node.
         Generates a 6-digit PIN with TTL and stores it in the ephemeral pairing table.
+        SECURITY: The PIN is NEVER returned in the HTTP response. It is only accessible
+        on the Hub console / operator screen via authenticated operator endpoint.
         """
         pin = generate_pairing_pin()
-        expires_at = datetime.utcnow() + timedelta(seconds=settings.PAIRING_PIN_TTL_SECONDS)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.PAIRING_PIN_TTL_SECONDS)
         
         with db_session() as conn:
             # Upsert into pairing_requests
@@ -62,7 +65,6 @@ class DeviceManager:
         
         return {
             "status": "pending_operator_approval",
-            "verification_code": pin,
             "expires_in_seconds": settings.PAIRING_PIN_TTL_SECONDS
         }
 
@@ -91,7 +93,9 @@ class DeviceManager:
                 
             # Check expiration
             expires_at = datetime.fromisoformat(req["expires_at"])
-            if datetime.utcnow() > expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires_at:
                 conn.execute("DELETE FROM pairing_requests WHERE device_id = ?", (device_id,))
                 return {"status": "error", "error": "Pairing PIN has expired. Please request a new PIN"}
                 
@@ -101,12 +105,17 @@ class DeviceManager:
                 return {"status": "error", "error": "Too many failed attempts. Pairing locked"}
                 
             # Constant-time comparison for PIN
-            if req["verification_pin"] != submitted_pin.strip():
-                conn.execute(
-                    "UPDATE pairing_requests SET attempts_remaining = attempts_remaining - 1 WHERE device_id = ?",
-                    (device_id,)
-                )
-                return {"status": "error", "error": "Invalid verification code"}
+            if not hmac.compare_digest(str(req["verification_pin"]), submitted_pin.strip()):
+                new_attempts = req["attempts_remaining"] - 1
+                if new_attempts <= 0:
+                    conn.execute("DELETE FROM pairing_requests WHERE device_id = ?", (device_id,))
+                    return {"status": "error", "error": "Too many failed attempts. Pairing locked"}
+                else:
+                    conn.execute(
+                        "UPDATE pairing_requests SET attempts_remaining = ? WHERE device_id = ?",
+                        (new_attempts, device_id)
+                    )
+                    return {"status": "error", "error": f"Invalid verification code. {new_attempts} attempt(s) remaining."}
                 
             # PIN is valid! Mint credential
             raw_token, token_hash = generate_device_token(device_id)
@@ -220,6 +229,21 @@ class DeviceManager:
         with db_session() as conn:
             cur = conn.execute("UPDATE devices SET status = 'revoked', auth_token_hash = NULL WHERE device_id = ?", (device_id,))
             return cur.rowcount > 0
+
+    def list_pending_pairings(self) -> List[Dict[str, Any]]:
+        """Returns active, unexpired pairing requests with PINs for operator display."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with db_session() as conn:
+            cursor = conn.execute(
+                """
+                SELECT device_id, device_name, device_model, verification_pin, created_at, expires_at, attempts_remaining
+                FROM pairing_requests
+                WHERE expires_at > ?
+                ORDER BY created_at DESC
+                """,
+                (now_iso,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
 
 device_manager = DeviceManager()

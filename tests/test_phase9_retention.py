@@ -65,7 +65,7 @@ def test_retention_prune_protects_locked_recordings():
     assert summary["locked_preserved"] >= 1
 
 
-def test_locked_recording_api_delete_defense(tmp_path):
+def test_locked_recording_api_delete_defense(tmp_path, admin_headers):
     client = TestClient(app)
 
     now = datetime.now(timezone.utc).isoformat()
@@ -81,16 +81,22 @@ def test_locked_recording_api_delete_defense(tmp_path):
         """, ("rec_api_locked_test", "cam_1", str(test_video), now, now, 10, 1024, now, 1))
         conn.commit()
 
-    # Attempt delete while locked -> 403 Forbidden
-    res_del = client.delete("/api/v1/recordings/rec_api_locked_test")
+    # Unauthenticated delete fails closed with 401
+    assert client.delete("/api/v1/recordings/rec_api_locked_test").status_code == 401
+
+    # Attempt delete while locked with admin credentials -> 403 Forbidden
+    res_del = client.delete("/api/v1/recordings/rec_api_locked_test", headers=admin_headers)
     assert res_del.status_code == 403
     assert "lock" in res_del.json()["detail"].lower()
 
-    # Unlock via patch
-    res_patch = client.patch("/api/v1/recordings/rec_api_locked_test/lock", json={"is_locked": False})
+    # Unlock via patch (fails closed without auth)
+    assert client.patch("/api/v1/recordings/rec_api_locked_test/lock", json={"is_locked": False}).status_code == 401
+
+    # Unlock with admin credentials
+    res_patch = client.patch("/api/v1/recordings/rec_api_locked_test/lock", json={"is_locked": False}, headers=admin_headers)
     assert res_patch.status_code == 200
     assert res_patch.json()["is_locked"] is False
 
     # Now delete succeeds
-    res_del2 = client.delete("/api/v1/recordings/rec_api_locked_test")
+    res_del2 = client.delete("/api/v1/recordings/rec_api_locked_test", headers=admin_headers)
     assert res_del2.status_code in (200, 204)

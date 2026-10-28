@@ -11,7 +11,7 @@ Tests:
 
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 import numpy as np
 import pytest
 
@@ -230,13 +230,36 @@ def test_tracker_occlusion_and_cleanup():
     assert len(tracker.tracks) == 0
 
 
+def test_bytetrack_kalman_motion_prediction():
+    """Verify that Kalman filter predicts position forward along velocity vector during occlusion."""
+    tracker = ByteTrackTracker(max_age_frames=5)
+    camera_id = "cam_kf_01"
+
+    # Frame 1: Object at [0.1, 0.1, 0.2, 0.2]
+    det1 = Detection(detection_id="d1", class_id=0, class_name="person", confidence=0.9, bbox_xyxy=[0.1, 0.1, 0.2, 0.2])
+    tracker.update(camera_id, [det1])
+
+    # Frame 2: Object moved right to [0.15, 0.1, 0.25, 0.2] (vx > 0)
+    det2 = Detection(detection_id="d2", class_id=0, class_name="person", confidence=0.9, bbox_xyxy=[0.15, 0.1, 0.25, 0.2])
+    tracks = tracker.update(camera_id, [det2])
+    assert len(tracks) == 1
+    assert tracks[0].velocity_vector[0] > 0.0  # Positive x-velocity
+
+    # Frame 3: Occluded (empty detection)
+    tracks_occluded = tracker.update(camera_id, [])
+    assert len(tracks_occluded) == 1
+    # Kalman filter must have predicted forward in x direction
+    pred_x1 = tracks_occluded[0].current_bbox[0]
+    assert pred_x1 >= 0.15, f"Expected predicted x1 >= 0.15, got {pred_x1}"
+
+
 # -----------------------------------------------------------------------------
 # 5. Observation Builder Tests
 # -----------------------------------------------------------------------------
 
 def test_observation_builder_structure():
     """Verify Observation conforms strictly to shared/schemas/v1/models.py."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     detections = [
         Detection(
             detection_id="det_01",

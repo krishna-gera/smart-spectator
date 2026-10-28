@@ -2,7 +2,7 @@
 
 > **A Local-First Visual Intelligence Ecosystem for Snapdragon-Powered PCs and Repurposed Edge Nodes.**  
 > Developed for the **Qualcomm Snapdragon AI Lab Build & Present Challenge**.  
-> **Release Version:** `1.2.0` | **Status:** Production Hardened & Challenge Ready | **Tests:** 127/127 PASSING
+> **Release Version:** `2.0.0` | **Status:** Production Hardened & Challenge Ready | **Tests:** 167/167 PASSING (100%)
 
 ---
 
@@ -13,17 +13,17 @@ Smart Spectator transforms ordinary Android smartphones into high-definition, in
 By offloading neural inference to the **45+ TOPS Qualcomm Hexagon NPU** on Snapdragon X-Series platforms, Smart Spectator delivers real-time spatial object detection, multi-object temporal tracking, and custom event reasoning (**SpectatorNet**) completely within the local network—with **zero cloud dependency, zero subscription costs, and guaranteed privacy**.
 
 ```
-Android Camera Node (Flutter / Kotlin / MediaCodec H.264)
-       ↓ (Low-latency TCP Stream over Local Wi-Fi / Port 8554)
-Smart Spectator Desktop Hub (FastAPI + SQLite WAL / Port 8000)
-       ↓ (Snapdragon Hexagon NPU / Qualcomm QNN / DirectML)
-Multi-Stage AI Perception (YOLOv8n → ByteTrack → SpectatorNet GRU)
+Android Camera Node (Flutter / Kotlin / CameraX / MediaCodec H.264 Encoder)
+       ↓ (Low-latency SSP1 Binary Packets over TCP / Port 8554)
+Smart Spectator Desktop Hub (FastAPI + SQLite WAL / Port 8000 / Port 8554)
+       ↓ (Snapdragon Hexagon NPU / Qualcomm QNN / DirectML / CoreML Fallback)
+Multi-Stage AI Perception (YOLOv8n → ByteTrack Kalman Filter → SpectatorNet GRU)
        ↓
-Event & Decision Engine (ROI Polygon Zones / Temporal Rules / Prioritization)
+Macro Intelligence & Rules (Context Engine → Incident Engine → Zones → State Machine)
        ↓
-Local Storage (SQLite WAL + Circular Ring Buffer MP4 Recordings + Retention Lock)
+Local Storage (SQLite WAL via Repositories + Circular Ring Buffer MP4 + Retention Lock)
        ↓
-Monitoring Client Web Dashboard & WebSocket Real-Time Alert Feed (Schema 1.2.0)
+Monitoring Client Web Dashboard & WebSocket Real-Time Alert Feed (Schema 2.0.0)
 ```
 
 ---
@@ -38,8 +38,9 @@ Monitoring Client Web Dashboard & WebSocket Real-Time Alert Feed (Schema 1.2.0)
 - **Phase 5 (Monitoring Client Application):** ✅ **COMPLETED** (Operator-grade single page app, OLED dark theme, Multi-camera grid, Live view with bounding box overlays, Interactive polygon canvas, Rule manager, Event inspector, MP4 clip player, System telemetry)
 - **Phase 6 (Production Hardening & Device Integration):** ✅ **COMPLETED** (Centralized configuration, rotating logs with secret sanitization, health diagnostics `/health/detailed`, SQLite versioned migrations, online hot backup/restore, 500MB disk guard, Android lifecycle handling and exponential backoff)
 - **Phase 7 (Snapdragon Optimization & Model Releases):** ✅ **COMPLETED** (Tiered inference fallback QNN -> DirectML/CoreML -> CPU, versioned model releases FP32/INT8 in `ai/models/releases/`, real hardware benchmarking suite, CI/CD pipeline, demo scenario runner, release packaging v1.0.0)
-- **Phase 8 (Real-Device Deployment, End-to-End Validation & Demo Readiness):** ✅ **COMPLETED** (Windows on Snapdragon deployment toolchain `install_windows.ps1`, Android production release auditing, unified 11-subsystem diagnostics endpoint `/api/v1/system/diagnostics`, model integrity SHA-256 validation, first-run doctor `scripts/doctor.py`, hardware runtime benchmark `scripts/validate_snapdragon_runtime.py`, deterministic demo runner `scripts/run_demo.py`, 100 automated unit & integration tests)
-- **Phase 9 (Polished Intelligent Local Monitoring Product):** ✅ **COMPLETED** (Modernized OLED client, causal timeline milestones, deterministic event prioritization CRITICAL/HIGH/MEDIUM/LOW, multi-tier notification cooldowns, retention lock defense, model registry, offline hardware A/B benchmarking, zero-secret safe config export/import, 127 total automated tests)
+- **Phase 8 (Real-Device Deployment, End-to-End Validation & Demo Readiness):** ✅ **COMPLETED** (Windows on Snapdragon deployment toolchain `install_windows.ps1`, Android production release auditing, unified 11-subsystem diagnostics endpoint `/api/v1/system/diagnostics`, model integrity SHA-256 validation, first-run doctor `scripts/doctor.py`, hardware runtime benchmark `scripts/validate_snapdragon_runtime.py`, deterministic demo runner `scripts/run_demo.py`)
+- **Phase 9 (Polished Intelligent Local Monitoring Product):** ✅ **COMPLETED** (Modernized OLED client, causal timeline milestones, deterministic event prioritization CRITICAL/HIGH/MEDIUM/LOW, multi-tier notification cooldowns, retention lock defense, model registry, offline hardware A/B benchmarking, zero-secret safe config export/import)
+- **Phase 10 & Remediated Production Core (Master Engineering Remediation):** ✅ **COMPLETED** (Native Android CameraX + MediaCodec H.264 capture pipeline; Hub PyAV real H.264 keyframe-gated decoding; ByteTrack 8-state constant velocity linear Kalman Filter; full REST API authentication with PBKDF2 hashing, signed session tokens, and RBAC hierarchy; protected destructive endpoints; thread-safe asyncio WebSocket broadcaster; database Repository pattern with consolidated storage retention; correlation IDs; CI/CD security and multi-architecture matrix; 167 total automated tests passing 100%)
 
 ---
 
@@ -103,7 +104,7 @@ smart-spectator/
 │   ├── health_windows.ps1          # Windows health probe
 │   └── service_status.ps1          # Windows process monitor
 │
-└── tests/                          # 100 automated unit & integration tests (Pytest)
+└── tests/                          # 167 automated unit & integration tests (Pytest)
 ```
 
 ---
@@ -141,7 +142,7 @@ Open PowerShell 7 as Administrator:
 .\scripts\stop_windows.ps1
 ```
 
-### 4. Run Automated Test Suite (100 Tests)
+### 4. Run Automated Test Suite (167 Tests)
 ```bash
 PYTHONPATH=. pytest -v
 ```

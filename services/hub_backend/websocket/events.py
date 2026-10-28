@@ -7,7 +7,7 @@ Pushes event_created, event_updated, event_resolved, camera_connected, camera_di
 import json
 import asyncio
 from datetime import datetime, timezone
-from typing import Set, Dict, Any
+from typing import Set, Dict, Any, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from services.event_engine import event_engine
@@ -22,8 +22,29 @@ class EventStreamHub:
         self.active_clients: Set[WebSocket] = set()
         self.client_filters: Dict[WebSocket, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Explicitly set the main asyncio event loop for threadsafe cross-thread broadcasts."""
+        self._loop = loop
+
+    def get_loop(self) -> Optional[asyncio.AbstractEventLoop]:
+        """Returns the active asyncio event loop."""
+        if self._loop and not self._loop.is_closed():
+            return self._loop
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            return None
 
     async def register(self, websocket: WebSocket):
+        # Auto-capture running loop from websocket endpoint context if not already set
+        if self._loop is None or self._loop.is_closed():
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+
         await websocket.accept()
         async with self._lock:
             self.active_clients.add(websocket)
@@ -94,10 +115,15 @@ event_stream_hub = EventStreamHub()
 # Synchronous bridge from EventEngine thread to asyncio event loop
 def _on_event_engine_broadcast(msg_type: str, data: Dict[str, Any]):
     try:
-        loop = asyncio.get_running_loop()
-        asyncio.run_coroutine_threadsafe(event_stream_hub.broadcast(msg_type, data), loop)
-    except RuntimeError:
-        pass
+        loop = event_stream_hub.get_loop()
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(event_stream_hub.broadcast(msg_type, data), loop)
+        else:
+            import logging
+            logging.getLogger("smart_spectator.websocket").debug("No running asyncio loop available for event broadcast")
+    except Exception as e:
+        import logging
+        logging.getLogger("smart_spectator.websocket").warning(f"Failed to schedule event broadcast: {e}")
 
 
 # Register listener with EventEngine

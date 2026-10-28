@@ -5,12 +5,14 @@ Reports statistical deviations, baselines, and explanation strings.
 """
 
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Query, Body, status
+from fastapi import APIRouter, HTTPException, Query, Body, status, Depends
 
 from services.event_engine.anomaly import (
     anomaly_detector,
     baseline_engine,
 )
+from ..auth.dependencies import require_operator
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/anomalies", tags=["Anomaly Detection & Baselines"])
 
@@ -35,7 +37,10 @@ def list_baselines(camera_id: Optional[str] = Query(None)):
 
 
 @router.post("/recompute-baselines", status_code=status.HTTP_200_OK)
-def recompute_baselines(camera_id: Optional[str] = Query(None)):
+def recompute_baselines(
+    camera_id: Optional[str] = Query(None),
+    operator: Principal = Depends(require_operator),
+):
     """Recomputes and persists baseline metrics from historical event frequency."""
     profiles = baseline_engine.compute_hourly_frequency_baselines(camera_id=camera_id, persist=True)
     return {
@@ -46,7 +51,10 @@ def recompute_baselines(camera_id: Optional[str] = Query(None)):
 
 
 @router.post("/evaluate", response_model=Dict[str, Any])
-def evaluate_anomaly(payload: Dict[str, Any] = Body(...)):
+def evaluate_anomaly(
+    payload: Dict[str, Any] = Body(...),
+    operator: Principal = Depends(require_operator),
+):
     """Evaluates whether an observed event count constitutes a statistical anomaly."""
     observed = float(payload.get("observed_count", 0.0))
     hour = int(payload.get("hour_of_day", 12))

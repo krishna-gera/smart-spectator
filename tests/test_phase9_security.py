@@ -29,7 +29,7 @@ def setup_phase9_security_env(tmp_path):
     yield
 
 
-def test_recording_path_traversal_defense():
+def test_recording_path_traversal_defense(admin_headers, viewer_headers):
     client = TestClient(app)
 
     # Insert malicious recording path attempting path traversal
@@ -42,27 +42,33 @@ def test_recording_path_traversal_defense():
         """, ("rec_traversal_attack", "cam_1", "../../../etc/passwd", "2026-09-30T10:00:00Z", "2026-09-30T10:00:00Z", 5, 1024, "2026-09-30T10:00:00Z", 0))
         conn.commit()
 
-    # Attempt to download traversed file -> MUST return 400 or 404 (blocked by resolve_safe_recording_path)
-    res_dl = client.get("/api/v1/recordings/rec_traversal_attack/download")
+    # Unauthenticated download fails closed with 401
+    assert client.get("/api/v1/recordings/rec_traversal_attack/download").status_code == 401
+
+    # Attempt to download traversed file with viewer auth -> MUST return 400 or 404 (blocked by resolve_safe_recording_path)
+    res_dl = client.get("/api/v1/recordings/rec_traversal_attack/download", headers=viewer_headers)
     assert res_dl.status_code in (400, 404)
 
-    # Attempt to delete traversed file -> Database row removed but file outside recordings_dir is protected
-    res_del = client.delete("/api/v1/recordings/rec_traversal_attack")
+    # Unauthenticated delete fails closed with 401
+    assert client.delete("/api/v1/recordings/rec_traversal_attack").status_code == 401
+
+    # Attempt to delete traversed file with admin auth -> Database row removed but file outside recordings_dir is protected
+    res_del = client.delete("/api/v1/recordings/rec_traversal_attack", headers=admin_headers)
     assert res_del.status_code in (200, 204)
 
 
-def test_telemetry_and_audit_zero_secrets():
+def test_telemetry_and_audit_zero_secrets(viewer_headers):
     client = TestClient(app)
 
     # Check AI Diagnostics
-    res_tele = client.get("/api/v1/ai/status")
+    res_tele = client.get("/api/v1/ai/status", headers=viewer_headers)
     assert res_tele.status_code == 200
     tele_text = res_tele.text.lower()
     assert "hmac" not in tele_text
     assert "secret" not in tele_text
     assert "private_key" not in tele_text
 
-    # Check System Health
+    # Check System Health (public endpoint)
     res_health = client.get("/api/v1/health")
     assert res_health.status_code == 200
     assert "token" not in res_health.text.lower()

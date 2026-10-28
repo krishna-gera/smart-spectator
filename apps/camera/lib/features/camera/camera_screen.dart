@@ -4,6 +4,8 @@ import 'package:camera/camera.dart';
 import '../../core/storage/credential_store.dart';
 import '../../core/streaming/media_transport.dart';
 import '../../core/control/control_client.dart';
+import '../../core/codec/h264_encoder.dart';
+import '../../core/protocol/packet_encoder.dart';
 
 class CameraScreen extends StatefulWidget {
   final DeviceCredentials credentials;
@@ -25,6 +27,16 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   bool _isCameraInitialized = false;
   bool _isStreaming = false;
 
+  final H264HardwareEncoder _encoder = H264HardwareEncoder();
+  bool _isProcessingFrame = false;
+  int _sequenceNumber = 0;
+  int _framesCaptured = 0;
+  int _packetsSent = 0;
+  int _bytesSent = 0;
+  double _fps = 0.0;
+  DateTime? _lastFpsUpdate;
+  int _framesInWindow = 0;
+
   MediaTransport? _mediaTransport;
   ControlClient? _controlClient;
   TransportStatus _transportStatus = TransportStatus.disconnected;
@@ -40,8 +52,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Android lifecycle management (Section 6)
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      if (_isStreaming) {
+        _stopStreamingPipeline();
+      }
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         _cameraController?.dispose();
         _cameraController = null;
@@ -64,8 +78,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (_cameras.isNotEmpty) {
         _cameraController = CameraController(
           _cameras[0],
-          ResolutionPreset.high, // 720p target as per Phase 0
+          ResolutionPreset.high, // 720p target as per Phase 0 / SSP1
           enableAudio: false,
+          imageFormatGroup: ImageFormatGroup.yuv420,
         );
         await _cameraController!.initialize();
         if (mounted) {
@@ -107,25 +122,134 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     }
   }
 
-  void _toggleStreaming() async {
-    if (_isStreaming) {
-      _mediaTransport?.disconnect();
-      _controlClient?.stop();
+  Future<void> _startStreamingPipeline() async {
+    if (_mediaTransport == null || _cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+
+    await _mediaTransport?.connect();
+    await _controlClient?.start();
+
+    final ok = await _encoder.init(
+      width: 1280,
+      height: 720,
+      bitrate: 2000000,
+      fps: 30,
+      keyframeInterval: 1,
+    );
+
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hardware H.264 encoder initialization failed')),
+      );
+      return;
+    }
+
+    _sequenceNumber = 0;
+    _framesCaptured = 0;
+    _packetsSent = 0;
+    _bytesSent = 0;
+    _framesInWindow = 0;
+    _lastFpsUpdate = DateTime.now();
+
+    try {
+      await _cameraController!.startImageStream((CameraImage image) async {
+        if (!_isStreaming || _isProcessingFrame) return;
+        _isProcessingFrame = true;
+
+        try {
+          _framesCaptured++;
+          _framesInWindow++;
+          final now = DateTime.now();
+          if (_lastFpsUpdate != null && now.difference(_lastFpsUpdate!).inMilliseconds >= 1000) {
+            final elapsedSec = now.difference(_lastFpsUpdate!).inMilliseconds / 1000.0;
+            if (mounted) {
+              setState(() {
+                _fps = _framesInWindow / elapsedSec;
+              });
+            }
+            _framesInWindow = 0;
+            _lastFpsUpdate = now;
+          }
+
+          final yuvBytes = H264HardwareEncoder.extractYuvFromImage(image);
+          final timestampUs = DateTime.now().microsecondsSinceEpoch;
+          final packets = await _encoder.encodeYuvFrame(
+            yuvBytes,
+            image.width,
+            image.height,
+            timestampUs,
+          );
+
+          for (final pkt in packets) {
+            final frameType = pkt.isKeyframe ? PacketEncoder.frameTypeIdr : PacketEncoder.frameTypeP;
+            final wirePacket = PacketEncoder.encodePacket(
+              frameType: frameType,
+              sequenceNumber: _sequenceNumber++,
+              ptsUs: pkt.ptsUs,
+              payload: pkt.data,
+            );
+
+            _mediaTransport?.sendPacket(wirePacket);
+            _packetsSent++;
+            _bytesSent += wirePacket.length;
+          }
+
+          if (mounted && _packetsSent % 15 == 0) {
+            setState(() {});
+          }
+        } catch (e) {
+          debugPrint('Frame processing error: $e');
+        } finally {
+          _isProcessingFrame = false;
+        }
+      });
+
+      if (mounted) {
+        setState(() {
+          _isStreaming = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to start image stream: $e');
+      await _encoder.stop();
+      if (mounted) {
+        setState(() {
+          _isStreaming = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopStreamingPipeline() async {
+    try {
+      if (_cameraController != null && _cameraController!.value.isStreamingImages) {
+        await _cameraController!.stopImageStream();
+      }
+    } catch (_) {}
+
+    await _encoder.stop();
+    _mediaTransport?.disconnect();
+    _controlClient?.stop();
+
+    if (mounted) {
       setState(() {
         _isStreaming = false;
-      });
-    } else {
-      await _mediaTransport?.connect();
-      await _controlClient?.start();
-      setState(() {
-        _isStreaming = true;
+        _fps = 0.0;
       });
     }
   }
 
+  void _toggleStreaming() async {
+    if (_isStreaming) {
+      await _stopStreamingPipeline();
+    } else {
+      await _startStreamingPipeline();
+    }
+  }
+
   Future<void> _unpair() async {
-    _mediaTransport?.disconnect();
-    _controlClient?.stop();
+    await _stopStreamingPipeline();
     await CredentialStore.clear();
     widget.onUnpaired();
   }
@@ -133,6 +257,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _stopStreamingPipeline();
     _transportSub?.cancel();
     _mediaTransport?.dispose();
     _controlClient?.stop();
@@ -142,6 +267,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
+    final double mbSent = _bytesSent / (1024 * 1024);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
@@ -219,9 +346,21 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                         ),
                       ],
                     ),
-                    const Text(
-                      '720p @ 30 FPS',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _isStreaming ? '${_fps.toStringAsFixed(1)} FPS' : '720p @ 30 FPS',
+                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                        ),
+                        if (_isStreaming) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '${mbSent.toStringAsFixed(2)} MB ($_framesCaptured frames, $_packetsSent pkts)',
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                        ]
+                      ],
                     ),
                   ],
                 ),

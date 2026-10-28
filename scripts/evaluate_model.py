@@ -13,11 +13,20 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import sys
+
+# Ensure repository root is on sys.path
+root_path = Path(__file__).resolve().parent.parent
+if str(root_path) not in sys.path:
+    sys.path.insert(0, str(root_path))
+
 import time
 from typing import Dict, Any, List
 import numpy as np
 
 try:
+    import os
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # see services/__init__.py
     import onnxruntime as ort
 except ImportError:
     ort = None

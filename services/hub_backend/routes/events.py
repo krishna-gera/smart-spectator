@@ -6,13 +6,15 @@ Conforms to Sections 19 & 20 of Phase 4 specification.
 from datetime import datetime, timezone
 import json
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Depends, status
 from pydantic import BaseModel
 
 from shared.schemas.v1.models import Event, EventStatus, EventSeverity
 from services.hub_backend.database.connection import db_session
 from services.event_engine import event_engine
 from services.event_engine.state_machine import InvalidStateTransitionError
+from ..auth.dependencies import require_operator, require_viewer
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -100,40 +102,10 @@ def _row_to_event_dict(r: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("/stats", response_model=Dict[str, Any])
-def get_event_stats() -> Dict[str, Any]:
+def get_event_stats(viewer: Principal = Depends(require_viewer)) -> Dict[str, Any]:
     """Retrieves operational summary statistics for events."""
-    with db_session() as conn:
-        total = conn.execute("SELECT COUNT(*) as c FROM events").fetchone()["c"]
-        active = conn.execute("SELECT COUNT(*) as c FROM events WHERE status IN ('detected', 'confirmed', 'active')").fetchone()["c"]
-
-        # Counts by priority
-        p_rows = conn.execute("SELECT priority, COUNT(*) as c FROM events GROUP BY priority").fetchall()
-        by_priority = {r["priority"]: r["c"] for r in p_rows}
-
-        # Counts by type
-        t_rows = conn.execute("SELECT event_type, COUNT(*) as c FROM events GROUP BY event_type ORDER BY c DESC LIMIT 10").fetchall()
-        by_type = {r["event_type"]: r["c"] for r in t_rows}
-
-        # Counts by severity
-        s_rows = conn.execute("SELECT severity, COUNT(*) as c FROM events GROUP BY severity").fetchall()
-        by_severity = {r["severity"]: r["c"] for r in s_rows}
-
-        # Recent 24h count
-        recent = conn.execute("SELECT COUNT(*) as c FROM events WHERE timestamp >= datetime('now', '-24 hours')").fetchone()["c"]
-
-        return {
-            "total_events": total,
-            "active_events": active,
-            "events_last_24h": recent,
-            "by_priority": {
-                "CRITICAL": by_priority.get("CRITICAL", 0),
-                "HIGH": by_priority.get("HIGH", 0),
-                "MEDIUM": by_priority.get("MEDIUM", 0),
-                "LOW": by_priority.get("LOW", 0),
-            },
-            "by_severity": by_severity,
-            "by_type": by_type,
-        }
+    from services.hub_backend.database.repositories.event_repo import event_repository
+    return event_repository.get_stats()
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -152,6 +124,7 @@ def list_events(
     sort_order: str = Query("desc"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    viewer: Principal = Depends(require_viewer),
 ):
     """Lists confirmed events with advanced filtering, sorting, and bounded pagination."""
     query = "SELECT * FROM events WHERE 1=1"
@@ -205,18 +178,21 @@ def list_events(
 
 
 @router.get("/{event_id}", response_model=Dict[str, Any])
-def get_event(event_id: str):
+def get_event(event_id: str, viewer: Principal = Depends(require_viewer)):
     """Fetches full details for a single event."""
-    with db_session() as conn:
-        cursor = conn.execute("SELECT * FROM events WHERE event_id = ?", (event_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail=f"Event '{event_id}' not found.")
-        return _row_to_event_dict(row)
+    from services.hub_backend.database.repositories.event_repo import event_repository
+    row = event_repository.get_by_id(event_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Event '{event_id}' not found.")
+    return _row_to_event_dict(row)
 
 
 @router.get("/{event_id}/predictions", response_model=List[Dict[str, Any]])
-def get_event_predictions(event_id: str, limit: int = Query(20, ge=1, le=50)):
+def get_event_predictions(
+    event_id: str,
+    limit: int = Query(20, ge=1, le=50),
+    viewer: Principal = Depends(require_viewer)
+):
     """Fetches raw temporal model predictions correlated with this event."""
     with db_session() as conn:
         cursor = conn.execute("SELECT camera_id, timestamp, start_time, end_time FROM events WHERE event_id = ?", (event_id,))
@@ -253,7 +229,7 @@ def get_event_predictions(event_id: str, limit: int = Query(20, ge=1, le=50)):
 
 
 @router.post("/{event_id}/acknowledge", response_model=Dict[str, Any])
-def acknowledge_event(event_id: str):
+def acknowledge_event(event_id: str, operator: Principal = Depends(require_operator)):
     """Marks an event acknowledged by the user."""
     try:
         ev = event_engine.acknowledge_event(event_id)
@@ -265,7 +241,7 @@ def acknowledge_event(event_id: str):
 
 
 @router.post("/{event_id}/dismiss", response_model=Dict[str, Any])
-def dismiss_event(event_id: str):
+def dismiss_event(event_id: str, operator: Principal = Depends(require_operator)):
     """Dismisses an event with state machine validation."""
     try:
         ev = event_engine.dismiss_event(event_id)
@@ -279,7 +255,7 @@ def dismiss_event(event_id: str):
 
 
 @router.post("/{event_id}/resolve", response_model=Dict[str, Any])
-def resolve_event(event_id: str):
+def resolve_event(event_id: str, operator: Principal = Depends(require_operator)):
     """Manually resolves an active event."""
     try:
         ev = event_engine.resolve_event(event_id)

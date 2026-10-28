@@ -27,7 +27,9 @@ def setup_test_db(tmp_path):
 
 
 def test_local_memory_historical_queries():
-    base_time = datetime(2026, 9, 30, 23, 15, 0, tzinfo=timezone.utc)
+    # Yesterday 23:15 UTC: all three events share one UTC date and stay inside the 2-day window
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+    base_time = yesterday.replace(hour=23, minute=15, second=0, microsecond=0)
 
     # Insert events into test database
     with get_db() as conn:

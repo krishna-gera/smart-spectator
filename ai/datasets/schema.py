@@ -3,7 +3,7 @@ Smart Spectator - Dataset & Annotation Schemas
 Conforms strictly to Phase 3 data specifications.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
@@ -22,7 +22,7 @@ class TemporalAnnotation(BaseModel):
     confidence: float = 1.0
     annotator: str = "system"
     notes: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class SequenceSample(BaseModel):
@@ -65,7 +65,7 @@ class DatasetMetadata(BaseModel):
     """Top-level dataset version metadata for reproducibility."""
     dataset_name: str = "smart_spectator"
     dataset_version: str = "v1.0"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     sequence_length: int = 30
     fps: float = 5.0
     max_objects_per_frame: int = 16

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 try:
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # see services/__init__.py
     import onnxruntime as ort
     HAS_ORT = True
 except ImportError:

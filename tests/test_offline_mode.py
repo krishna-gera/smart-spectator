@@ -103,7 +103,10 @@ def test_end_to_end_offline_visual_pipeline(offline_env):
         device_model="Snapdragon Test Node"
     )
     assert req_res["status"] == "pending_operator_approval"
-    pin = req_res["verification_code"]
+    assert "verification_code" not in req_res
+    pending = device_manager.list_pending_pairings()
+    target = next(p for p in pending if p["device_id"] == "offline_phone_01")
+    pin = target["verification_pin"]
 
     verify_res = device_manager.verify_pairing("offline_phone_01", pin)
     assert verify_res["status"] == "paired"

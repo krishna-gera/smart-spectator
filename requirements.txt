@@ -1,0 +1,28 @@
+# Smart Spectator Desktop Hub - Core Python Dependencies
+# Target Python Version: >= 3.10, < 3.14
+
+# Web Framework & API
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.8.0
+websockets>=13.0
+requests>=2.31.0
+
+# Network Discovery
+zeroconf>=0.130.0
+
+# Numerical & Media Processing
+numpy>=1.26.0,<3.0.0
+pillow>=10.0.0
+opencv-python>=4.8.0
+av>=12.0.0
+
+# AI / ML Inference
+onnxruntime>=1.18.0
+
+# System Telemetry & Utilities
+psutil>=5.9.0
+pyyaml>=6.0
+
+# Testing & Quality
+pytest>=8.0.0

@@ -9,6 +9,8 @@ import argparse
 from pathlib import Path
 import sys
 import numpy as np
+import os
+os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # see services/__init__.py
 import onnxruntime as ort
 import torch
 

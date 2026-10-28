@@ -1,8 +1,8 @@
-"""
+/*
 Smart Spectator - Media Transport & Reconnect State Machine
 Conforms to Sections 6, 7, 8, 11 of Phase 6 Master Specification.
 Enforces exponential backoff: 1s, 2s, 4s, 8s, 16s, up to 30s max, resetting on connection.
-"""
+*/
 
 import 'dart:async';
 import 'dart:math';

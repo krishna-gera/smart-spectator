@@ -374,4 +374,27 @@ CREATE TABLE IF NOT EXISTS model_drift_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_drift_model ON model_drift_logs(model_id, created_at DESC);
+
+-- 23. Users Table (RBAC)
+CREATE TABLE IF NOT EXISTS users (
+    user_id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    salt TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('admin', 'operator', 'viewer')),
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+-- 24. Revoked Tokens Table
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+    token_id TEXT PRIMARY KEY,
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_exp ON revoked_tokens(expires_at);
 """

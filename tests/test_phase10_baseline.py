@@ -25,7 +25,9 @@ def setup_test_db(tmp_path):
 
 
 def test_baseline_hourly_frequency_computation():
-    base_time = datetime(2026, 9, 30, 14, 0, 0, tzinfo=timezone.utc)
+    # Anchor to yesterday 14:00 UTC so all 3 days stay inside the 14-day lookback window
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+    base_time = yesterday.replace(hour=14, minute=0, second=0, microsecond=0)
 
     # Insert synthetic event counts for hour 14 across 3 consecutive days
     with get_db() as conn:

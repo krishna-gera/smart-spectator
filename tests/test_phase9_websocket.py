@@ -42,3 +42,33 @@ def test_websocket_subscription_filter():
         assert resp["type"] == "subscription_ack"
         assert resp["schema_version"] == "1.2.0"
         assert resp["filter"]["camera_id"] == "cam_alpha"
+
+
+def test_websocket_cross_thread_event_broadcast():
+    """Verifies events emitted from background OS worker threads reach connected WebSocket clients."""
+    import threading
+    import time
+    from services.hub_backend.websocket.events import _on_event_engine_broadcast
+
+    client = TestClient(app)
+    with client.websocket_connect("/api/v1/events/stream") as websocket:
+        # Spawn broadcast from an OS worker thread with no event loop
+        def worker():
+            time.sleep(0.05)
+            _on_event_engine_broadcast("event_created", {
+                "event_id": "evt_worker_999",
+                "event_type": "PERSON_ENTERED",
+                "camera_id": "cam_alpha",
+                "confidence": 0.95
+            })
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+        # Receive broadcast over WebSocket
+        msg = websocket.receive_json()
+        assert msg["type"] == "event_created"
+        assert msg["schema_version"] == "1.2.0"
+        assert msg["data"]["event_id"] == "evt_worker_999"
+        assert msg["data"]["confidence"] == 0.95
+        t.join(timeout=1.0)

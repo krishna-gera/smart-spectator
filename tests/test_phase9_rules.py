@@ -43,7 +43,7 @@ def test_time_window_evaluation():
     assert is_time_in_range(time(21, 59), night_start, night_end) is False
 
 
-def test_rule_api_crud_lifecycle():
+def test_rule_api_crud_lifecycle(operator_headers, viewer_headers):
     client = TestClient(app)
 
     # 1. Create rule
@@ -62,26 +62,29 @@ def test_rule_api_crud_lifecycle():
         "priority_override": "CRITICAL"
     }
 
-    res = client.post("/api/v1/rules", json=rule_data)
+    # Unauthenticated create fails closed
+    assert client.post("/api/v1/rules", json=rule_data).status_code == 401
+
+    res = client.post("/api/v1/rules", json=rule_data, headers=operator_headers)
     assert res.status_code in (200, 201)
     created = res.json()
     assert created["name"] == "Overnight Intrusion Rule"
     rule_id = created["rule_id"]
 
     # 2. Disable rule
-    res_dis = client.post(f"/api/v1/rules/{rule_id}/disable")
+    res_dis = client.post(f"/api/v1/rules/{rule_id}/disable", headers=operator_headers)
     assert res_dis.status_code == 200
     assert res_dis.json()["enabled"] is False
 
     # 3. Enable rule
-    res_en = client.post(f"/api/v1/rules/{rule_id}/enable")
+    res_en = client.post(f"/api/v1/rules/{rule_id}/enable", headers=operator_headers)
     assert res_en.status_code == 200
     assert res_en.json()["enabled"] is True
 
     # 4. Delete rule
-    res_del = client.delete(f"/api/v1/rules/{rule_id}")
+    res_del = client.delete(f"/api/v1/rules/{rule_id}", headers=operator_headers)
     assert res_del.status_code in (200, 204)
 
     # Verify deleted
-    res_get = client.get(f"/api/v1/rules/{rule_id}")
+    res_get = client.get(f"/api/v1/rules/{rule_id}", headers=viewer_headers)
     assert res_get.status_code == 404

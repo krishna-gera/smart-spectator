@@ -29,3 +29,6 @@ ai/datasets/smart_spectator/raw/
 ai/datasets/smart_spectator/processed/
 artifacts/runs/**/*.pt
 *.tmp
+
+# macOS
+.DS_Store

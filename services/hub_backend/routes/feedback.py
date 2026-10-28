@@ -5,15 +5,20 @@ Allows operators to submit validation ratings and tracks model accuracy/drift.
 """
 
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Query, Body, status
+from fastapi import APIRouter, HTTPException, Query, Body, status, Depends
 
 from ai.monitoring import feedback_manager, drift_monitor
+from ..auth.dependencies import require_operator
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/feedback", tags=["Human Feedback & Model Drift"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def submit_feedback(payload: Dict[str, Any] = Body(...)):
+def submit_feedback(
+    payload: Dict[str, Any] = Body(...),
+    operator: Principal = Depends(require_operator),
+):
     """Submits operator validation rating for an event (CORRECT, INCORRECT, NOT_SURE)."""
     event_id = payload.get("event_id")
     rating = payload.get("feedback")
@@ -22,7 +27,7 @@ def submit_feedback(payload: Dict[str, Any] = Body(...)):
 
     notes = payload.get("notes")
     model_version = payload.get("model_version", "spectatornet_v1_int8")
-    operator_id = payload.get("operator_id", "operator")
+    operator_id = operator.username
 
     try:
         return feedback_manager.record_feedback(

@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 from services.device_manager.manager import device_manager
 from services.stream_engine.server import stream_engine
 from ..database.connection import db_session
+from ..auth.dependencies import require_admin, require_operator, require_viewer
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/devices", tags=["Devices & Pairing"])
 
@@ -32,6 +34,7 @@ class PairingVerifyBody(BaseModel):
 def request_pairing(body: PairingRequestBody, request: Request):
     """
     Step 1 of pairing: Node presents its identity and requests a 6-digit verification PIN.
+    PIN is not returned in response; operator views it on Hub console.
     """
     client_ip = request.client.host if request.client else None
     result = device_manager.request_pairing(
@@ -61,21 +64,19 @@ def verify_pairing(body: PairingVerifyBody):
 
 
 @router.get("", status_code=status.HTTP_200_OK)
-def list_devices():
+def list_devices(viewer: Principal = Depends(require_viewer)):
     """Returns list of registered devices and their connectivity states."""
     return device_manager.list_devices()
 
 
 @router.get("/pairing/pending", status_code=status.HTTP_200_OK)
-def list_pending_pairing_requests():
+def list_pending_pairing_requests(operator: Principal = Depends(require_operator)):
     """Desktop Hub utility: returns pending PINs to display on Desktop UI."""
-    with db_session() as conn:
-        cur = conn.execute("SELECT device_id, device_name, device_model, verification_pin, expires_at FROM pairing_requests WHERE expires_at > CURRENT_TIMESTAMP")
-        return cur.fetchall()
+    return device_manager.list_pending_pairings()
 
 
 @router.get("/{device_id}", status_code=status.HTTP_200_OK)
-def get_device(device_id: str):
+def get_device(device_id: str, viewer: Principal = Depends(require_viewer)):
     """Fetches single device details."""
     with db_session() as conn:
         cur = conn.execute("SELECT * FROM devices WHERE device_id = ?", (device_id,))
@@ -88,8 +89,8 @@ def get_device(device_id: str):
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_200_OK)
-def revoke_device(device_id: str):
-    """Instantly revokes authentication for a device and halts its active streams."""
+def revoke_device(device_id: str, admin: Principal = Depends(require_admin)):
+    """Instantly revokes authentication for a device and halts its active streams. Admin only."""
     cam = device_manager.get_camera_for_device(device_id)
     if cam:
         cam_id = cam["camera_id"]

@@ -72,12 +72,12 @@ def main():
         "capabilities": ["h264", "1080p", "torch", "ptz_simulated"]
     }
     resp1 = http_post_json(f"{BASE_URL}/devices/pair/request", pair_req)
-    pin = resp1["pairing_pin"]
+    pin = resp1.get("verification_code") or resp1.get("pairing_pin")
     print(f"✔ Hub generated PIN: {pin}")
 
-    resp2 = http_post_json(f"{BASE_URL}/devices/pair/verify", {"device_id": dev_id, "pin": pin})
-    token = resp2["auth_token"]
-    camera_id = resp2["assigned_camera_id"]
+    resp2 = http_post_json(f"{BASE_URL}/devices/pair/verify", {"device_id": dev_id, "verification_code": pin})
+    token = resp2.get("device_token") or resp2.get("auth_token")
+    camera_id = resp2.get("camera_id") or resp2.get("assigned_camera_id")
     print(f"✔ Paired successfully! Camera ID: {camera_id}")
 
     # 3. Simulate Camera Frame Ingestion into AI Pipeline

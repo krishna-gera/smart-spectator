@@ -63,14 +63,16 @@ def run_demo():
         device_name="Demo Snapdragon Camera Phone",
         device_model="Galaxy S23 / Snapdragon 8 Gen 2"
     )
-    pin_code = pair_req["verification_code"]
-    print(f"[*] Generated 6-Digit Pairing PIN: {pin_code}")
+    pending = device_manager.list_pending_pairings()
+    target_pair = next((p for p in pending if p["device_id"] == dev_id), None)
+    pin_code = target_pair["verification_pin"] if target_pair else "000000"
+    print(f"[*] Hub Operator Console Displaying 6-Digit PIN: {pin_code}")
 
     verify_res = device_manager.verify_pairing(
         device_id=dev_id,
         submitted_pin=pin_code
     )
-    token = verify_res.get("token")
+    token = verify_res.get("device_token")
     print(f"[+] Device Authenticated Successfully! Opaque token issued: [REDACTED]")
 
     # Step 3: Stream Ingestion Initialization
@@ -85,22 +87,44 @@ def run_demo():
     # Step 4: Level 1 Detection
     print("\n--- [Step 4/9] Object Detection (YOLOv8n) ---")
     detector = YOLOObjectDetector()
-    # Synthetic frame containing person and backpack
-    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
-    frame[150:600, 400:700] = 180  # Simulated person figure
+    loaded = detector.load()
+    if not loaded:
+        print("[!] FATAL: YOLOObjectDetector failed to initialize and load model weights!")
+        sys.exit(1)
+
+    import cv2
+    sample_img_path = root_path / "ai" / "evaluation" / "samples" / "sample_person_phone.jpg"
+    if sample_img_path.exists():
+        frame = cv2.imread(str(sample_img_path))
+    else:
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+        frame[150:600, 400:700] = 180
+
     detections = detector.detect(frame)
-    print(f"[*] Ingested Frame Resolution: 1280x720 (720p)")
-    print(f"[+] Level 1 Detector completed in ~{detector.get_performance().get('mean_ms', 3.2)} ms. Detections found: {len(detections)}")
+    if not detections:
+        print("[!] FATAL: Detector returned zero detections on real sample frame!")
+        sys.exit(1)
+
+    print(f"[*] Ingested Frame Resolution: {frame.shape[1]}x{frame.shape[0]}")
+    print(f"[+] Level 1 Detector completed in ~{detector.get_performance().get('mean_ms', 3.2):.1f} ms. Detections found: {len(detections)}")
+    for d in detections:
+        print(f"    - Detection: {d.class_name} (conf: {d.confidence:.2f}, bbox: {d.bbox_xyxy})")
 
     # Step 5: Level 2 Tracking
     print("\n--- [Step 5/9] Multi-Object Tracking (ByteTrack) ---")
     tracker = ByteTrackTracker()
     now_ts = time.time()
     tracked_objects = tracker.update(cam_id, detections, now_ts)
+    if not tracked_objects:
+        print("[!] FATAL: ByteTrack failed to assign tracks to active detections!")
+        sys.exit(1)
     print(f"[+] Level 2 ByteTrack assigned {len(tracked_objects)} persistent trajectory tracklet(s).")
+    for t in tracked_objects:
+        print(f"    - Track ID: {t.track_id} (class: {t.class_name})")
 
     # Step 6: Level 3 Temporal Activity Classification (SpectatorNet)
     print("\n--- [Step 6/9] Temporal Intelligence (SpectatorNet GRU) ---")
+    print("    [Notice: SpectatorNet is an experimental research model under ongoing validation]")
     obs = ObservationBuilder.build(
         camera_id=cam_id,
         frame_index=1,

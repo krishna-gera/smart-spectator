@@ -81,9 +81,11 @@ def test_event_timeline_milestones_generation():
     assert "detected" in milestones[0]["title"].lower() or "visual" in milestones[0]["title"].lower()
 
 
-def test_events_stats_api_integration():
+def test_events_stats_api_integration(viewer_headers):
     client = TestClient(app)
-    response = client.get("/api/v1/events/stats")
+    assert client.get("/api/v1/events/stats").status_code == 401
+
+    response = client.get("/api/v1/events/stats", headers=viewer_headers)
     assert response.status_code == 200
     data = response.json()
 
@@ -98,9 +100,11 @@ def test_events_stats_api_integration():
     assert data["by_priority"]["HIGH"] >= 1
 
 
-def test_events_search_and_priority_filter():
+def test_events_search_and_priority_filter(viewer_headers):
     client = TestClient(app)
-    res = client.get("/api/v1/events?priority=HIGH&min_confidence=0.5")
+    assert client.get("/api/v1/events?priority=HIGH&min_confidence=0.5").status_code == 401
+
+    res = client.get("/api/v1/events?priority=HIGH&min_confidence=0.5", headers=viewer_headers)
     assert res.status_code == 200
     events = res.json()
     assert isinstance(events, list)

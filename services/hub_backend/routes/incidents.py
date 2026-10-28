@@ -5,9 +5,11 @@ Lists, inspects, acknowledges, and resolves security/operational incidents.
 """
 
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Query, Body, status
+from fastapi import APIRouter, HTTPException, Query, Body, status, Depends
 
 from services.event_engine.incident_engine import incident_engine
+from ..auth.dependencies import require_operator
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/incidents", tags=["Incidents Engine"])
 
@@ -41,9 +43,14 @@ def get_incident(incident_id: str):
 
 
 @router.post("/{incident_id}/acknowledge", response_model=Dict[str, Any])
-def acknowledge_incident(incident_id: str, payload: Dict[str, Any] = Body(default_factory=dict)):
+def acknowledge_incident(
+    incident_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    operator: Principal = Depends(require_operator),
+):
     """Operator acknowledgement of an open incident."""
-    operator_id = payload.get("operator_id", "operator")
+    # Attribute to the authenticated principal, not a client-supplied operator_id
+    operator_id = operator.username
     inc = incident_engine.acknowledge_incident(incident_id, operator_id=operator_id)
     if not inc:
         raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found.")
@@ -51,9 +58,13 @@ def acknowledge_incident(incident_id: str, payload: Dict[str, Any] = Body(defaul
 
 
 @router.post("/{incident_id}/resolve", response_model=Dict[str, Any])
-def resolve_incident(incident_id: str, payload: Dict[str, Any] = Body(default_factory=dict)):
+def resolve_incident(
+    incident_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    operator: Principal = Depends(require_operator),
+):
     """Operator resolution of an incident with optional notes."""
-    operator_id = payload.get("operator_id", "operator")
+    operator_id = operator.username
     notes = payload.get("resolution_notes", "")
     inc = incident_engine.resolve_incident(incident_id, operator_id=operator_id, notes=notes)
     if not inc:

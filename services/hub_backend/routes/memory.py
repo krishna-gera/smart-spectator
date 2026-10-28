@@ -5,10 +5,12 @@ Provides structured access to historical memory aggregations, relationships, and
 """
 
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Query, Body, status
+from fastapi import APIRouter, HTTPException, Query, Body, status, Depends
 
 from services.event_engine.memory import local_memory
 from services.event_engine.patterns import pattern_engine
+from ..auth.dependencies import require_operator
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/memory", tags=["Local Event Memory & Analytics"])
 
@@ -65,6 +67,7 @@ def scan_patterns(
     camera_id: Optional[str] = Query(None),
     window_minutes: int = Query(60, ge=10, le=1440),
     min_frequency: int = Query(3, ge=2, le=20),
+    operator: Principal = Depends(require_operator),
 ):
     """Triggers an on-demand scan for repeated temporal activity patterns."""
     discovered = pattern_engine.scan_for_patterns(

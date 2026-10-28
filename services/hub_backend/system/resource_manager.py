@@ -27,19 +27,19 @@ class ResourcePriorityManager:
     memory summarization) do not block or degrade primary real-time vision pipelines.
     """
 
-    def __init__(self, max_background_workers: int = 2, queue_backpressure_threshold: int = 8):
+    def __init__(self, max_background_workers: int = 2, queue_backpressure_threshold: int = 2):
         self._bg_pool = ThreadPoolExecutor(max_workers=max_background_workers, thread_name_prefix="ss-background")
         self.queue_backpressure_threshold = queue_backpressure_threshold
 
     def is_realtime_congested(self) -> bool:
         """
         Checks whether any active camera context in the AI pipeline has queue depth
-        exceeding backpressure threshold.
+        exceeding backpressure threshold (bounded queue capacity is 2).
         """
         try:
             from services.ai_engine.pipeline import ai_pipeline
             for ctx in ai_pipeline.contexts.values():
-                if ctx.queue.qsize() >= self.queue_backpressure_threshold:
+                if ctx.queue.full() or ctx.queue.qsize() >= self.queue_backpressure_threshold:
                     return True
         except Exception:
             pass

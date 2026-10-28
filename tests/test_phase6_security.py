@@ -39,7 +39,10 @@ def test_invalid_and_revoked_token_authentication():
 
     # 2. Pair a legitimate test device
     req = device_manager.request_pairing("dev_sec_01", "Sec Node", "Pixel 7")
-    pin = req["verification_code"]
+    assert req["status"] == "pending_operator_approval"
+    pending = device_manager.list_pending_pairings()
+    target = next(p for p in pending if p["device_id"] == "dev_sec_01")
+    pin = target["verification_pin"]
     verify_res = device_manager.verify_pairing("dev_sec_01", pin)
     assert verify_res["status"] == "paired"
     token = verify_res["device_token"]
@@ -101,7 +104,7 @@ def test_polygon_boundary_bounds_validation():
         ze.validate_polygon([[0.2, 0.2], [0.4, 0.4]])
 
 
-def test_api_revocation_endpoint_security():
+def test_api_revocation_endpoint_security(admin_headers):
     """Verifies that DELETE /devices/{device_id} properly revokes device and rejects revoked requests."""
     client = TestClient(app)
 
@@ -111,7 +114,16 @@ def test_api_revocation_endpoint_security():
         "device_name": "Endpoint Node",
     })
     assert p_req.status_code == 202
-    pin = p_req.json()["verification_code"]
+    assert "verification_code" not in p_req.json()
+
+    # Unauthenticated pending pairings check fails closed
+    assert client.get("/api/v1/devices/pairing/pending").status_code == 401
+
+    pend_res = client.get("/api/v1/devices/pairing/pending", headers=admin_headers)
+    assert pend_res.status_code == 200
+    matched = [p for p in pend_res.json() if p["device_id"] == "dev_endpoint_sec"]
+    assert len(matched) == 1
+    pin = matched[0]["verification_pin"]
 
     v_req = client.post("/api/v1/devices/pair/verify", json={
         "device_id": "dev_endpoint_sec",
@@ -119,11 +131,15 @@ def test_api_revocation_endpoint_security():
     })
     assert v_req.status_code == 200
 
-    # Revoke device via API
-    del_res = client.delete("/api/v1/devices/dev_endpoint_sec")
+    # Unauthenticated deletion fails closed
+    del_unauth = client.delete("/api/v1/devices/dev_endpoint_sec")
+    assert del_unauth.status_code == 401
+
+    # Revoke device via API with admin credentials
+    del_res = client.delete("/api/v1/devices/dev_endpoint_sec", headers=admin_headers)
     assert del_res.status_code == 200
     assert del_res.json()["status"] == "revoked"
 
-    # Revoking non-existent returns 404
-    del_404 = client.delete("/api/v1/devices/non_existent_device")
+    # Revoking non-existent with admin credentials returns 404
+    del_404 = client.delete("/api/v1/devices/non_existent_device", headers=admin_headers)
     assert del_404.status_code == 404

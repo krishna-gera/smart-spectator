@@ -42,7 +42,7 @@ def test_system_status_endpoint():
     assert "active_streaming_cameras" in data
 
 
-def test_pairing_api_end_to_end():
+def test_pairing_api_end_to_end(admin_headers, viewer_headers):
     # 1. Pairing Request
     req_payload = {
         "device_id": "dev_integration_api",
@@ -55,13 +55,18 @@ def test_pairing_api_end_to_end():
     assert req_res.status_code == 202
     req_data = req_res.json()
     assert req_data["status"] == "pending_operator_approval"
-    pin = req_data["verification_code"]
+    assert "verification_code" not in req_data
 
-    # 2. Check pending PINs endpoint for Desktop UI
-    pending_res = client.get("/api/v1/devices/pairing/pending")
+    # 2. Check pending PINs endpoint for Desktop UI / Operator (fails closed without auth)
+    unauth_pending = client.get("/api/v1/devices/pairing/pending")
+    assert unauth_pending.status_code == 401
+
+    pending_res = client.get("/api/v1/devices/pairing/pending", headers=admin_headers)
     assert pending_res.status_code == 200
     pending_pins = pending_res.json()
-    assert any(p["verification_pin"] == pin for p in pending_pins)
+    matched = [p for p in pending_pins if p["device_id"] == "dev_integration_api"]
+    assert len(matched) == 1
+    pin = matched[0]["verification_pin"]
 
     # 3. Pairing Verification
     verify_payload = {
@@ -75,21 +80,55 @@ def test_pairing_api_end_to_end():
     token = verify_data["device_token"]
     assert token.startswith("ss_tok_v1_")
 
-    # 4. Check device listed
-    devs_res = client.get("/api/v1/devices")
+    # 4. Check device listed (requires viewer auth)
+    devs_res = client.get("/api/v1/devices", headers=viewer_headers)
     assert devs_res.status_code == 200
     devs = devs_res.json()
     assert any(d["device_id"] == "dev_integration_api" for d in devs)
 
     # 5. Check camera created
-    cams_res = client.get("/api/v1/cameras")
+    cams_res = client.get("/api/v1/cameras", headers=viewer_headers)
     assert cams_res.status_code == 200
     cams = cams_res.json()
     assert len(cams) >= 1
     assert any(c["device_id"] == "dev_integration_api" for c in cams)
 
 
-def test_unauthenticated_device_revocation():
-    # Non-existent device returns 404
+def test_unauthenticated_device_revocation(admin_headers):
+    # Unauthenticated request fails closed with 401
     res = client.delete("/api/v1/devices/non_existent_id")
-    assert res.status_code == 404
+    assert res.status_code == 401
+
+    # Authenticated request for non-existent device returns 404
+    res_auth = client.delete("/api/v1/devices/non_existent_id", headers=admin_headers)
+    assert res_auth.status_code == 404
+
+
+def test_camera_rename_and_lifecycle_apis(operator_headers):
+    # 1. Setup camera record
+    from services.hub_backend.database.connection import db_session
+    with db_session() as conn:
+        conn.execute("INSERT OR REPLACE INTO cameras (camera_id, name, source_type) VALUES ('cam_hub_test_1', 'Original Cam', 'phone')")
+
+    # 2. Test Rename (PUT /cameras/{id})
+    res = client.put("/api/v1/cameras/cam_hub_test_1", json={"name": "Renamed Cam 1"}, headers=operator_headers)
+    assert res.status_code == 200
+    assert res.json()["name"] == "Renamed Cam 1"
+
+    # 3. Test Disconnect & Reconnect
+    res_disc = client.post("/api/v1/cameras/cam_hub_test_1/disconnect", headers=operator_headers)
+    assert res_disc.status_code == 200
+    assert res_disc.json()["status"] == "disconnected"
+
+    res_rec = client.post("/api/v1/cameras/cam_hub_test_1/reconnect", headers=operator_headers)
+    assert res_rec.status_code == 200
+    assert res_rec.json()["status"] == "streaming"
+
+
+def test_ai_telemetry_endpoint(viewer_headers):
+    res = client.get("/api/v1/ai/telemetry", headers=viewer_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "active_backend" in data
+    assert "camera_contexts" in data
+

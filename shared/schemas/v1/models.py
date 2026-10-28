@@ -3,10 +3,14 @@ Smart Spectator - Versioned Data Contracts (Schema v1)
 Defines strongly typed, decoupled contracts for Hub, Camera Nodes, AI Pipeline, and Clients.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class DeviceStatus(str, Enum):
@@ -88,8 +92,8 @@ class Device(BaseModel):
     is_charging: Optional[bool] = Field(None, description="True if connected to power")
     battery_temperature_c: Optional[float] = Field(None, description="Thermal sensor reading in Celsius")
     app_version: Optional[str] = Field(None, description="Client app build version")
-    last_seen: datetime = Field(default_factory=datetime.utcnow)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_seen: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Camera(BaseModel):
@@ -104,7 +108,7 @@ class Camera(BaseModel):
     is_active: bool = Field(default=True)
     status: StreamStatus = Field(default=StreamStatus.IDLE)
     lens_facing: Optional[str] = Field("back", description="back, front, external")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +119,7 @@ class FrameMetadata(BaseModel):
     camera_id: str
     frame_index: int
     pts: int = Field(..., description="Presentation timestamp in microseconds")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     width: int
     height: int
     channels: int = 3
@@ -157,7 +161,7 @@ class TrackedObject(BaseModel):
 class Observation(BaseModel):
     observation_id: str
     camera_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     frame_index: int
     detections: List[Detection] = Field(default_factory=list)
     tracked_objects: List[TrackedObject] = Field(default_factory=list)
@@ -173,11 +177,11 @@ class Event(BaseModel):
     severity: EventSeverity = Field(default=EventSeverity.INFO)
     confidence: float = Field(..., description="Event classification score (0.0 to 1.0)")
     summary: str = Field(..., description="Human-readable event description")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
     trigger_observation_id: Optional[str] = None
     involved_track_ids: List[int] = Field(default_factory=list)
     zone_id: Optional[str] = None
@@ -196,8 +200,8 @@ class Zone(BaseModel):
     polygon: List[List[float]] = Field(..., description="List of [x, y] normalized vertices (0.0 to 1.0)")
     color: str = Field(default="#38bdf8", description="Hex display color for overlay")
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class RuleCondition(BaseModel):
@@ -218,8 +222,8 @@ class EventRule(BaseModel):
     actions: List[str] = Field(default_factory=lambda: ["CREATE_EVENT", "CLIENT_NOTIFICATION"])
     cooldown_seconds: int = Field(default=60, description="Minimum delay between re-triggers")
     severity_override: Optional[EventSeverity] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class EventActionRecord(BaseModel):
@@ -228,12 +232,12 @@ class EventActionRecord(BaseModel):
     action_type: str
     status: str
     error: Optional[str] = None
-    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    executed_at: datetime = Field(default_factory=utc_now)
 
 
 class AuditLogEntry(BaseModel):
     log_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     actor: str = "system"
     action: str
     resource: str
@@ -247,7 +251,7 @@ class EventPrediction(BaseModel):
     """
     schema_version: str = "1.0"
     camera_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     event_type: str = Field(..., description="e.g. OBJECT_REMOVED, PERSON_ENTERED, NORMAL_BACKGROUND")
     confidence: float = Field(..., description="Classification probability (0.0 to 1.0)")
     start_time: Optional[datetime] = None
@@ -295,8 +299,8 @@ class MonitoringTask(BaseModel):
     roi_polygon: Optional[List[List[float]]] = Field(None, description="Normalized coordinates of monitoring zone")
     notification_policy: Dict[str, Any] = Field(default_factory=dict, description="Sound, UI banner, webhook")
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +322,7 @@ class ModelMetadata(BaseModel):
 
 
 class SystemHealth(BaseModel):
-    hub_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    hub_timestamp: datetime = Field(default_factory=utc_now)
     cpu_percent: float
     memory_percent: float
     memory_used_mb: float

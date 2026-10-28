@@ -24,9 +24,10 @@ def setup_phase9_api_env(tmp_path):
     yield
 
 
-def test_storage_stats_api():
+def test_storage_stats_api(viewer_headers):
     client = TestClient(app)
-    res = client.get("/api/v1/system/storage")
+    assert client.get("/api/v1/system/storage").status_code == 401
+    res = client.get("/api/v1/system/storage", headers=viewer_headers)
     assert res.status_code == 200
     data = res.json()
 
@@ -38,9 +39,10 @@ def test_storage_stats_api():
     assert data["disk_total_gb"] > 0
 
 
-def test_retention_cleanup_api():
+def test_retention_cleanup_api(operator_headers):
     client = TestClient(app)
-    res = client.post("/api/v1/system/storage/retention/cleanup")
+    assert client.post("/api/v1/system/storage/retention/cleanup").status_code == 401
+    res = client.post("/api/v1/system/storage/retention/cleanup", headers=operator_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "success"
@@ -49,25 +51,30 @@ def test_retention_cleanup_api():
     assert "locked_preserved" in data
 
 
-def test_operator_activity_api():
+def test_operator_activity_api(viewer_headers):
     client = TestClient(app)
-    res = client.get("/api/v1/system/activity?limit=5")
+    assert client.get("/api/v1/system/activity?limit=5").status_code == 401
+    res = client.get("/api/v1/system/activity?limit=5", headers=viewer_headers)
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list)
 
 
-def test_config_export_and_import_apis():
+def test_config_export_and_import_apis(admin_headers):
     client = TestClient(app)
+    assert client.get("/api/v1/system/config/export").status_code == 401
 
     # Export
-    res_exp = client.get("/api/v1/system/config/export")
+    res_exp = client.get("/api/v1/system/config/export", headers=admin_headers)
     assert res_exp.status_code == 200
     cfg = res_exp.json()
     assert cfg["schema_version"] == "1.2.0"
 
+    # Import fails closed without auth
+    assert client.post("/api/v1/system/config/import", json=cfg).status_code == 401
+
     # Import
-    res_imp = client.post("/api/v1/system/config/import", json=cfg)
+    res_imp = client.post("/api/v1/system/config/import", json=cfg, headers=admin_headers)
     assert res_imp.status_code == 200
     imp_data = res_imp.json()
     assert imp_data["status"] == "success"

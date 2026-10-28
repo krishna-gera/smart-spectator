@@ -331,70 +331,15 @@ class RecordingManager:
 
     def cleanup_storage(self) -> None:
         """
-        Deletes oldest recordings if total size exceeds max_storage_gb
-        or recordings exceed retention_days. Never deletes active recordings.
+        Consolidated storage retention cleanup: delegates directly to the centralized
+        retention manager respecting retention lock flags, orphan cleanup, and audit trails.
         """
         try:
-            now_ts = time.time()
-            cutoff_ts = now_ts - (self.retention_days * 86400)
-            max_bytes = int(self.max_storage_gb * 1024 * 1024 * 1024)
-
-            with self._lock:
-                active_event_ids = set(self._active_recordings.keys())
-
-            with db_session() as conn:
-                cursor = conn.execute(
-                    "SELECT recording_id, file_path, thumbnail_path, file_size_bytes, created_at "
-                    "FROM recordings ORDER BY created_at ASC"
-                )
-                records = cursor.fetchall()
-
-            total_bytes = sum(r["file_size_bytes"] for r in records)
-            deleted_ids = []
-
-            for r in records:
-                # Check retention days or storage quota
-                is_expired = False
-                try:
-                    rec_time = datetime.fromisoformat(r["created_at"]).timestamp()
-                    if rec_time < cutoff_ts:
-                        is_expired = True
-                except Exception:
-                    pass
-
-                needs_cleanup = is_expired or (total_bytes > max_bytes)
-
-                if needs_cleanup:
-                    rec_id = r["recording_id"]
-                    # Never delete recording associated with currently active event
-                    if any(ev_id in r["file_path"] for ev_id in active_event_ids):
-                        continue
-
-                    # Safely remove files
-                    mp4_p = Path(r["file_path"])
-                    if mp4_p.exists():
-                        try:
-                            mp4_p.unlink()
-                        except Exception:
-                            pass
-                    if r.get("thumbnail_path"):
-                        th_p = Path(r["thumbnail_path"])
-                        if th_p.exists():
-                            try:
-                                th_p.unlink()
-                            except Exception:
-                                pass
-
-                    total_bytes -= r["file_size_bytes"]
-                    deleted_ids.append(rec_id)
-
-            if deleted_ids:
-                with db_session() as conn:
-                    conn.executemany(
-                        "DELETE FROM recordings WHERE recording_id = ?",
-                        [(rid,) for rid in deleted_ids],
-                    )
-                print(f"[RecordingManager] Cleaned up {len(deleted_ids)} expired recordings.")
-
+            from services.hub_backend.storage.retention import run_retention_cleanup
+            res = run_retention_cleanup(recording_retention_days=self.retention_days)
+            deleted_recs = res.get("recordings_deleted", 0)
+            if deleted_recs > 0:
+                print(f"[RecordingManager] Cleaned up {deleted_recs} expired recordings via retention manager.")
         except Exception as e:
             print(f"[RecordingManager] Cleanup storage error: {e}")
+

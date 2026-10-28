@@ -420,7 +420,14 @@ def apply_migrations(conn: sqlite3.Connection) -> int:
         if version > current_ver:
             # Execute migration in transaction
             try:
-                conn.executescript(sql_script)
+                statements = [s.strip() for s in sql_script.split(";") if s.strip()]
+                for stmt in statements:
+                    try:
+                        conn.execute(stmt)
+                    except sqlite3.OperationalError as op_err:
+                        if "duplicate column name" in str(op_err).lower():
+                            continue
+                        raise
                 now_str = datetime.now(timezone.utc).isoformat()
                 conn.execute(
                     "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",

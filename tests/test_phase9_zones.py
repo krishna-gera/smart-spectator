@@ -45,7 +45,7 @@ def test_point_in_polygon_geometry():
     assert is_point_in_polygon((0.5, 0.9), poly) is False
 
 
-def test_zone_api_crud_lifecycle():
+def test_zone_api_crud_lifecycle(operator_headers, viewer_headers):
     client = TestClient(app)
 
     # 1. Create Zone
@@ -55,14 +55,18 @@ def test_zone_api_crud_lifecycle():
         "color": "#ef4444",
         "is_active": True
     }
-    res = client.post("/api/v1/cameras/cam_phase9/zones", json=payload)
+
+    # Unauthenticated create fails closed
+    assert client.post("/api/v1/cameras/cam_phase9/zones", json=payload).status_code == 401
+
+    res = client.post("/api/v1/cameras/cam_phase9/zones", json=payload, headers=operator_headers)
     assert res.status_code in (200, 201)
     created = res.json()
     assert created["name"] == "Entrance Gate Phase 9"
     zone_id = created["zone_id"]
 
     # 2. Get Zones for Camera
-    res_list = client.get("/api/v1/cameras/cam_phase9/zones")
+    res_list = client.get("/api/v1/cameras/cam_phase9/zones", headers=viewer_headers)
     assert res_list.status_code == 200
     zones = res_list.json()
     assert any(z["zone_id"] == zone_id for z in zones)
@@ -73,14 +77,14 @@ def test_zone_api_crud_lifecycle():
         "polygon": [[0.15, 0.15], [0.6, 0.15], [0.6, 0.6], [0.15, 0.6]],
         "is_active": True
     }
-    res_up = client.put(f"/api/v1/zones/{zone_id}", json=update_payload)
+    res_up = client.put(f"/api/v1/zones/{zone_id}", json=update_payload, headers=operator_headers)
     assert res_up.status_code == 200
     assert res_up.json()["name"] == "Updated Entrance Zone"
 
     # 4. Delete Zone
-    res_del = client.delete(f"/api/v1/zones/{zone_id}")
+    res_del = client.delete(f"/api/v1/zones/{zone_id}", headers=operator_headers)
     assert res_del.status_code in (200, 204)
 
     # Verify deleted
-    res_list_after = client.get("/api/v1/cameras/cam_phase9/zones")
+    res_list_after = client.get("/api/v1/cameras/cam_phase9/zones", headers=viewer_headers)
     assert not any(z["zone_id"] == zone_id for z in res_list_after.json())

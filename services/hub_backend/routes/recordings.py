@@ -3,15 +3,18 @@ Smart Spectator - REST API: Local Recordings & Secure Media Streaming
 Conforms to Sections 26, 43, 63, 64 of Phase 4 & Phase 5 specifications.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Depends, status
 from fastapi.responses import FileResponse
 
-from services.hub_backend.database.connection import db_session
+from services.hub_backend.database.repositories.recording_repo import recording_repository
+from services.hub_backend.database.repositories.audit_repo import audit_repository
 from services.event_engine import event_engine
+from ..auth.dependencies import require_admin, require_operator, require_viewer
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/recordings", tags=["Recordings"])
 
@@ -41,66 +44,35 @@ def _row_to_recording_dict(r: Dict[str, Any]) -> Dict[str, Any]:
 def list_recordings(
     camera_id: Optional[str] = Query(None),
     event_id: Optional[str] = Query(None),
-    date_from: Optional[datetime] = Query(None),
-    date_to: Optional[datetime] = Query(None),
-    min_duration: Optional[float] = Query(None, ge=0.0),
-    max_duration: Optional[float] = Query(None, ge=0.0),
-    min_size_bytes: Optional[int] = Query(None, ge=0),
+    start_time: Optional[str] = Query(None),
+    end_time: Optional[str] = Query(None),
+    min_size_bytes: Optional[int] = Query(None),
     is_locked: Optional[bool] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    viewer: Principal = Depends(require_viewer),
 ):
-    """Lists local event recordings with multi-criteria filtering and pagination."""
-    query = "SELECT * FROM recordings WHERE 1=1"
-    params = []
-
-    if camera_id:
-        query += " AND camera_id = ?"
-        params.append(camera_id)
-    if event_id:
-        query += " AND event_id = ?"
-        params.append(event_id)
-    if date_from:
-        query += " AND start_time >= ?"
-        params.append(date_from.isoformat())
-    if date_to:
-        query += " AND start_time <= ?"
-        params.append(date_to.isoformat())
-    if min_duration is not None:
-        query += " AND duration_seconds >= ?"
-        params.append(min_duration)
-    if max_duration is not None:
-        query += " AND duration_seconds <= ?"
-        params.append(max_duration)
-    if min_size_bytes is not None:
-        query += " AND file_size_bytes >= ?"
-        params.append(min_size_bytes)
-    if is_locked is not None:
-        query += " AND is_locked = ?"
-        params.append(1 if is_locked else 0)
-
-    query += " ORDER BY start_time DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-
-    with db_session() as conn:
-        cursor = conn.execute(query, params)
-        rows = cursor.fetchall()
-        return [_row_to_recording_dict(r) for r in rows]
+    """Lists completed video recordings with filtering options."""
+    rows = recording_repository.list_recordings(
+        camera_id=camera_id,
+        is_locked=is_locked,
+        limit=limit,
+        offset=offset,
+    )
+    return [_row_to_recording_dict(r) for r in rows]
 
 
 @router.get("/{recording_id}", response_model=Dict[str, Any])
-def get_recording(recording_id: str):
+def get_recording(recording_id: str, viewer: Principal = Depends(require_viewer)):
     """Retrieves recording metadata."""
-    with db_session() as conn:
-        cursor = conn.execute("SELECT * FROM recordings WHERE recording_id = ?", (recording_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Recording not found.")
-        return _row_to_recording_dict(row)
+    row = recording_repository.get_by_id(recording_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Recording not found.")
+    return _row_to_recording_dict(row)
 
 
 @router.get("/{recording_id}/stream")
-def stream_recording(recording_id: str):
+def stream_recording(recording_id: str, viewer: Principal = Depends(require_viewer)):
     """
     Safely streams MP4 video clip to client inline.
     Guarantees path traversal prevention (Section 64).
@@ -117,7 +89,7 @@ def stream_recording(recording_id: str):
 
 
 @router.get("/{recording_id}/download")
-def download_recording(recording_id: str):
+def download_recording(recording_id: str, viewer: Principal = Depends(require_viewer)):
     """Safely triggers attachment download of recording."""
     safe_path = event_engine.recording_mgr.resolve_safe_recording_path(recording_id)
     if not safe_path or not safe_path.exists():
@@ -132,34 +104,24 @@ def download_recording(recording_id: str):
 
 
 @router.patch("/{recording_id}/lock", response_model=Dict[str, Any])
-def toggle_recording_lock(recording_id: str):
+def toggle_recording_lock(recording_id: str, operator: Principal = Depends(require_operator)):
     """Toggles retention protection lock flag on recording."""
-    with db_session() as conn:
-        cursor = conn.execute("SELECT is_locked FROM recordings WHERE recording_id = ?", (recording_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Recording not found.")
-        current_lock = bool(row.get("is_locked", 0))
-        new_lock = 0 if current_lock else 1
-        conn.execute("UPDATE recordings SET is_locked = ? WHERE recording_id = ?", (new_lock, recording_id))
-        return {"recording_id": recording_id, "is_locked": bool(new_lock)}
+    res = recording_repository.toggle_lock(recording_id)
+    if res is None:
+        raise HTTPException(status_code=404, detail="Recording not found.")
+    return {"recording_id": recording_id, "is_locked": res}
 
 
 @router.get("/{recording_id}/thumbnail")
-def get_recording_thumbnail(recording_id: str):
+def get_recording_thumbnail(recording_id: str, viewer: Principal = Depends(require_viewer)):
     """Safely serves snapshot thumbnail for recording."""
-    with db_session() as conn:
-        cursor = conn.execute("SELECT thumbnail_path FROM recordings WHERE recording_id = ?", (recording_id,))
-        row = cursor.fetchone()
-        if not row or not row.get("thumbnail_path"):
-            raise HTTPException(status_code=404, detail="Thumbnail not found.")
+    thumb_path = recording_repository.get_thumbnail_path(recording_id)
+    if not thumb_path:
+        raise HTTPException(status_code=404, detail="Thumbnail not found.")
 
-    thumb_p = Path(row["thumbnail_path"]).resolve()
-    base_p = event_engine.recording_mgr.snapshots_dir.resolve()
-
-    try:
-        thumb_p.relative_to(base_p)
-    except ValueError:
+    thumb_p = Path(thumb_path).resolve()
+    base_dir = event_engine.recording_mgr.recordings_dir.resolve()
+    if base_dir not in thumb_p.parents and thumb_p.parent != base_dir:
         raise HTTPException(status_code=403, detail="Access denied.")
 
     if not thumb_p.exists():
@@ -169,39 +131,30 @@ def get_recording_thumbnail(recording_id: str):
 
 
 @router.delete("/{recording_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_recording(recording_id: str):
+def delete_recording(recording_id: str, admin: Principal = Depends(require_admin)):
     """
     Deletes a recording and its underlying media file.
     Rejects deletion if recording is protected by retention lock.
+    Requires administrator privileges.
     """
-    with db_session() as conn:
-        cursor = conn.execute("SELECT file_path, thumbnail_path, is_locked FROM recordings WHERE recording_id = ?", (recording_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Recording not found.")
+    row = recording_repository.get_by_id(recording_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Recording not found.")
 
-        if row.get("is_locked"):
-            raise HTTPException(
-                status_code=403,
-                detail="Recording is protected by retention lock. Unlock recording before deletion."
-            )
-
-        # Unlink file from database
-        conn.execute("DELETE FROM recordings WHERE recording_id = ?", (recording_id,))
-        conn.execute("UPDATE events SET recording_id = NULL WHERE recording_id = ?", (recording_id,))
-
-        # Record activity
-        conn.execute(
-            """
-            INSERT INTO audit_logs (log_id, actor, action, resource, metadata_json)
-            VALUES (?, 'operator', 'DELETE_RECORDING', ?, ?)
-            """,
-            (
-                f"audit_{datetime.now().strftime('%Y%m%d%H%M%S')}_{recording_id[:8]}",
-                f"recording:{recording_id}",
-                json.dumps({"file_name": Path(row["file_path"]).name})
-            )
+    if row.get("is_locked"):
+        raise HTTPException(
+            status_code=403,
+            detail="Recording is protected by retention lock. Unlock recording before deletion."
         )
+
+    recording_repository.delete_record(recording_id)
+
+    audit_repository.log(
+        action="DELETE_RECORDING",
+        actor=admin.username,
+        resource=f"recording:{recording_id}",
+        details={"file_name": Path(row["file_path"]).name}
+    )
 
     # Safely delete disk files after checking base dir confinement
     try:
@@ -215,10 +168,9 @@ def delete_recording(recording_id: str):
 
     try:
         if row.get("thumbnail_path"):
-            th = Path(row["thumbnail_path"]).resolve()
-            s_dir = event_engine.recording_mgr.snapshots_dir.resolve()
-            if s_dir in th.parents or th.parent == s_dir:
-                if th.exists() and th.is_file():
-                    th.unlink()
-    except Exception:
-        pass
+            tp = Path(row["thumbnail_path"]).resolve()
+            base_dir = event_engine.recording_mgr.recordings_dir.resolve()
+            if (base_dir in tp.parents or tp.parent == base_dir) and tp.exists() and tp.is_file():
+                tp.unlink()
+    except Exception as e:
+        print(f"[RecordingsAPI] Thumbnail unlink warning: {e}")

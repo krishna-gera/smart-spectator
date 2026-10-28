@@ -315,11 +315,42 @@ export class SystemApi extends BaseApi {
     }
 }
 
+export class AuthApi extends BaseApi {
+    async login(username, password) {
+        const res = await this.post('/api/v1/auth/login', { username, password });
+        if (res && res.token) {
+            this.client.setAuthToken(res.token);
+        }
+        return res;
+    }
+
+    async logout() {
+        try {
+            await this.post('/api/v1/auth/logout');
+        } finally {
+            this.client.setAuthToken(null);
+        }
+    }
+
+    async getMe() {
+        return this.get('/api/v1/auth/me');
+    }
+
+    async listUsers() {
+        return this.get('/api/v1/auth/users');
+    }
+
+    async createUser(userData) {
+        return this.post('/api/v1/auth/users', userData);
+    }
+}
+
 export class HubApiClient {
     constructor(baseUrl = '') {
         this.baseUrl = baseUrl || window.location.origin;
         this.authToken = localStorage.getItem('ss_auth_token') || null;
 
+        this.auth = new AuthApi(this);
         this.cameras = new CameraApi(this);
         this.events = new EventApi(this);
         this.zones = new ZoneApi(this);

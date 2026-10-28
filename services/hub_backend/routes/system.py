@@ -11,7 +11,7 @@ import platform
 import shutil
 import time
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, Query, HTTPException, Body
+from fastapi import APIRouter, Query, HTTPException, Body, Depends
 import psutil
 try:
     import onnxruntime as ort
@@ -29,6 +29,8 @@ from services.device_manager.manager import device_manager
 from ai.inference.manager import provider_manager
 from ai.models.validator import model_validator
 from services.hub_backend.routes.health import _startup_time
+from ..auth.dependencies import require_admin, require_operator, require_viewer
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/system", tags=["System"])
 
@@ -51,7 +53,7 @@ def get_system_metrics() -> Dict[str, Any]:
     storage_used_gb = round(storage_used_bytes / (1024 * 1024 * 1024), 3)
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "event_engine": ee_metrics,
         "ai_pipeline": {
             "model_id": ai_telemetry.get("active_model"),
@@ -391,8 +393,8 @@ def get_system_diagnostics() -> Dict[str, Any]:
 
 
 @router.post("/backup")
-def create_backup() -> Dict[str, Any]:
-    """Exports consistent local database backup (Section 18)."""
+def create_backup(admin: Principal = Depends(require_admin)) -> Dict[str, Any]:
+    """Exports consistent local database backup (Section 18). Administrator only."""
     try:
         backup_path = export_database_backup()
         return {
@@ -407,8 +409,11 @@ def create_backup() -> Dict[str, Any]:
 
 
 @router.post("/restore")
-def restore_backup(payload: Dict[str, str] = Body(...)) -> Dict[str, Any]:
-    """Restores database from an exported backup file (Section 18)."""
+def restore_backup(
+    payload: Dict[str, str] = Body(...),
+    admin: Principal = Depends(require_admin)
+) -> Dict[str, Any]:
+    """Restores database from an exported backup file (Section 18). Administrator only."""
     backup_file = payload.get("backup_file")
     if not backup_file:
         raise HTTPException(status_code=400, detail="Field 'backup_file' is required.")
@@ -430,15 +435,19 @@ def restore_backup(payload: Dict[str, str] = Body(...)) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.get("/config")
-def get_system_configuration() -> Dict[str, Any]:
+def get_system_configuration(viewer: Principal = Depends(require_viewer)) -> Dict[str, Any]:
     """Retrieves all categorized system configuration without exposing secrets."""
     from services.hub_backend.config_manager import load_categorized_config
     return load_categorized_config()
 
 
 @router.put("/config/{category}")
-def update_system_configuration(category: str, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    """Validates and updates configuration parameters for a specific category."""
+def update_system_configuration(
+    category: str,
+    payload: Dict[str, Any] = Body(...),
+    admin: Principal = Depends(require_admin)
+) -> Dict[str, Any]:
+    """Validates and updates configuration parameters for a specific category. Administrator only."""
     from services.hub_backend.config_manager import save_config_category
     try:
         return save_config_category(category, payload)
@@ -449,15 +458,18 @@ def update_system_configuration(category: str, payload: Dict[str, Any] = Body(..
 
 
 @router.get("/config/export")
-def export_configuration() -> Dict[str, Any]:
-    """Safely exports complete configuration manifest with zero secret leakage."""
+def export_configuration(admin: Principal = Depends(require_admin)) -> Dict[str, Any]:
+    """Safely exports complete configuration manifest with zero secret leakage. Administrator only."""
     from services.hub_backend.config_manager import export_safe_configuration
     return export_safe_configuration()
 
 
 @router.post("/config/import")
-def import_configuration(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    """Validates and imports system configuration manifest."""
+def import_configuration(
+    payload: Dict[str, Any] = Body(...),
+    admin: Principal = Depends(require_admin)
+) -> Dict[str, Any]:
+    """Validates and imports system configuration manifest. Administrator only."""
     from services.hub_backend.config_manager import import_safe_configuration
     try:
         return import_safe_configuration(payload)
@@ -472,7 +484,7 @@ def import_configuration(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.get("/storage")
-def get_storage_dashboard() -> Dict[str, Any]:
+def get_storage_dashboard(viewer: Principal = Depends(require_viewer)) -> Dict[str, Any]:
     """Returns detailed storage metrics, usage breakdowns, and retention policies."""
     from services.hub_backend.storage.retention import get_retention_policies
     rec_dir = settings.RECORDINGS_DIR.resolve()
@@ -529,6 +541,7 @@ def get_storage_dashboard() -> Dict[str, Any]:
 def trigger_retention_cleanup(
     event_days: Optional[int] = Query(None, ge=1, le=365),
     recording_days: Optional[int] = Query(None, ge=1, le=180),
+    operator: Principal = Depends(require_operator),
 ) -> Dict[str, Any]:
     """Executes automated retention pruning of expired events and recordings."""
     from services.hub_backend.storage.retention import run_retention_cleanup
@@ -549,6 +562,7 @@ def trigger_retention_cleanup(
 def get_operator_activity_log(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    viewer: Principal = Depends(require_viewer),
 ):
     """Retrieves operator activity audit trail with secret masking."""
     with db_session() as conn:
@@ -579,7 +593,7 @@ def get_operator_activity_log(
 # ---------------------------------------------------------------------------
 
 @router.get("/notifications")
-def get_notification_settings() -> Dict[str, Any]:
+def get_notification_settings(viewer: Principal = Depends(require_viewer)) -> Dict[str, Any]:
     """Retrieves notification configuration and per-event cooldown rules."""
     from services.event_engine.notifications import DEFAULT_COOLDOWNS, EVENT_CATEGORY_MAP
     with db_session() as conn:

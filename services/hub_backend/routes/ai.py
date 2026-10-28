@@ -1,10 +1,12 @@
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, HTTPException, status, Query, Body
+from fastapi import APIRouter, HTTPException, status, Query, Body, Depends
 from services.ai_engine.pipeline import ai_pipeline
 from ai.inference.manager import provider_manager
 from ai.models.registry import model_registry
 from ai.models.ab_evaluator import ab_evaluator
 from ai.models.validator import model_validator
+from ..auth.dependencies import require_admin, require_operator
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/ai", tags=["AI Perception & Telemetry"])
 
@@ -77,6 +79,12 @@ def get_ai_status():
     }
 
 
+@router.get("/telemetry", status_code=status.HTTP_200_OK)
+def get_ai_telemetry():
+    """Returns real-time AI perception pipeline telemetry metrics."""
+    return ai_pipeline.get_telemetry()
+
+
 @router.get("/models", response_model=List[Dict[str, Any]])
 def list_registered_models(task_type: Optional[str] = Query(None)):
     """Lists all locally registered AI models and their validation status."""
@@ -94,7 +102,11 @@ def get_model_details(model_id: str):
 
 
 @router.post("/models/{task_type}/activate")
-def activate_production_model(task_type: str, payload: Dict[str, str] = Body(...)):
+def activate_production_model(
+    task_type: str,
+    payload: Dict[str, str] = Body(...),
+    admin: Principal = Depends(require_admin),
+):
     """Explicitly selects the active production model for detection or temporal events."""
     model_id = payload.get("model_id")
     if not model_id:
@@ -119,6 +131,7 @@ def run_model_ab_evaluation(
     model_a_id: str = Query("spectatornet_v1_fp32"),
     model_b_id: str = Query("spectatornet_v1_int8"),
     iterations: int = Query(50, ge=10, le=200),
+    operator: Principal = Depends(require_operator),
 ):
     """Executes offline A/B evaluation benchmarking two models on local hardware."""
     try:

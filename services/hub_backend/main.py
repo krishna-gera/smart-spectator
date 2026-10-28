@@ -13,12 +13,13 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database.connection import init_database
+from .auth.user_manager import user_manager
 from services.device_manager.discovery import hub_advertiser, get_local_ip
 from services.stream_engine.server import stream_engine
 from services.ai_engine.pipeline import ai_pipeline
 from services.event_engine import event_engine_service
 from .routes import (
-    health, devices, cameras, streams, ai, events, zones, rules, recordings, system,
+    auth, health, devices, cameras, streams, ai, events, zones, rules, recordings, system,
     query, incidents, anomalies, memory, feedback
 )
 from .websocket import control, events as events_ws
@@ -26,9 +27,14 @@ from .websocket import control, events as events_ws
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Startup: Initialize SQLite database in WAL mode
+    # 1. Startup: Initialize SQLite database in WAL mode & seed default admin
     print("[Hub] Initializing SQLite database...")
     init_database()
+    user_manager.seed_default_admin()
+
+    # 1b. Startup: Bind main event loop for real-time WebSocket event broadcaster
+    loop = asyncio.get_running_loop()
+    events_ws.event_stream_hub.set_loop(loop)
 
     # 2. Startup: Start mDNS Hub Advertisement in background worker thread
     print("[Hub] Starting mDNS service advertisement...")
@@ -72,17 +78,38 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for local client and mobile dashboards
+import uuid
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
+
+class CorrelationIdMiddleware(BaseHTTPMiddleware):
+    """Injects and propagates unique cross-service tracing correlation IDs."""
+    async def dispatch(self, request: Request, call_next):
+        correlation_id = request.headers.get("x-correlation-id") or f"corr_{uuid.uuid4().hex[:12]}"
+        request.state.correlation_id = correlation_id
+        response: Response = await call_next(request)
+        response.headers["X-Correlation-ID"] = correlation_id
+        return response
+
+
+# Add Correlation ID Middleware
+app.add_middleware(CorrelationIdMiddleware)
+
+# Enable CORS with configured origins (lock down wildcard in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Correlation-ID"],
 )
 
 # Register REST & WebSocket API Routers under /api/v1
 API_PREFIX = "/api/v1"
+app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(devices.router, prefix=API_PREFIX)
 app.include_router(cameras.router, prefix=API_PREFIX)

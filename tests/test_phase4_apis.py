@@ -15,6 +15,10 @@ from services.hub_backend.main import app
 from services.hub_backend.config import settings
 from services.hub_backend.database.connection import init_database, db_session
 from services.event_engine import event_engine
+from services.hub_backend.auth.tokens import create_access_token
+from services.hub_backend.auth.models import Principal
+from services.hub_backend.auth.roles import Role
+from services.hub_backend.auth.user_manager import user_manager
 
 client = TestClient(app)
 
@@ -26,6 +30,7 @@ def setup_test_api_env(tmp_path):
     settings.RECORDINGS_DIR = tmp_path / "recordings"
     settings.SNAPSHOTS_DIR = tmp_path / "snapshots"
     init_database()
+    user_manager.seed_default_admin()
 
     # Prepopulate a test camera
     with db_session() as conn:
@@ -42,7 +47,13 @@ def setup_test_api_env(tmp_path):
         os.remove(db_file)
 
 
-def test_zone_crud_apis():
+@pytest.fixture
+def admin_headers():
+    token = create_access_token("usr_admin", "admin", Role.ADMIN)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_zone_crud_apis(admin_headers):
     # 1. Create Zone
     zone_data = {
         "name": "Porch Area",
@@ -50,7 +61,7 @@ def test_zone_crud_apis():
         "color": "#38bdf8",
         "is_active": True,
     }
-    create_res = client.post("/api/v1/cameras/cam_api_01/zones", json=zone_data)
+    create_res = client.post("/api/v1/cameras/cam_api_01/zones", json=zone_data, headers=admin_headers)
     assert create_res.status_code == 201
     created = create_res.json()
     assert created["name"] == "Porch Area"
@@ -58,26 +69,26 @@ def test_zone_crud_apis():
     zone_id = created["zone_id"]
 
     # 2. List Zones for camera
-    list_res = client.get("/api/v1/cameras/cam_api_01/zones")
+    list_res = client.get("/api/v1/cameras/cam_api_01/zones", headers=admin_headers)
     assert list_res.status_code == 200
     zones = list_res.json()
     assert any(z["zone_id"] == zone_id for z in zones)
 
     # 3. Update Zone
-    update_res = client.put(f"/api/v1/zones/{zone_id}", json={"name": "Updated Porch Area"})
+    update_res = client.put(f"/api/v1/zones/{zone_id}", json={"name": "Updated Porch Area"}, headers=admin_headers)
     assert update_res.status_code == 200
     assert update_res.json()["name"] == "Updated Porch Area"
 
     # 4. Delete Zone
-    del_res = client.delete(f"/api/v1/zones/{zone_id}")
+    del_res = client.delete(f"/api/v1/zones/{zone_id}", headers=admin_headers)
     assert del_res.status_code == 204
 
     # Verify deleted
-    list_after = client.get("/api/v1/cameras/cam_api_01/zones").json()
+    list_after = client.get("/api/v1/cameras/cam_api_01/zones", headers=admin_headers).json()
     assert not any(z["zone_id"] == zone_id for z in list_after)
 
 
-def test_rule_crud_and_toggle_apis():
+def test_rule_crud_and_toggle_apis(admin_headers):
     # 1. Create Rule
     rule_data = {
         "name": "Night Entry Alert",
@@ -90,33 +101,33 @@ def test_rule_crud_and_toggle_apis():
         "actions": ["CREATE_EVENT", "SAVE_CLIP"],
         "cooldown_seconds": 45,
     }
-    create_res = client.post("/api/v1/rules", json=rule_data)
+    create_res = client.post("/api/v1/rules", json=rule_data, headers=admin_headers)
     assert create_res.status_code == 201
     rule = create_res.json()
     assert rule["name"] == "Night Entry Alert"
     rule_id = rule["rule_id"]
 
     # 2. Get Rules
-    list_res = client.get("/api/v1/rules")
+    list_res = client.get("/api/v1/rules", headers=admin_headers)
     assert list_res.status_code == 200
     assert any(r["rule_id"] == rule_id for r in list_res.json())
 
     # 3. Disable Rule
-    dis_res = client.post(f"/api/v1/rules/{rule_id}/disable")
+    dis_res = client.post(f"/api/v1/rules/{rule_id}/disable", headers=admin_headers)
     assert dis_res.status_code == 200
     assert dis_res.json()["enabled"] is False
 
     # 4. Enable Rule
-    en_res = client.post(f"/api/v1/rules/{rule_id}/enable")
+    en_res = client.post(f"/api/v1/rules/{rule_id}/enable", headers=admin_headers)
     assert en_res.status_code == 200
     assert en_res.json()["enabled"] is True
 
     # 5. Delete Rule
-    del_res = client.delete(f"/api/v1/rules/{rule_id}")
+    del_res = client.delete(f"/api/v1/rules/{rule_id}", headers=admin_headers)
     assert del_res.status_code == 204
 
 
-def test_events_query_and_lifecycle_apis():
+def test_events_query_and_lifecycle_apis(admin_headers):
     # Insert dummy event into SQLite
     ev_id = "ev_api_test_01"
     now_str = datetime.now(timezone.utc).isoformat()
@@ -132,30 +143,30 @@ def test_events_query_and_lifecycle_apis():
         )
 
     # 1. List Events
-    res = client.get("/api/v1/events", params={"camera_id": "cam_api_01", "severity": "high"})
+    res = client.get("/api/v1/events", params={"camera_id": "cam_api_01", "severity": "high"}, headers=admin_headers)
     assert res.status_code == 200
     events = res.json()
     assert any(e["event_id"] == ev_id for e in events)
 
     # 2. Get Single Event
-    ev_res = client.get(f"/api/v1/events/{ev_id}")
+    ev_res = client.get(f"/api/v1/events/{ev_id}", headers=admin_headers)
     assert ev_res.status_code == 200
     assert ev_res.json()["event_id"] == ev_id
 
     # 3. Acknowledge Event
-    ack_res = client.post(f"/api/v1/events/{ev_id}/acknowledge")
+    ack_res = client.post(f"/api/v1/events/{ev_id}/acknowledge", headers=admin_headers)
     assert ack_res.status_code == 200
     assert ack_res.json()["metadata"]["acknowledged"] is True
 
     # 4. Resolve Event
-    res_res = client.post(f"/api/v1/events/{ev_id}/resolve")
+    res_res = client.post(f"/api/v1/events/{ev_id}/resolve", headers=admin_headers)
     assert res_res.status_code == 200
     assert res_res.json()["status"] == "resolved"
 
 
-def test_system_telemetry_and_audit_apis():
+def test_system_telemetry_and_audit_apis(admin_headers):
     # 1. System Metrics
-    m_res = client.get("/api/v1/system/metrics")
+    m_res = client.get("/api/v1/system/metrics", headers=admin_headers)
     assert m_res.status_code == 200
     m_data = m_res.json()
     assert "event_engine" in m_data
@@ -163,14 +174,14 @@ def test_system_telemetry_and_audit_apis():
     assert "storage" in m_data
 
     # 2. Decoupled Component Health
-    h_res = client.get("/api/v1/system/health/components")
+    h_res = client.get("/api/v1/system/health/components", headers=admin_headers)
     assert h_res.status_code == 200
     h_data = h_res.json()
     assert "components" in h_data
     assert h_data["components"]["database"] == "healthy"
 
     # 3. Audit Logs
-    a_res = client.get("/api/v1/system/audit")
+    a_res = client.get("/api/v1/system/audit", headers=admin_headers)
     assert a_res.status_code == 200
     assert isinstance(a_res.json(), list)
 

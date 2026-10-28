@@ -77,7 +77,7 @@ def test_after_hours_incident_generation_and_resolution():
     assert res_inc.resolution_notes == "Authorized night maintenance verified."
 
 
-def test_incidents_api_endpoints():
+def test_incidents_api_endpoints(operator_headers):
     client = TestClient(app)
 
     # 1. Create incident via engine
@@ -107,7 +107,8 @@ def test_incidents_api_endpoints():
     # 3. Acknowledge via API
     ack_res = client.post(
         f"/api/v1/incidents/{inc.incident_id}/acknowledge",
-        json={"operator_id": "sec_operator_42"}
+        json={"operator_id": "sec_operator_42"},
+        headers=operator_headers,
     )
     assert ack_res.status_code == 200
     assert ack_res.json()["status"] == "ACKNOWLEDGED"
@@ -115,7 +116,8 @@ def test_incidents_api_endpoints():
     # 4. Resolve via API
     res_res = client.post(
         f"/api/v1/incidents/{inc.incident_id}/resolve",
-        json={"operator_id": "sec_operator_42", "resolution_notes": "False alarm confirmed."}
+        json={"operator_id": "sec_operator_42", "resolution_notes": "False alarm confirmed."},
+        headers=operator_headers,
     )
     assert res_res.status_code == 200
     assert res_res.json()["status"] == "RESOLVED"

@@ -69,7 +69,7 @@ def test_anomaly_zscore_evaluation_and_explanation():
     assert "10.0 standard deviations" in rep_anomaly.explanation
 
 
-def test_anomalies_api_endpoints():
+def test_anomalies_api_endpoints(operator_headers):
     client = TestClient(app)
 
     # 1. Pre-load a baseline
@@ -92,7 +92,8 @@ def test_anomalies_api_endpoints():
     # 2. Evaluate anomaly via API endpoint
     res = client.post(
         "/api/v1/anomalies/evaluate",
-        json={"observed_count": 15.0, "hour_of_day": 15, "persist": True}
+        json={"observed_count": 15.0, "hour_of_day": 15, "persist": True},
+        headers=operator_headers,
     )
     assert res.status_code == 200
     data = res.json()

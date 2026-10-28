@@ -1,18 +1,18 @@
 {
-  "evaluation_timestamp": "2026-09-29T20:16:03.489770+00:00",
+  "evaluation_timestamp": "2026-09-30T09:22:07.306332+00:00",
   "model_id": "spectatornet_v1_int8",
   "model_name": "SpectatorNet Temporal GRU (INT8 Quantized)",
   "version": "1.0.0",
   "precision": "INT8",
   "runtime": "ONNX Runtime / QNN Hexagon NPU",
   "test_dataset": {
-    "num_samples": 20,
-    "synthetic_samples": 20,
+    "num_samples": 50,
+    "synthetic_samples": 50,
     "disclaimer": "Metrics calculated against synthetic evaluation benchmark."
   },
   "MODEL_QUALITY": {
-    "accuracy": 0.05,
-    "macro_f1": 0.014,
+    "accuracy": 0.14,
+    "macro_f1": 0.053,
     "class_metrics": {
       "NORMAL_BACKGROUND": {
         "precision": 0.0,
@@ -24,49 +24,49 @@
         "precision": 0.0,
         "recall": 0.0,
         "f1_score": 0.0,
-        "support": 2
+        "support": 4
       },
       "OBJECT_REMOVED": {
         "precision": 0.0,
         "recall": 0.0,
         "f1_score": 0.0,
-        "support": 4
+        "support": 8
       },
       "OBJECT_MOVED": {
         "precision": 0.0,
         "recall": 0.0,
         "f1_score": 0.0,
-        "support": 0
+        "support": 6
       },
       "PERSON_ENTERED": {
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1_score": 0.0,
-        "support": 1
+        "precision": 0.231,
+        "recall": 0.375,
+        "f1_score": 0.286,
+        "support": 8
       },
       "PERSON_LEFT": {
         "precision": 0.0,
         "recall": 0.0,
         "f1_score": 0.0,
-        "support": 0
+        "support": 1
       },
       "ZONE_LOITERING": {
-        "precision": 0.083,
-        "recall": 0.25,
-        "f1_score": 0.125,
-        "support": 4
+        "precision": 0.114,
+        "recall": 0.667,
+        "f1_score": 0.195,
+        "support": 6
       },
       "CAMERA_BLOCKED": {
         "precision": 0.0,
         "recall": 0.0,
         "f1_score": 0.0,
-        "support": 5
+        "support": 8
       },
       "TASK_COMPLETED": {
         "precision": 0.0,
         "recall": 0.0,
         "f1_score": 0.0,
-        "support": 4
+        "support": 9
       }
     },
     "confusion_matrix": [
@@ -86,9 +86,9 @@
         0,
         0,
         0,
+        1,
         0,
-        0,
-        2,
+        3,
         0,
         0
       ],
@@ -98,41 +98,8 @@
         0,
         0,
         3,
-        0,
         1,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        4,
         0,
         0
       ],
@@ -142,8 +109,8 @@
         0,
         0,
         2,
-        1,
-        1,
+        0,
+        4,
         0,
         0
       ],
@@ -152,7 +119,7 @@
         0,
         0,
         0,
-        0,
+        3,
         0,
         5,
         0,
@@ -163,9 +130,42 @@
         0,
         0,
         0,
+        0,
+        0,
         1,
         0,
-        3,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        4,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        7,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        7,
         0,
         0
       ]
@@ -173,10 +173,10 @@
   },
   "SYSTEM_PERFORMANCE": {
     "file_size_bytes": 540088,
-    "mean_latency_ms": 0.148,
-    "p50_latency_ms": 0.148,
-    "p95_latency_ms": 0.151,
-    "p99_latency_ms": 0.157,
-    "throughput_fps": 6756.8
+    "mean_latency_ms": 0.136,
+    "p50_latency_ms": 0.136,
+    "p95_latency_ms": 0.139,
+    "p99_latency_ms": 0.143,
+    "throughput_fps": 7352.9
   }
 }

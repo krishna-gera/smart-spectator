@@ -1,7 +1,7 @@
 # Smart Spectator — Phase 7 Hardware Benchmark Report
 ## End-to-End Perception & Inference Performance Measurements
 
-**Generated:** 2026-09-29T11:06:24.902375+00:00  
+**Generated:** 2026-09-30T09:21:23.647595+00:00  
 **System Host:** Darwin 27.0.0 (arm64)  
 **Processor:** arm (10 logical cores, 16.0 GB RAM)  
 **Execution Providers Evaluated:** `CoreMLExecutionProvider, AzureExecutionProvider, CPUExecutionProvider`  
@@ -12,9 +12,9 @@
 
 | Component | Precision | Active Provider | Mean (ms) | p50 (ms) | p95 (ms) | Throughput (FPS) |
 |---|---|---|---|---|---|---|
-| **YOLOv8n Detector** | FP32 | CoreMLExecutionProvider | 3.25 | 3.21 | 3.46 | 307.42 |
-| **SpectatorNet** | FP32 | CoreMLExecutionProvider | 0.21 | 0.2 | 0.26 | 4810.64 |
-| **SpectatorNet** | INT8 | CoreMLExecutionProvider | 0.24 | 0.24 | 0.29 | 4082.7 |
+| **YOLOv8n Detector** | FP32 | CoreMLExecutionProvider | 3.22 | 3.17 | 3.36 | 310.99 |
+| **SpectatorNet** | FP32 | CoreMLExecutionProvider | 0.2 | 0.2 | 0.21 | 5012.74 |
+| **SpectatorNet** | INT8 | CoreMLExecutionProvider | 0.25 | 0.25 | 0.25 | 4014.51 |
 
 ---
 
@@ -23,14 +23,14 @@
 ```
 Raw Frame (720p)
    │
-   ├─► YOLOv8n + ByteTrack (Perception):    11.55 ms
+   ├─► YOLOv8n + ByteTrack (Perception):    12.13 ms
    │
-   ├─► Feature Encoder + SpectatorNet:      0.79 ms
+   ├─► Feature Encoder + SpectatorNet:      0.89 ms
    │
    └─► Event Engine (Rules/Zones/State):    0.01 ms
 --------------------------------------------------------------
-Total End-to-End Pipeline Latency:           11.72 ms (p50: 10.43 ms)
-Sustainable Throughput:                      85.4 FPS
+Total End-to-End Pipeline Latency:           12.32 ms (p50: 10.8 ms)
+Sustainable Throughput:                      81.2 FPS
 ```
 
 ---

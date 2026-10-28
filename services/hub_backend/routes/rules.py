@@ -4,15 +4,16 @@ Conforms to Section 22 of Phase 4 specification.
 """
 
 from datetime import datetime, timezone
-import json
 from typing import List, Dict, Any, Optional
 import uuid
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field
 
 from shared.schemas.v1.models import EventRule, EventSeverity
-from services.hub_backend.database.connection import db_session
+from services.hub_backend.database.repositories.audit_repo import audit_repository
 from services.event_engine import event_engine
+from ..auth.dependencies import require_operator, require_viewer
+from ..auth.models import Principal
 
 router = APIRouter(prefix="/rules", tags=["Rules"])
 
@@ -36,13 +37,13 @@ class RuleUpdateRequest(BaseModel):
 
 
 @router.get("", response_model=List[EventRule])
-def list_rules():
+def list_rules(viewer: Principal = Depends(require_viewer)):
     """Lists all configured automation rules."""
     return event_engine.rule_engine.get_all_rules()
 
 
 @router.get("/{rule_id}", response_model=EventRule)
-def get_rule(rule_id: str):
+def get_rule(rule_id: str, viewer: Principal = Depends(require_viewer)):
     """Retrieves a single rule by ID."""
     rule = event_engine.rule_engine.get_rule(rule_id)
     if not rule:
@@ -51,7 +52,7 @@ def get_rule(rule_id: str):
 
 
 @router.post("", response_model=EventRule, status_code=status.HTTP_201_CREATED)
-def create_rule(req: RuleCreateRequest):
+def create_rule(req: RuleCreateRequest, operator: Principal = Depends(require_operator)):
     """Creates a new automation rule."""
     rule_id = f"rule_{uuid.uuid4().hex[:8]}"
     now_dt = datetime.now(timezone.utc)
@@ -75,17 +76,18 @@ def create_rule(req: RuleCreateRequest):
     )
     event_engine.rule_engine.save_rule_to_db(rule)
 
-    with db_session() as conn:
-        conn.execute(
-            "INSERT INTO audit_logs (log_id, actor, action, resource, metadata_json) VALUES (?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), "user", "rule_created", rule.rule_id, json.dumps({"name": rule.name})),
-        )
+    audit_repository.log(
+        action="rule_created",
+        actor=operator.username,
+        resource=rule.rule_id,
+        details={"name": rule.name}
+    )
 
     return rule
 
 
 @router.put("/{rule_id}", response_model=EventRule)
-def update_rule(rule_id: str, req: RuleUpdateRequest):
+def update_rule(rule_id: str, req: RuleUpdateRequest, operator: Principal = Depends(require_operator)):
     """Updates an existing automation rule."""
     rule = event_engine.rule_engine.get_rule(rule_id)
     if not rule:
@@ -110,32 +112,34 @@ def update_rule(rule_id: str, req: RuleUpdateRequest):
     rule.updated_at = datetime.now(timezone.utc)
     event_engine.rule_engine.save_rule_to_db(rule)
 
-    with db_session() as conn:
-        conn.execute(
-            "INSERT INTO audit_logs (log_id, actor, action, resource, metadata_json) VALUES (?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), "user", "rule_updated", rule.rule_id, json.dumps({"name": rule.name})),
-        )
+    audit_repository.log(
+        action="rule_updated",
+        actor=operator.username,
+        resource=rule.rule_id,
+        details={"name": rule.name}
+    )
 
     return rule
 
 
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_rule(rule_id: str):
+def delete_rule(rule_id: str, operator: Principal = Depends(require_operator)):
     """Deletes an automation rule."""
     rule = event_engine.rule_engine.get_rule(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found.")
 
     event_engine.rule_engine.delete_rule(rule_id)
-    with db_session() as conn:
-        conn.execute(
-            "INSERT INTO audit_logs (log_id, actor, action, resource, metadata_json) VALUES (?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), "user", "rule_deleted", rule_id, json.dumps({"name": rule.name})),
-        )
+    audit_repository.log(
+        action="rule_deleted",
+        actor=operator.username,
+        resource=rule_id,
+        details={"name": rule.name}
+    )
 
 
 @router.post("/{rule_id}/enable", response_model=EventRule)
-def enable_rule(rule_id: str):
+def enable_rule(rule_id: str, operator: Principal = Depends(require_operator)):
     """Enables an automation rule."""
     rule = event_engine.rule_engine.get_rule(rule_id)
     if not rule:
@@ -147,7 +151,7 @@ def enable_rule(rule_id: str):
 
 
 @router.post("/{rule_id}/disable", response_model=EventRule)
-def disable_rule(rule_id: str):
+def disable_rule(rule_id: str, operator: Principal = Depends(require_operator)):
     """Disables an automation rule."""
     rule = event_engine.rule_engine.get_rule(rule_id)
     if not rule:

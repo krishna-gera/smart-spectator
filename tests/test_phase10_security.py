@@ -16,6 +16,8 @@ from ai.orchestration.safety import (
 )
 from services.hub_backend.query import local_query_engine, StructuredQuery
 from services.stream_engine.privacy import privacy_mask_engine
+from fastapi.testclient import TestClient
+from services.hub_backend.main import app
 
 
 def test_action_safety_validator_enforces_whitelist_and_blocks_attacks():
@@ -78,3 +80,38 @@ def test_privacy_mask_engine_application():
     assert np.all(masked[10:40, 10:40] == [0, 0, 0])
     # Unmasked region should remain white (255, 255, 255)
     assert np.all(masked[60:90, 60:90] == [255, 255, 255])
+
+
+@pytest.mark.parametrize("path", [
+    "/api/v1/ai/models/temporal/activate",
+    "/api/v1/ai/ab-evaluate",
+    "/api/v1/incidents/inc_x/acknowledge",
+    "/api/v1/incidents/inc_x/resolve",
+    "/api/v1/anomalies/recompute-baselines",
+    "/api/v1/anomalies/evaluate",
+    "/api/v1/memory/patterns/scan",
+    "/api/v1/feedback",
+])
+def test_mutating_routes_require_authentication(path):
+    client = TestClient(app)
+    res = client.post(path, json={})
+    assert res.status_code == 401
+
+
+def test_model_activation_requires_admin(operator_headers, tmp_path):
+    from services.hub_backend.config import settings
+    from services.hub_backend.database.connection import init_database
+
+    orig = settings.DATABASE_PATH
+    settings.DATABASE_PATH = tmp_path / "test_rbac.db"
+    init_database()
+    client = TestClient(app)
+    try:
+        res = client.post(
+            "/api/v1/ai/models/temporal/activate",
+            json={"model_id": "spectatornet_v1_int8"},
+            headers=operator_headers,
+        )
+    finally:
+        settings.DATABASE_PATH = orig
+    assert res.status_code == 403

@@ -1,4 +1,4 @@
-name: Smart Spectator CI
+name: Smart Spectator Comprehensive CI
 
 on:
   push:
@@ -7,7 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test-and-verify:
+  backend-and-ai-verify:
+    name: Backend, Stream Ingest & AI Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -28,22 +29,66 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio flake8
+          pip install pytest pytest-asyncio flake8 bandit
 
-      - name: Code Quality & Lint Check
+      - name: Code Quality & Syntax Check
         run: |
-          # Stop build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=apps/camera
 
-      - name: Run Test Suite (Phases 1-7)
+      - name: Security Scan (Bandit & Secret Checks)
+        run: |
+          # Bandit AST security scanner for high severity vulnerabilities
+          bandit -r services/ shared/ -ll -ii --exclude services/hub_backend/database/migrations.py
+          # Verify no committed private keys or unrevoked active credentials
+          ! grep -rn "PRIVATE KEY" services/ shared/ ai/ apps/client/
+          ! grep -rn "ss_tok_v1_" services/hub_backend/config.py
+
+      - name: Run Test Suite
         env:
           SMART_SPECTATOR_ENV: test
           PYTHONPATH: .
         run: |
           pytest -v tests/
 
-      - name: Security & Secret Scan Verification
+  android-camera-verify:
+    name: Android Camera App Flutter Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.x"
+          channel: "stable"
+          cache: true
+
+      - name: Verify Flutter Dependencies & Analyze
+        working-directory: apps/camera
         run: |
-          # Verify no committed private keys or active credentials
-          ! grep -rn "PRIVATE KEY" services/ shared/ ai/ apps/client/
-          ! grep -rn "ss_tok_v1_" services/hub_backend/config.py
+          flutter pub get
+          flutter analyze .
+
+  windows-arm-snapdragon-verify:
+    name: Snapdragon ARM64 & QNN Acceleration Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install onnxruntime numpy pydantic pytest
+
+      - name: Validate Snapdragon QNN Manifest & Precision
+        env:
+          PYTHONPATH: .
+        run: |
+          pytest -v tests/test_phase7_snapdragon_inference.py tests/test_phase8_model_integrity.py

@@ -1,6 +1,6 @@
 {
   "report_id": "phase7_hardware_report",
-  "benchmark_timestamp": "2026-09-29T11:06:24.902375+00:00",
+  "benchmark_timestamp": "2026-09-30T09:21:23.647595+00:00",
   "system": {
     "os": "Darwin",
     "os_version": "27.0.0",
@@ -13,40 +13,40 @@
       "AzureExecutionProvider",
       "CPUExecutionProvider"
     ],
-    "timestamp": "2026-09-29T11:06:23.375430+00:00"
+    "timestamp": "2026-09-30T09:21:22.070155+00:00"
   },
   "spectatornet_fp32": {
     "active_provider": "CoreMLExecutionProvider",
     "iterations": 50,
     "warmup": 10,
-    "mean_ms": 0.21,
+    "mean_ms": 0.2,
     "p50_ms": 0.2,
-    "p95_ms": 0.26,
+    "p95_ms": 0.21,
     "min_ms": 0.19,
-    "max_ms": 0.4,
-    "throughput_fps": 4810.64
+    "max_ms": 0.21,
+    "throughput_fps": 5012.74
   },
   "spectatornet_int8": {
     "active_provider": "CoreMLExecutionProvider",
     "iterations": 50,
     "warmup": 10,
-    "mean_ms": 0.24,
-    "p50_ms": 0.24,
-    "p95_ms": 0.29,
-    "min_ms": 0.23,
-    "max_ms": 0.44,
-    "throughput_fps": 4082.7
+    "mean_ms": 0.25,
+    "p50_ms": 0.25,
+    "p95_ms": 0.25,
+    "min_ms": 0.24,
+    "max_ms": 0.26,
+    "throughput_fps": 4014.51
   },
   "yolov8n_detector": {
     "active_provider": "CoreMLExecutionProvider",
     "iterations": 20,
     "warmup": 5,
-    "mean_ms": 3.25,
-    "p50_ms": 3.21,
-    "p95_ms": 3.46,
-    "min_ms": 3.11,
-    "max_ms": 3.48,
-    "throughput_fps": 307.42
+    "mean_ms": 3.22,
+    "p50_ms": 3.17,
+    "p95_ms": 3.36,
+    "min_ms": 3.02,
+    "max_ms": 4.05,
+    "throughput_fps": 310.99
   },
   "motion_gating": {
     "gating_enabled_frames_processed": 2,
@@ -54,13 +54,13 @@
     "frames_filtered_percent": 83.3
   },
   "end_to_end_pipeline": {
-    "e2e_mean_ms": 11.72,
-    "e2e_p50_ms": 10.43,
-    "e2e_p95_ms": 13.66,
-    "perception_mean_ms": 11.55,
-    "temporal_model_mean_ms": 0.79,
+    "e2e_mean_ms": 12.32,
+    "e2e_p50_ms": 10.8,
+    "e2e_p95_ms": 16.39,
+    "perception_mean_ms": 12.13,
+    "temporal_model_mean_ms": 0.89,
     "event_engine_mean_ms": 0.01,
-    "sustainable_fps": 85.4
+    "sustainable_fps": 81.2
   },
   "hardware_claims_verified": true,
   "npu_note": "NPU benchmarks pending execution on physical Snapdragon Windows ARM64 device; local benchmarks performed with native host providers."
