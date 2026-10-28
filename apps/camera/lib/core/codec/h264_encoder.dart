@@ -67,7 +67,8 @@ class H264HardwareEncoder {
   /// Encodes one camera frame. Throws [PlatformException] if the encoder
   /// cannot be created for this frame size.
   Future<List<EncodedPacket>> encodeImage(CameraImage image, int timestampUs) async {
-    if (image.planes.length < 3) return [];
+    // Android delivers 3 planes (Y, U, V); iOS delivers NV12 (Y, interleaved CbCr).
+    if (image.planes.isEmpty) return [];
     if (!await _ensureInitialized(image.width, image.height)) {
       throw PlatformException(code: 'ENCODER_INIT_FAILED', message: 'Encoder unavailable for ${image.width}x${image.height}');
     }

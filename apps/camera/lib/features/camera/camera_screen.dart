@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
@@ -128,7 +129,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       deviceId: creds.deviceId,
       cameraId: creds.cameraId!,
       deviceToken: creds.deviceToken!,
-      sensorOrientation: _cameraController!.description.sensorOrientation,
+      // iOS already rotates image-stream frames upright; Android delivers sensor-oriented frames.
+      sensorOrientation: Platform.isIOS ? 0 : _cameraController!.description.sensorOrientation,
       fpsProvider: () => _isStreaming ? _fps : null,
       onCommand: (cmd) {
         // The main phone asks for a keyframe when a viewer starts or recovers.
