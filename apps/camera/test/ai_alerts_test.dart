@@ -67,7 +67,7 @@ void main() {
     test('turns proxy errors into readable messages', () async {
       final r = await fakeAi([], status: 502, body: {'error': 'ai_not_authorised'}).analyze(jpeg: _jpeg, cameraId: 'c', cameraName: 'c');
       expect(r.ok, isFalse);
-      expect(r.error, contains('credits'));
+      expect(r.error, contains('Groq key'));
     });
 
     test('is a no-op when the build has no AI configured', () async {

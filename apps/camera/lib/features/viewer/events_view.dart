@@ -311,7 +311,7 @@ class _CameraSettingsSheetState extends State<CameraSettingsSheet> {
     if (on &&
         !await confirm(context,
             title: 'Turn on AI descriptions?',
-            message: 'When this camera detects motion, one snapshot is sent to xAI (an online AI service) to be described. '
+            message: 'When this camera detects motion, one snapshot is sent to Groq (an online AI service) to be described. '
                 'Live video never leaves your Wi-Fi. You can turn this off at any time.',
             action: 'Turn on')) {
       return;
@@ -357,7 +357,7 @@ class _CameraSettingsSheetState extends State<CameraSettingsSheet> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             secondary: const Icon(Icons.auto_awesome, color: AppColors.ai),
-            title: const Text('AI descriptions (xAI)'),
+            title: const Text('AI descriptions (Groq)'),
             subtitle: Text(widget.aiConfigured
                 ? 'Describe motion snapshots and skip alerts for shadows or lighting changes.'
                 : 'Not available in this build (AI service not configured).'),

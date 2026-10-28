@@ -5,7 +5,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 /// Something a camera reported (Phase 3: motion). [aiSummary] is filled in
-/// later by the xAI integration (Phase 4).
+/// later by the AI integration (Phase 4, Groq via the AI proxy).
 class CameraEvent {
   final String id;
   final String cameraId;
@@ -85,7 +85,7 @@ class CameraSettings {
   final double sensitivity;
   final bool notify;
 
-  /// Send motion snapshots to the AI service (xAI). Off until the user opts in.
+  /// Send motion snapshots to the AI service (Groq). Off until the user opts in.
   final bool aiEnabled;
 
   const CameraSettings({this.motionEnabled = true, this.sensitivity = 0.5, this.notify = true, this.aiEnabled = false});

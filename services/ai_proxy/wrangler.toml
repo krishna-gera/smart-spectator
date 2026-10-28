@@ -1,6 +1,6 @@
 # Cloudflare Worker for the Smart Spectator AI proxy.
 # Deploy:   npx wrangler deploy
-# Secrets:  npx wrangler secret put XAI_API_KEY
+# Secrets:  npx wrangler secret put AI_API        (Groq API key)
 #           npx wrangler secret put PROXY_TOKEN
 # Never put secrets in this file; local secrets live in .dev.vars (git-ignored).
 name = "smart-spectator-ai-proxy"
@@ -8,6 +8,7 @@ main = "src/worker.js"
 compatibility_date = "2026-10-01"
 
 [vars]
-XAI_MODEL = "grok-4.7"
+AI_PROVIDER = "groq"
+AI_MODEL = "qwen/qwen3.8-27b"
 DAILY_REQUEST_LIMIT = "300"
 PER_CAMERA_MIN_INTERVAL_SECONDS = "20"

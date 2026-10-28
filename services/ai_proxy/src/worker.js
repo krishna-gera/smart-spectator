@@ -1,22 +1,43 @@
 /**
  * Smart Spectator AI proxy.
  *
- * The only component that holds the xAI API key. The main phone sends one
- * JPEG snapshot; the proxy asks xAI for a structured description and returns
- * it. Images are never stored or logged, and xAI is asked not to store the
- * request (`store: false`).
+ * The only component that holds the AI provider's API key. The main phone
+ * sends one JPEG snapshot; the proxy asks the vision model for a structured
+ * description and returns it. Images are never stored or logged here.
+ *
+ * Providers:
+ *   groq (default) — OpenAI-compatible chat completions, model qwen/qwen3.8-27b, JSON mode
+ *   xai            — Responses API with a strict JSON schema (store: false)
  *
  * Runs as a Cloudflare Worker (`wrangler deploy`) or locally with
  * `node dev-server.mjs` (same code, secrets read from .dev.vars).
  *
  * Environment:
- *   XAI_API_KEY                      required, secret
+ *   AI_API                           required, secret: the provider API key (XAI_API_KEY also accepted)
  *   PROXY_TOKEN                      required, secret; callers send "Authorization: Bearer <token>"
- *   XAI_MODEL                        optional, default "grok-4.7"
- *   XAI_BASE_URL                     optional, default "https://api.x.ai/v1" (tests point it at a fake)
+ *   AI_PROVIDER                      optional, "groq" (default) or "xai"
+ *   AI_MODEL                         optional, provider default
+ *   AI_BASE_URL                      optional, provider default (tests point it at a fake)
  *   DAILY_REQUEST_LIMIT              optional, default 300 analyses per day (cost cap)
  *   PER_CAMERA_MIN_INTERVAL_SECONDS  optional, default 20
  */
+
+const PROVIDERS = {
+  groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'qwen/qwen3.8-27b' },
+  xai: { baseUrl: 'https://api.x.ai/v1', model: 'grok-4.7' },
+};
+
+/** Provider settings resolved from the environment (with XAI_* names kept for compatibility). */
+export function providerConfig(env) {
+  const name = (env.AI_PROVIDER || (env.AI_API ? 'groq' : env.XAI_API_KEY ? 'xai' : 'groq')).toLowerCase();
+  const defaults = PROVIDERS[name] ?? PROVIDERS.groq;
+  return {
+    name: PROVIDERS[name] ? name : 'groq',
+    key: env.AI_API || env.XAI_API_KEY || '',
+    model: env.AI_MODEL || (name === 'xai' ? env.XAI_MODEL : undefined) || defaults.model,
+    baseUrl: env.AI_BASE_URL || (name === 'xai' ? env.XAI_BASE_URL : undefined) || defaults.baseUrl,
+  };
+}
 
 export const CATEGORIES = ['person', 'vehicle', 'animal', 'package', 'motion_other', 'no_activity', 'camera_problem'];
 export const THREAT_LEVELS = ['none', 'low', 'medium', 'high'];
@@ -43,6 +64,61 @@ const PROMPT = [
   'and "camera_problem" if the view is blocked, black, or unusable.',
   'threat_level: "none" for normal activity, "high" only for clear danger such as fire, a weapon, or forced entry.',
 ].join(' ');
+
+// JSON mode (Groq) does not enforce a schema, so the shape is spelled out; normaliseInsight validates it.
+const JSON_INSTRUCTIONS =
+  'Reply with only a JSON object with exactly these keys: ' +
+  `"summary" (one plain sentence, at most 20 words), "category" (one of ${CATEGORIES.join(', ')}), ` +
+  `"threat_level" (one of ${THREAT_LEVELS.join(', ')}), "people_count" (integer), "confidence" (number 0 to 1).`;
+
+function buildRequest(provider, b64, cameraName) {
+  const prompt = `${PROMPT} Camera name: "${cameraName}".`;
+  if (provider.name === 'xai') {
+    return {
+      path: '/responses',
+      body: {
+        model: provider.model,
+        store: false,
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_image', image_url: `data:image/jpeg;base64,${b64}`, detail: 'low' },
+              { type: 'input_text', text: prompt },
+            ],
+          },
+        ],
+        text: { format: { type: 'json_schema', name: 'camera_insight', schema: INSIGHT_SCHEMA, strict: true } },
+      },
+    };
+  }
+  return {
+    path: '/chat/completions',
+    body: {
+      model: provider.model,
+      temperature: 0.2,
+      max_completion_tokens: 300,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: `${prompt} ${JSON_INSTRUCTIONS}` },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+function extractText(provider, data) {
+  if (provider.name === 'xai') {
+    const message = (data.output ?? []).find((o) => o.type === 'message');
+    return (message?.content ?? []).find((c) => c.type === 'output_text')?.text;
+  }
+  return data.choices?.[0]?.message?.content;
+}
 
 // Best-effort limits. In-memory: per process locally, per isolate on Workers.
 // Production should move these to Durable Objects or KV.
@@ -117,27 +193,19 @@ async function analyze(request, env, now) {
   state.lastByCamera.set(cameraId, now);
   state.count++;
 
-  const model = env.XAI_MODEL || 'grok-4.7';
+  const provider = providerConfig(env);
+  const { path, body: payload } = buildRequest(provider, b64, cameraName);
   const started = Date.now();
   let upstream;
   try {
-    upstream = await fetch(`${env.XAI_BASE_URL || 'https://api.x.ai/v1'}/responses`, {
+    upstream = await fetch(`${provider.baseUrl}${path}`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${env.XAI_API_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        store: false,
-        input: [
-          {
-            role: 'user',
-            content: [
-              { type: 'input_image', image_url: `data:image/jpeg;base64,${b64}`, detail: 'low' },
-              { type: 'input_text', text: `${PROMPT} Camera name: "${cameraName}".` },
-            ],
-          },
-        ],
-        text: { format: { type: 'json_schema', name: 'camera_insight', schema: INSIGHT_SCHEMA, strict: true } },
-      }),
+      headers: {
+        authorization: `Bearer ${provider.key}`,
+        'content-type': 'application/json',
+        'user-agent': 'smart-spectator-ai-proxy/1.0',
+      },
+      body: JSON.stringify(payload),
     });
   } catch {
     return json(502, { error: 'ai_unreachable' });
@@ -146,17 +214,15 @@ async function analyze(request, env, now) {
   if (!upstream.ok) {
     // Never forward upstream bodies (could echo request data); map to stable codes.
     const code = upstream.status === 401 || upstream.status === 403 ? 'ai_not_authorised' : upstream.status === 429 ? 'ai_rate_limited' : 'ai_error';
-    console.log(JSON.stringify({ event: 'xai_error', status: upstream.status, camera: cameraId }));
+    console.log(JSON.stringify({ event: 'ai_error', provider: provider.name, status: upstream.status, camera: cameraId }));
     return json(502, { error: code, upstream_status: upstream.status });
   }
 
   try {
     const data = await upstream.json();
-    const message = (data.output ?? []).find((o) => o.type === 'message');
-    const text = (message?.content ?? []).find((c) => c.type === 'output_text')?.text;
-    const insight = normaliseInsight(text);
-    console.log(JSON.stringify({ event: 'analysed', camera: cameraId, category: insight.category, ms: Date.now() - started }));
-    return json(200, { ...insight, model: data.model ?? model, latency_ms: Date.now() - started });
+    const insight = normaliseInsight(extractText(provider, data));
+    console.log(JSON.stringify({ event: 'analysed', provider: provider.name, camera: cameraId, category: insight.category, ms: Date.now() - started }));
+    return json(200, { ...insight, provider: provider.name, model: data.model ?? provider.model, latency_ms: Date.now() - started });
   } catch {
     return json(502, { error: 'ai_bad_response' });
   }
@@ -172,10 +238,11 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/health' && request.method === 'GET') {
-      return json(200, { status: 'ok', service: 'smart-spectator-ai-proxy', configured: Boolean(env.XAI_API_KEY && env.PROXY_TOKEN) });
+      const p = providerConfig(env);
+      return json(200, { status: 'ok', service: 'smart-spectator-ai-proxy', provider: p.name, model: p.model, configured: Boolean(p.key && env.PROXY_TOKEN) });
     }
     if (url.pathname !== '/v1/analyze' || request.method !== 'POST') return json(404, { error: 'not_found' });
-    if (!env.XAI_API_KEY || !env.PROXY_TOKEN) return json(503, { error: 'proxy_not_configured' });
+    if (!providerConfig(env).key || !env.PROXY_TOKEN) return json(503, { error: 'proxy_not_configured' });
 
     const auth = request.headers.get('authorization') ?? '';
     const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-/// Where the AI proxy lives. The xAI key is never in the app: only the proxy
+/// Where the AI proxy lives. The AI provider's key (Groq) is never in the app: only the proxy
 /// address and a proxy access token, supplied at build time with
 ///   --dart-define=AI_PROXY_URL=http://10.0.0.5:8787
 ///   --dart-define=AI_PROXY_TOKEN=...
@@ -73,7 +73,7 @@ class AiClient {
   AiClient(this.config, {http.Client? httpClient}) : _http = httpClient ?? http.Client();
 
   static const _messages = {
-    'ai_not_authorised': 'The AI service is not active (check the xAI account has credits).',
+    'ai_not_authorised': 'The AI service rejected its API key (check the Groq key and account).',
     'daily_limit_reached': 'Daily AI limit reached.',
     'too_frequent': 'This camera was analysed moments ago.',
     'ai_rate_limited': 'The AI is busy; try again shortly.',
