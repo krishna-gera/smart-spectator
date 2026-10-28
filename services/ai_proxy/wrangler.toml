@@ -1,0 +1,13 @@
+# Cloudflare Worker for the Smart Spectator AI proxy.
+# Deploy:   npx wrangler deploy
+# Secrets:  npx wrangler secret put XAI_API_KEY
+#           npx wrangler secret put PROXY_TOKEN
+# Never put secrets in this file; local secrets live in .dev.vars (git-ignored).
+name = "smart-spectator-ai-proxy"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+XAI_MODEL = "grok-4.7"
+DAILY_REQUEST_LIMIT = "300"
+PER_CAMERA_MIN_INTERVAL_SECONDS = "20"

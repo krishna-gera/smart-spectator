@@ -32,3 +32,8 @@ artifacts/runs/**/*.pt
 
 # macOS
 .DS_Store
+
+# Local secrets (xAI key, AI proxy token) — never commit
+.dev.vars
+**/.dev.vars
+*.secret

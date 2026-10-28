@@ -1,0 +1,11 @@
+{
+  "name": "smart-spectator-ai-proxy",
+  "private": true,
+  "type": "module",
+  "description": "Holds the xAI API key and turns camera snapshots into structured insights.",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "test": "node --test",
+    "deploy": "npx wrangler deploy"
+  }
+}
