@@ -1,153 +1,162 @@
 package com.smartspectator.smart_spectator_camera
 
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaFormat
-import android.os.Bundle
+import android.content.Intent
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.nio.ByteBuffer
 
 class MainActivity : FlutterActivity() {
-    private val ENCODER_CHANNEL = "com.smartspectator.camera/encoder"
-    private var mediaCodec: MediaCodec? = null
-    private var isEncoderInitialized = false
-    private var frameWidth = 1280
-    private var frameHeight = 720
+    private val main = Handler(Looper.getMainLooper())
+    private val encoder = VideoEncoder()
+    private val decoders = mutableMapOf<Long, VideoDecoder>()
+    private var nsd: NsdHelper? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        nsd = NsdHelper(applicationContext)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ENCODER_CHANNEL).setMethodCallHandler { call, result ->
+        // ---- Camcorder Mode: hardware H.264 encoder
+        MethodChannel(messenger, ENCODER_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "initEncoder" -> {
                     val width = call.argument<Int>("width") ?: 1280
                     val height = call.argument<Int>("height") ?: 720
-                    val bitrate = call.argument<Int>("bitrate") ?: 2000000
+                    val bitrate = call.argument<Int>("bitrate") ?: 2_000_000
                     val fps = call.argument<Int>("fps") ?: 30
-                    val gopSeconds = call.argument<Int>("keyframeInterval") ?: 1
-
-                    val success = initializeMediaCodec(width, height, bitrate, fps, gopSeconds)
-                    if (success) {
-                        result.success(true)
-                    } else {
-                        result.error("ENCODER_INIT_FAILED", "Failed to initialize Android MediaCodec H.264 encoder", null)
+                    val gop = call.argument<Int>("keyframeInterval") ?: 1
+                    encoder.post {
+                        val ok = encoder.configure(width, height, bitrate, fps, gop)
+                        main.post {
+                            if (ok) result.success(true)
+                            else result.error("ENCODER_INIT_FAILED", "Failed to initialize H.264 encoder for ${width}x$height", null)
+                        }
                     }
                 }
                 "encodeFrame" -> {
-                    val yuvData = call.argument<ByteArray>("yuvData")
-                    val width = call.argument<Int>("width") ?: frameWidth
-                    val height = call.argument<Int>("height") ?: frameHeight
-                    val timestampUs = call.argument<Long>("timestampUs") ?: (System.nanoTime() / 1000)
-
-                    if (yuvData == null || !isEncoderInitialized) {
-                        result.error("INVALID_STATE", "Encoder not initialized or null YUV buffer", null)
+                    val rawPlanes = call.argument<List<Map<String, Any>>>("planes")
+                    val timestampUs = (call.argument<Number>("timestampUs") ?: System.nanoTime() / 1000).toLong()
+                    if (rawPlanes == null || rawPlanes.size < 3) {
+                        result.error("INVALID_ARGS", "Expected three YUV planes", null)
                         return@setMethodCallHandler
                     }
-
-                    try {
-                        val encodedPackets = encodeYuvToH264(yuvData, width, height, timestampUs)
-                        result.success(encodedPackets)
-                    } catch (e: Exception) {
-                        result.error("ENCODE_ERROR", e.message, null)
+                    val planes = rawPlanes.map {
+                        PlaneData(
+                            it["bytes"] as ByteArray,
+                            (it["rowStride"] as Number).toInt(),
+                            (it["pixelStride"] as Number).toInt(),
+                        )
+                    }
+                    encoder.post {
+                        try {
+                            val packets = encoder.encode(planes, timestampUs)
+                            main.post { result.success(packets) }
+                        } catch (e: Exception) {
+                            main.post { result.error("ENCODE_ERROR", e.message, null) }
+                        }
                     }
                 }
-                "stopEncoder" -> {
-                    stopMediaCodec()
+                "requestKeyframe" -> {
+                    encoder.requestKeyframe()
                     result.success(true)
+                }
+                "stopEncoder" -> encoder.post {
+                    encoder.stopCodec()
+                    main.post { result.success(true) }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // ---- View Mode: hardware H.264 decoders rendering into Flutter textures
+        val decoderChannel = MethodChannel(messenger, DECODER_CHANNEL)
+        decoderChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "create" -> {
+                    val producer = flutterEngine.renderer.createSurfaceProducer()
+                    val id = producer.id()
+                    decoders[id] = VideoDecoder(producer) { w, h ->
+                        main.post {
+                            decoderChannel.invokeMethod("onVideoSize", mapOf("textureId" to id, "width" to w, "height" to h))
+                        }
+                    }
+                    result.success(id)
+                }
+                "feed" -> {
+                    val id = (call.argument<Number>("textureId") ?: -1).toLong()
+                    val data = call.argument<ByteArray>("data")
+                    val pts = (call.argument<Number>("ptsUs") ?: 0).toLong()
+                    val decoder = decoders[id]
+                    if (decoder != null && data != null) decoder.feed(data, pts)
+                    result.success(null)
+                }
+                "stats" -> {
+                    val d = decoders[(call.argument<Number>("textureId") ?: -1).toLong()]
+                    result.success(d?.let { mapOf("framesRendered" to it.framesRendered, "packetsDropped" to it.packetsDropped) })
+                }
+                "release" -> {
+                    decoders.remove((call.argument<Number>("textureId") ?: -1).toLong())?.release()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // ---- System services: foreground hub service, screen wake, LAN discovery
+        MethodChannel(messenger, SYSTEM_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startHubService" -> {
+                    val intent = Intent(this, HubForegroundService::class.java)
+                        .putExtra(HubForegroundService.EXTRA_TEXT, call.argument<String>("text"))
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+                    result.success(true)
+                }
+                "stopHubService" -> {
+                    stopService(Intent(this, HubForegroundService::class.java))
+                    result.success(true)
+                }
+                "keepScreenOn" -> {
+                    if (call.argument<Boolean>("enabled") == true) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                    result.success(true)
+                }
+                "nsdRegister" -> {
+                    nsd?.register(call.argument<Int>("port") ?: 8000, call.argument<String>("name") ?: "SmartSpectator")
+                    result.success(true)
+                }
+                "nsdUnregister" -> {
+                    nsd?.unregister()
+                    result.success(true)
+                }
+                "nsdDiscover" -> {
+                    val timeout = (call.argument<Number>("timeoutMs") ?: 3000).toLong()
+                    val helper = nsd
+                    if (helper == null) result.success(emptyList<Any>())
+                    else helper.discover(timeout) { hubs -> result.success(hubs) }
                 }
                 else -> result.notImplemented()
             }
         }
     }
 
-    private fun initializeMediaCodec(width: Int, height: Int, bitrate: Int, fps: Int, gopSeconds: Int): Boolean {
-        stopMediaCodec()
-        return try {
-            frameWidth = width
-            frameHeight = height
-
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
-                setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
-                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, gopSeconds)
-                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
-            }
-
-            mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
-                configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-                start()
-            }
-            isEncoderInitialized = true
-            true
-        } catch (e: Exception) {
-            mediaCodec = null
-            isEncoderInitialized = false
-            false
-        }
-    }
-
-    private fun encodeYuvToH264(yuvData: ByteArray, width: Int, height: Int, timestampUs: Long): List<Map<String, Any>> {
-        val codec = mediaCodec ?: return emptyList()
-        val results = mutableListOf<Map<String, Any>>()
-
-        // 1. Submit input frame
-        val inputBufferIndex = codec.dequeueInputBuffer(10000L) // 10ms timeout
-        if (inputBufferIndex >= 0) {
-            val inputBuffer: ByteBuffer = codec.getInputBuffer(inputBufferIndex) ?: return emptyList()
-            inputBuffer.clear()
-            val bytesToCopy = Math.min(yuvData.size, inputBuffer.remaining())
-            inputBuffer.put(yuvData, 0, bytesToCopy)
-            codec.queueInputBuffer(inputBufferIndex, 0, bytesToCopy, timestampUs, 0)
-        }
-
-        // 2. Drain output buffers
-        val bufferInfo = MediaCodec.BufferInfo()
-        var outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 10000L)
-
-        while (outputBufferIndex >= 0) {
-            val outputBuffer: ByteBuffer = codec.getOutputBuffer(outputBufferIndex) ?: continue
-            outputBuffer.position(bufferInfo.offset)
-            outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-
-            val outData = ByteArray(bufferInfo.size)
-            outputBuffer.get(outData)
-
-            val isKeyframe = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0 ||
-                             (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0
-
-            results.add(mapOf(
-                "isKeyframe" to isKeyframe,
-                "data" to outData,
-                "ptsUs" to bufferInfo.presentationTimeUs,
-                "flags" to bufferInfo.flags
-            ))
-
-            codec.releaseOutputBuffer(outputBufferIndex, false)
-            outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 0L)
-        }
-
-        return results
-    }
-
-    private fun stopMediaCodec() {
-        try {
-            if (isEncoderInitialized && mediaCodec != null) {
-                mediaCodec?.stop()
-                mediaCodec?.release()
-            }
-        } catch (e: Exception) {
-            // Ignore teardown errors
-        } finally {
-            mediaCodec = null
-            isEncoderInitialized = false
-        }
-    }
-
     override fun onDestroy() {
-        stopMediaCodec()
+        decoders.values.forEach { it.release() }
+        decoders.clear()
+        nsd?.unregister()
+        encoder.shutdown()
         super.onDestroy()
+    }
+
+    companion object {
+        private const val ENCODER_CHANNEL = "com.smartspectator.camera/encoder"
+        private const val DECODER_CHANNEL = "com.smartspectator/decoder"
+        private const val SYSTEM_CHANNEL = "com.smartspectator/system"
     }
 }

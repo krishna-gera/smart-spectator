@@ -13,69 +13,71 @@ class EncodedPacket {
   });
 }
 
+/// Bridge to the Android MediaCodec H.264 encoder (VideoEncoder.kt).
+///
+/// The encoder is sized from the first real camera frame and re-created if the
+/// camera's frame size changes, so its input always matches the frames given.
 class H264HardwareEncoder {
   static const MethodChannel _channel = MethodChannel('com.smartspectator.camera/encoder');
 
+  final int bitrate;
+  final int fps;
+  final int keyframeIntervalSeconds;
+
+  int? _width;
+  int? _height;
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
 
-  /// Concatenates CameraImage plane buffers into a contiguous YUV byte stream
-  static Uint8List extractYuvFromImage(CameraImage image) {
-    if (image.planes.length == 1) {
-      return image.planes[0].bytes;
-    }
-    final int totalBytes = image.planes.fold(0, (sum, p) => sum + p.bytes.length);
-    final Uint8List yuvBytes = Uint8List(totalBytes);
-    int offset = 0;
-    for (final plane in image.planes) {
-      yuvBytes.setRange(offset, offset + plane.bytes.length, plane.bytes);
-      offset += plane.bytes.length;
-    }
-    return yuvBytes;
-  }
+  H264HardwareEncoder({
+    this.bitrate = 2000000,
+    this.fps = 30,
+    this.keyframeIntervalSeconds = 1,
+  });
 
-  Future<bool> init({
-    int width = 1280,
-    int height = 720,
-    int bitrate = 2000000,
-    int fps = 30,
-    int keyframeInterval = 1,
-  }) async {
+  /// Planes with their real strides; the native side copies them into the
+  /// codec's own layout, so padded rows and interleaved chroma are handled.
+  static List<Map<String, Object>> planesOf(CameraImage image) => image.planes
+      .map((p) => <String, Object>{
+            'bytes': p.bytes,
+            'rowStride': p.bytesPerRow,
+            'pixelStride': p.bytesPerPixel ?? 1,
+          })
+      .toList();
+
+  Future<bool> _ensureInitialized(int width, int height) async {
+    if (_isInitialized && width == _width && height == _height) return true;
     try {
-      final success = await _channel.invokeMethod<bool>('initEncoder', {
+      final ok = await _channel.invokeMethod<bool>('initEncoder', {
         'width': width,
         'height': height,
         'bitrate': bitrate,
         'fps': fps,
-        'keyframeInterval': keyframeInterval,
+        'keyframeInterval': keyframeIntervalSeconds,
       });
-      _isInitialized = success ?? false;
-      return _isInitialized;
-    } on PlatformException catch (_) {
+      _isInitialized = ok ?? false;
+    } on PlatformException {
       _isInitialized = false;
-      return false;
     }
+    _width = _isInitialized ? width : null;
+    _height = _isInitialized ? height : null;
+    return _isInitialized;
   }
 
-  Future<List<EncodedPacket>> encodeYuvFrame(
-    Uint8List yuvData,
-    int width,
-    int height,
-    int timestampUs,
-  ) async {
-    if (!_isInitialized) return [];
-
+  /// Encodes one camera frame. Throws [PlatformException] if the encoder
+  /// cannot be created for this frame size.
+  Future<List<EncodedPacket>> encodeImage(CameraImage image, int timestampUs) async {
+    if (image.planes.length < 3) return [];
+    if (!await _ensureInitialized(image.width, image.height)) {
+      throw PlatformException(code: 'ENCODER_INIT_FAILED', message: 'Encoder unavailable for ${image.width}x${image.height}');
+    }
     try {
-      final rawResults = await _channel.invokeMethod<List<dynamic>>('encodeFrame', {
-        'yuvData': yuvData,
-        'width': width,
-        'height': height,
+      final raw = await _channel.invokeMethod<List<dynamic>>('encodeFrame', {
+        'planes': planesOf(image),
         'timestampUs': timestampUs,
       });
-
-      if (rawResults == null || rawResults.isEmpty) return [];
-
-      return rawResults.map((item) {
+      if (raw == null) return [];
+      return raw.map((item) {
         final map = Map<String, dynamic>.from(item as Map);
         return EncodedPacket(
           isKeyframe: map['isKeyframe'] as bool? ?? false,
@@ -83,8 +85,17 @@ class H264HardwareEncoder {
           ptsUs: (map['ptsUs'] as num?)?.toInt() ?? timestampUs,
         );
       }).toList();
-    } on PlatformException catch (_) {
+    } on PlatformException {
       return [];
+    }
+  }
+
+  Future<void> requestKeyframe() async {
+    if (!_isInitialized) return;
+    try {
+      await _channel.invokeMethod('requestKeyframe');
+    } on PlatformException {
+      // Next scheduled keyframe (≤1 s) will arrive anyway.
     }
   }
 
@@ -94,5 +105,7 @@ class H264HardwareEncoder {
       await _channel.invokeMethod('stopEncoder');
     } catch (_) {}
     _isInitialized = false;
+    _width = null;
+    _height = null;
   }
 }

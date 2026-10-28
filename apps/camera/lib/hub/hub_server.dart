@@ -24,6 +24,10 @@ class CameraLink {
   DateTime? lastPacketAt;
   double? batteryLevel;
   bool? isCharging;
+  double? cameraFps;
+
+  /// Clockwise rotation needed to show the camera's picture upright.
+  int rotationDegrees = 0;
 
   int? _lastSequence;
   DateTime _windowStart = DateTime.now();
@@ -280,6 +284,9 @@ class HubServer {
             if (m is Map) {
               link.batteryLevel = (m['battery_level_percent'] as num?)?.toDouble();
               link.isCharging = m['is_charging'] as bool?;
+              link.cameraFps = (m['encoder_fps'] as num?)?.toDouble();
+              final rotation = (m['sensor_orientation'] as num?)?.toInt();
+              if (rotation != null && rotation % 90 == 0) link.rotationDegrees = rotation % 360;
               _notify();
             }
           case 'ping':

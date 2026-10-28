@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/platform/system_bridge.dart';
+import '../../core/video/live_video_controller.dart';
 import '../../hub/device_registry.dart';
 import '../../hub/hub_server.dart';
 
@@ -16,6 +18,7 @@ class ViewerScreen extends StatefulWidget {
 class _ViewerScreenState extends State<ViewerScreen> {
   late final DeviceRegistry _registry = DeviceRegistry(store: SharedPrefsDeviceStore());
   late final HubServer _server = HubServer(registry: _registry);
+  final Map<String, LiveVideoController> _live = {};
   StreamSubscription<void>? _changesSub;
   Timer? _ticker;
   String? _localIp;
@@ -32,9 +35,14 @@ class _ViewerScreenState extends State<ViewerScreen> {
       await _registry.load();
       await _server.start();
       _localIp = await HubServer.localIpAddress();
+      // Keep receiving with the screen off, and let camera phones find us.
+      await SystemBridge.startHubService(text: 'Main phone hub at ${_localIp ?? 'this phone'}:${_server.boundPort}');
+      await SystemBridge.advertiseHub(_server.boundPort!, 'Smart Spectator ${_localIp ?? ''}'.trim());
       _changesSub = _server.changes.listen((_) {
+        _syncLiveVideo();
         if (mounted) setState(() {});
       });
+      _syncLiveVideo();
       // Refresh PIN countdowns and stale stream indicators.
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
@@ -45,11 +53,40 @@ class _ViewerScreenState extends State<ViewerScreen> {
     if (mounted) setState(() {});
   }
 
+  /// One decoder per streaming camera; released when the camera stops.
+  void _syncLiveVideo() {
+    final streaming = {for (final c in _server.cameras.where((c) => c.streaming)) c.cameraId};
+    for (final id in _live.keys.where((id) => !streaming.contains(id)).toList()) {
+      _live.remove(id)!.dispose();
+    }
+    for (final id in streaming.where((id) => !_live.containsKey(id))) {
+      final controller = LiveVideoController(
+        cameraId: id,
+        packets: _server.packets,
+        requestKeyframe: _server.requestKeyframe,
+      );
+      _live[id] = controller;
+      controller.start();
+    }
+  }
+
+  void _openFullScreen(CameraLink cam, LiveVideoController controller) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => _FullScreenView(camera: cam, controller: controller),
+    ));
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
     _changesSub?.cancel();
+    for (final c in _live.values) {
+      c.dispose();
+    }
+    _live.clear();
     _server.dispose();
+    SystemBridge.stopAdvertisingHub();
+    SystemBridge.stopHubService();
     super.dispose();
   }
 
@@ -94,6 +131,25 @@ class _ViewerScreenState extends State<ViewerScreen> {
           if (pending.isNotEmpty) ...[
             const _SectionTitle('Pairing requests'),
             ...pending.map((p) => _PinCard(pending: p)),
+            const SizedBox(height: 16),
+          ],
+          if (_live.isNotEmpty) ...[
+            const _SectionTitle('Live'),
+            GridView.count(
+              crossAxisCount: _live.length == 1 ? 1 : 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: _live.length == 1 ? 16 / 10 : 1,
+              children: [
+                for (final cam in cameras.where((c) => _live.containsKey(c.cameraId)))
+                  GestureDetector(
+                    onTap: () => _openFullScreen(cam, _live[cam.cameraId]!),
+                    child: _LiveTile(camera: cam, controller: _live[cam.cameraId]!),
+                  ),
+              ],
+            ),
             const SizedBox(height: 16),
           ],
           _SectionTitle('Cameras (${cameras.length})'),
@@ -229,6 +285,103 @@ class _CameraCard extends StatelessWidget {
           onPressed: onRemove,
         ),
       ),
+    );
+  }
+}
+
+/// Decoded video for one camera, rotated upright and letterboxed.
+class _LiveVideo extends StatelessWidget {
+  final CameraLink camera;
+  final LiveVideoController controller;
+  const _LiveVideo({required this.camera, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final id = controller.textureId;
+        if (controller.state == LiveVideoState.failed) {
+          return _VideoMessage(controller.error ?? 'Video unavailable');
+        }
+        if (id == null || controller.state != LiveVideoState.playing) {
+          return const _VideoMessage('Waiting for picture…', spinner: true);
+        }
+        final quarterTurns = camera.rotationDegrees ~/ 90;
+        final sideways = quarterTurns.isOdd;
+        final aspect = sideways ? 1 / controller.aspectRatio : controller.aspectRatio;
+        return Center(
+          child: AspectRatio(
+            aspectRatio: aspect,
+            child: RotatedBox(quarterTurns: quarterTurns, child: Texture(textureId: id)),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VideoMessage extends StatelessWidget {
+  final String text;
+  final bool spinner;
+  const _VideoMessage(this.text, {this.spinner = false});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (spinner) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(height: 8),
+          Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+        ]),
+      );
+}
+
+class _LiveTile extends StatelessWidget {
+  final CameraLink camera;
+  final LiveVideoController controller;
+  const _LiveTile({required this.camera, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        color: Colors.black,
+        child: Stack(fit: StackFit.expand, children: [
+          _LiveVideo(camera: camera, controller: controller),
+          Positioned(
+            left: 8,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.circle, size: 8, color: Colors.redAccent),
+                const SizedBox(width: 6),
+                Text(camera.deviceName, style: const TextStyle(color: Colors.white, fontSize: 12)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _FullScreenView extends StatelessWidget {
+  final CameraLink camera;
+  final LiveVideoController controller;
+  const _FullScreenView({required this.camera, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: Text(camera.deviceName),
+      ),
+      body: SafeArea(child: _LiveVideo(camera: camera, controller: controller)),
     );
   }
 }

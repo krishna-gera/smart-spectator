@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import '../../core/storage/credential_store.dart';
 import '../../core/streaming/media_transport.dart';
 import '../../core/control/control_client.dart';
 import '../../core/codec/h264_encoder.dart';
 import '../../core/protocol/packet_encoder.dart';
+import '../../core/platform/system_bridge.dart';
 
 class CameraScreen extends StatefulWidget {
   final DeviceCredentials credentials;
@@ -104,14 +106,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         deviceToken: creds.deviceToken!,
       );
 
-      _controlClient = ControlClient(
-        hubIp: creds.hubIp!,
-        hubPort: creds.hubPort,
-        deviceId: creds.deviceId,
-        cameraId: creds.cameraId!,
-        deviceToken: creds.deviceToken!,
-      );
-
       _transportSub = _mediaTransport!.statusStream.listen((status) {
         if (mounted) {
           setState(() {
@@ -127,23 +121,25 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       return;
     }
 
-    await _mediaTransport?.connect();
-    await _controlClient?.start();
-
-    final ok = await _encoder.init(
-      width: 1280,
-      height: 720,
-      bitrate: 2000000,
-      fps: 30,
-      keyframeInterval: 1,
+    final creds = widget.credentials;
+    _controlClient = ControlClient(
+      hubIp: creds.hubIp!,
+      hubPort: creds.hubPort,
+      deviceId: creds.deviceId,
+      cameraId: creds.cameraId!,
+      deviceToken: creds.deviceToken!,
+      sensorOrientation: _cameraController!.description.sensorOrientation,
+      fpsProvider: () => _isStreaming ? _fps : null,
+      onCommand: (cmd) {
+        // The main phone asks for a keyframe when a viewer starts or recovers.
+        if (cmd['action'] == 'request_idr') _encoder.requestKeyframe();
+      },
     );
 
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hardware H.264 encoder initialization failed')),
-      );
-      return;
-    }
+    await _mediaTransport?.connect();
+    await _controlClient?.start();
+    // Android stops camera access when the app leaves the foreground.
+    await SystemBridge.keepScreenOn(true);
 
     _sequenceNumber = 0;
     _framesCaptured = 0;
@@ -172,14 +168,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             _lastFpsUpdate = now;
           }
 
-          final yuvBytes = H264HardwareEncoder.extractYuvFromImage(image);
           final timestampUs = DateTime.now().microsecondsSinceEpoch;
-          final packets = await _encoder.encodeYuvFrame(
-            yuvBytes,
-            image.width,
-            image.height,
-            timestampUs,
-          );
+          final packets = await _encoder.encodeImage(image, timestampUs);
 
           for (final pkt in packets) {
             final frameType = pkt.isKeyframe ? PacketEncoder.frameTypeIdr : PacketEncoder.frameTypeP;
@@ -198,6 +188,14 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           if (mounted && _packetsSent % 15 == 0) {
             setState(() {});
           }
+        } on PlatformException catch (e) {
+          debugPrint('Encoder error: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('This phone could not start its video encoder (${image.width}x${image.height}).')),
+            );
+          }
+          unawaited(_stopStreamingPipeline());
         } catch (e) {
           debugPrint('Frame processing error: $e');
         } finally {
@@ -231,6 +229,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     await _encoder.stop();
     _mediaTransport?.disconnect();
     _controlClient?.stop();
+    _controlClient = null;
+    await SystemBridge.keepScreenOn(false);
 
     if (mounted) {
       setState(() {
@@ -319,7 +319,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Hub: ${widget.credentials.hubIp}:${widget.credentials.hubPort}',
+                          'Main phone: ${widget.credentials.hubIp}:${widget.credentials.hubPort}',
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),

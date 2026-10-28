@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+/// Camera phone side of the control channel: sends 1 Hz telemetry and acts on
+/// commands from the main phone (e.g. "request_idr").
 class ControlClient {
   final String hubIp;
   final int hubPort;
@@ -10,8 +12,19 @@ class ControlClient {
   final String cameraId;
   final String deviceToken;
 
+  /// Called for every command the main phone sends.
+  final void Function(Map<String, dynamic> command)? onCommand;
+
+  /// Camera sensor rotation in degrees (0/90/180/270) so the viewer can show
+  /// the picture upright.
+  final int sensorOrientation;
+
+  /// Current measured capture FPS (null when not streaming).
+  final double? Function()? fpsProvider;
+
   WebSocketChannel? _channel;
   Timer? _telemetryTimer;
+  Timer? _retryTimer;
   final _battery = Battery();
   bool _isRunning = false;
 
@@ -21,28 +34,56 @@ class ControlClient {
     required this.deviceId,
     required this.cameraId,
     required this.deviceToken,
+    this.onCommand,
+    this.sensorOrientation = 0,
+    this.fpsProvider,
   });
+
+  bool get isConnected => _channel != null;
 
   Future<void> start() async {
     _isRunning = true;
-    _connect();
+    await _connect();
   }
 
-  void _connect() {
+  /// Parses a control message; returns it only if it is a device command.
+  static Map<String, dynamic>? parseCommand(Object? raw) {
+    if (raw is! String) return null;
+    try {
+      final data = jsonDecode(raw);
+      if (data is Map && data['type'] == 'device_control_command' && data['action'] is String) {
+        return Map<String, dynamic>.from(data);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _connect() async {
     if (!_isRunning) return;
-    final wsUrl = Uri.parse(
-      'ws://$hubIp:$hubPort/api/v1/control/ws?token=$deviceToken'
-    );
+    final wsUrl = Uri.parse('ws://$hubIp:$hubPort/api/v1/control/ws?token=$deviceToken');
 
     try {
-      _channel = WebSocketChannel.connect(wsUrl);
+      final channel = WebSocketChannel.connect(wsUrl);
+      await channel.ready;
+      if (!_isRunning) {
+        await channel.sink.close();
+        return;
+      }
+      _channel = channel;
       _startTelemetryLoop();
 
-      _channel!.stream.listen(
+      channel.stream.listen(
         (data) {
-          // Process Hub control commands (e.g. request_idr)
+          final cmd = parseCommand(data);
+          if (cmd == null) return;
+          onCommand?.call(cmd);
+          channel.sink.add(jsonEncode({
+            'protocol': 'ss_control_v1',
+            'type': 'command_ack',
+            'action': cmd['action'],
+          }));
         },
-        onDone: () => _retry(),
+        onDone: _retry,
         onError: (_) => _retry(),
         cancelOnError: true,
       );
@@ -56,12 +97,12 @@ class ControlClient {
     _telemetryTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (_channel == null) return;
 
-      int batteryLevel = 85;
-      bool isCharging = false;
+      int? batteryLevel;
+      bool? isCharging;
       try {
         batteryLevel = await _battery.batteryLevel;
         final state = await _battery.batteryState;
-        isCharging = state == BatteryState.charging;
+        isCharging = state == BatteryState.charging || state == BatteryState.full;
       } catch (_) {}
 
       final report = {
@@ -71,10 +112,11 @@ class ControlClient {
         'device_id': deviceId,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'metrics': {
-          'battery_level_percent': batteryLevel.toDouble(),
+          'battery_level_percent': batteryLevel?.toDouble(),
           'is_charging': isCharging,
-          'battery_temperature_c': null, // Genuine thermal API null if unsupported (Section 9)
-          'encoder_fps': 30.0,
+          'battery_temperature_c': null,
+          'encoder_fps': fpsProvider?.call(),
+          'sensor_orientation': sensorOrientation,
           'uptime_seconds': timer.tick,
         }
       };
@@ -88,14 +130,16 @@ class ControlClient {
   void _retry() {
     _channel = null;
     _telemetryTimer?.cancel();
+    _retryTimer?.cancel();
     if (_isRunning) {
-      Timer(const Duration(seconds: 3), () => _connect());
+      _retryTimer = Timer(const Duration(seconds: 3), _connect);
     }
   }
 
   void stop() {
     _isRunning = false;
     _telemetryTimer?.cancel();
+    _retryTimer?.cancel();
     _channel?.sink.close();
     _channel = null;
   }
