@@ -1,47 +1,42 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.pytest_cache/
-*.db
-*.db-shm
-*.db-wal
-# Local data & logs
-recordings/
-snapshots/
-logs/
-backups/
-.env
-
 # Flutter / Dart
 .dart_tool/
-.packages
 build/
-apps/camera/.dart_tool/
-apps/camera/build/
 apps/camera/.flutter-plugins
 apps/camera/.flutter-plugins-dependencies
 
-# OS
-# Datasets & Checkpoints
-ai/datasets/smart_spectator/raw/
-ai/datasets/smart_spectator/processed/
-artifacts/runs/**/*.pt
-*.tmp
+# Node / Cloudflare Wrangler / Vercel
+node_modules/
+.wrangler/
+.vercel/
 
-# macOS
-.DS_Store
-
-# Local secrets (xAI key, AI proxy token) — never commit
+# Local secrets — never commit (see services/ai_proxy/.dev.vars.example)
+.env
+.env.*
+!.env.example
 .dev.vars
 **/.dev.vars
 *.secret
 
-# Node / Cloudflare Wrangler
-node_modules/
-.wrangler/
-
 # Website download binaries are uploaded to Vercel, not committed
 apps/website/downloads/*.apk
-.vercel/
+
+# Local files from the retired PC hub (kept on disk, not in the repo)
+/ai/
+/artifacts/
+/shared/
+/tests/
+/recordings/
+/snapshots/
+/logs/
+/backups/
+/data/
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# OS / editors
+.DS_Store
+*.tmp

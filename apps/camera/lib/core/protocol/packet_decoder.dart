@@ -35,7 +35,6 @@ class DecodedPacket {
 }
 
 /// Smart Spectator - 24-Byte Camera Binary Framing Protocol (decode side).
-/// Mirrors services/stream_engine/protocol.py for the main phone.
 class PacketDecoder {
   /// Upper bound on a single packet payload to prevent memory exhaustion.
   static const int maxPayloadBytes = 10 * 1024 * 1024;

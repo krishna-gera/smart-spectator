@@ -21,8 +21,8 @@ void main() {
     expect(decoded.payload, [0, 0, 0, 1, 0x65]);
   });
 
-  test('matches the Python hub CRC for a known header', () {
-    // Same CRC-16-CCITT (0x1021, init 0xFFFF) as services/stream_engine/protocol.py:
+  test('uses CRC-16-CCITT for the header checksum', () {
+    // CRC-16-CCITT (0x1021, init 0xFFFF), the checksum used by the 24-byte packet header:
     // the standard check value for "123456789" is 0x29B1.
     expect(PacketEncoder.computeCrc16(Uint8List.fromList('123456789'.codeUnits)), 0x29B1);
   });

@@ -1,17 +1,25 @@
-# smart_spectator_camera
+# VYRO app (Flutter)
 
-A new Flutter project.
+One app with two modes:
 
-## Getting Started
+- **Camera** — streams H.264 video to main phones over Wi-Fi, detects motion,
+  shows a permanent 6-digit code (`lib/features/camera`, `lib/camera`).
+- **Main phone** — adds cameras by their code, live video, events, AI watch
+  tasks, and serves the web dashboard on port 8000 (`lib/features/viewer`, `lib/hub`).
 
-This project is a starting point for a Flutter application.
+| Folder | What |
+|---|---|
+| `lib/core` | AI client, video codec bridge, control channel, discovery, pairing, protocol, storage |
+| `lib/hub` | Main-phone hub server, device registry, events, AI tasks, web dashboard and API |
+| `lib/features` | Screens: onboarding, role, camera, pairing, viewer, settings |
+| `ios/Runner`, `android/.../kotlin` | Native video encode/decode, Bonjour/NSD, notifications |
 
-A few resources to get you started if this is your first Flutter project:
+## Run
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter test
+flutter run --dart-define=AI_PROXY_URL=https://<worker>.workers.dev --dart-define=AI_PROXY_TOKEN=<token>
+flutter build apk --release --split-per-abi --dart-define=AI_PROXY_URL=... --dart-define=AI_PROXY_TOKEN=...
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Without the two `--dart-define`s the app works with AI features switched off.

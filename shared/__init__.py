@@ -1,1 +1,0 @@
-"""Smart Spectator Shared Library"""

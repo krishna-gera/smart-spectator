@@ -34,7 +34,9 @@ Camera phone(s) ──H.264 over Wi-Fi──▶ Main phone (hub + web dashboard)
 | `apps/camera` | The VYRO app (Flutter; iOS + Android). Camera mode, main-phone hub, web dashboard (`lib/hub/web_dashboard.dart`). |
 | `services/ai_proxy` | VYRO AI service (Cloudflare Worker) — holds the AI key; plan/check watch tasks, describe snapshots. |
 | `apps/website` | Website, downloads and the mobile/desktop web apps — **https://smart-vyro.vercel.app** (Vercel). |
-| `services/hub_backend`, `services/*_engine`, `ai/`, `docs/` | Legacy PC-hub design (Python, Snapdragon). Not used by VYRO; kept for reference. |
+| `scripts/check_website.mjs` | Website link/asset check (CI and `deploy.sh`). |
+
+The earlier PC-hub design (Python backend, Snapdragon models, docs) was retired; it is preserved in git at the tag `legacy-pc-hub`.
 
 ## Develop
 
@@ -45,7 +47,7 @@ flutter build ios --simulator --debug \
   --dart-define=AI_PROXY_URL=https://<your-worker>.workers.dev \
   --dart-define=AI_PROXY_TOKEN=<proxy token>
 
-# AI service (secrets in services/ai_proxy/.dev.vars, never committed)
+# AI service (copy services/ai_proxy/.dev.vars.example to .dev.vars; never committed)
 cd services/ai_proxy && npm test
 npm run dev            # local, port 8787
 npm run deploy         # Cloudflare

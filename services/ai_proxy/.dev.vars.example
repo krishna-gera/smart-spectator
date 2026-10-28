@@ -1,0 +1,4 @@
+# Copy to .dev.vars (git-ignored) for `npm run dev`. In production these are
+# Cloudflare secrets: npx wrangler secret put AI_API / PROXY_TOKEN
+AI_API=
+PROXY_TOKEN=

@@ -1,1331 +1,0 @@
-
-pytorch2.14.0:ÈŒ
-È
-images
-stem.0.weight
-stem.0.biasgetitemnode_Conv_351"Conv*
-group†*
-pads@@@@†*
-kernel_shape@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†JË
-	namespace⁄: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.1: torch.nn.modules.batchnorm.BatchNorm2d/_native_batch_norm_legit_no_training: aten._native_batch_norm_legit_no_training.defaultJ:
-!pkg.onnxscript.rewriter.rule_nameFuseBatchNormIntoConvJ‘
-pkg.torch.onnx.class_hierarchy±['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.batchnorm.BatchNorm2d', 'aten._native_batch_norm_legit_no_training.default']J†
-pkg.torch.onnx.fx_nodeÖ%_native_batch_norm_legit_no_training : [num_users=1] = call_function[target=torch.ops.aten._native_batch_norm_legit_no_training.default](args = (%conv2d, %p_stem_1_weight, %p_stem_1_bias, %b_stem_1_running_mean, %b_stem_1_running_var, 0.1, 1e-05), kwargs = {})J\
-pkg.torch.onnx.name_scopes>['', 'stem', 'stem.1', '_native_batch_norm_legit_no_training']J∞
-pkg.torch.onnx.stack_traceëFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/batchnorm.py", line 210, in forward
-    return F.batch_norm(
-ê
-getitemval_10node_Sigmoid_10"SigmoidJ¢
-	namespaceî: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.2: torch.nn.modules.activation.SiLU/silu: aten.silu.defaultJÆ
-pkg.torch.onnx.class_hierarchyã['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.SiLU', 'aten.silu.default']JÑ
-pkg.torch.onnx.fx_nodej%silu : [num_users=1] = call_function[target=torch.ops.aten.silu.default](args = (%getitem,), kwargs = {})J<
-pkg.torch.onnx.name_scopes['', 'stem', 'stem.2', 'silu']J«
-pkg.torch.onnx.stack_trace®File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/activation.py", line 476, in forward
-    return F.silu(input, inplace=self.inplace)
-å
-getitem
-val_10silu	node_silu"MulJ¢
-	namespaceî: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.2: torch.nn.modules.activation.SiLU/silu: aten.silu.defaultJÆ
-pkg.torch.onnx.class_hierarchyã['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.SiLU', 'aten.silu.default']JÑ
-pkg.torch.onnx.fx_nodej%silu : [num_users=1] = call_function[target=torch.ops.aten.silu.default](args = (%getitem,), kwargs = {})J<
-pkg.torch.onnx.name_scopes['', 'stem', 'stem.2', 'silu']J«
-pkg.torch.onnx.stack_trace®File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/activation.py", line 476, in forward
-    return F.silu(input, inplace=self.inplace)
-Ò
-silu
-stem.3.weight
-stem.3.bias	getitem_3node_Conv_352"Conv*
-group†*
-pads@@@@†*
-kernel_shape@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†JÍ
-	namespace‹: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.4: torch.nn.modules.batchnorm.BatchNorm2d/_native_batch_norm_legit_no_training_1: aten._native_batch_norm_legit_no_training.defaultJ:
-!pkg.onnxscript.rewriter.rule_nameFuseBatchNormIntoConvJ‘
-pkg.torch.onnx.class_hierarchy±['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.batchnorm.BatchNorm2d', 'aten._native_batch_norm_legit_no_training.default']J§
-pkg.torch.onnx.fx_nodeâ%_native_batch_norm_legit_no_training_1 : [num_users=1] = call_function[target=torch.ops.aten._native_batch_norm_legit_no_training.default](args = (%conv2d_1, %p_stem_4_weight, %p_stem_4_bias, %b_stem_4_running_mean, %b_stem_4_running_var, 0.1, 1e-05), kwargs = {})J^
-pkg.torch.onnx.name_scopes@['', 'stem', 'stem.4', '_native_batch_norm_legit_no_training_1']J∞
-pkg.torch.onnx.stack_traceëFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/batchnorm.py", line 210, in forward
-    return F.batch_norm(
-ö
-	getitem_3val_17node_Sigmoid_17"SigmoidJ§
-	namespaceñ: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.5: torch.nn.modules.activation.SiLU/silu_1: aten.silu.defaultJÆ
-pkg.torch.onnx.class_hierarchyã['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.SiLU', 'aten.silu.default']Jà
-pkg.torch.onnx.fx_noden%silu_1 : [num_users=1] = call_function[target=torch.ops.aten.silu.default](args = (%getitem_3,), kwargs = {})J>
-pkg.torch.onnx.name_scopes ['', 'stem', 'stem.5', 'silu_1']J«
-pkg.torch.onnx.stack_trace®File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/activation.py", line 476, in forward
-    return F.silu(input, inplace=self.inplace)
-ö
-	getitem_3
-val_17silu_1node_silu_1"MulJ§
-	namespaceñ: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.5: torch.nn.modules.activation.SiLU/silu_1: aten.silu.defaultJÆ
-pkg.torch.onnx.class_hierarchyã['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.SiLU', 'aten.silu.default']Jà
-pkg.torch.onnx.fx_noden%silu_1 : [num_users=1] = call_function[target=torch.ops.aten.silu.default](args = (%getitem_3,), kwargs = {})J>
-pkg.torch.onnx.name_scopes ['', 'stem', 'stem.5', 'silu_1']J«
-pkg.torch.onnx.stack_trace®File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/activation.py", line 476, in forward
-    return F.silu(input, inplace=self.inplace)
-Û
-silu_1
-stem.6.weight
-stem.6.bias	getitem_6node_Conv_353"Conv*
-group†*
-pads@@@@†*
-kernel_shape@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†JÍ
-	namespace‹: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.7: torch.nn.modules.batchnorm.BatchNorm2d/_native_batch_norm_legit_no_training_2: aten._native_batch_norm_legit_no_training.defaultJ:
-!pkg.onnxscript.rewriter.rule_nameFuseBatchNormIntoConvJ‘
-pkg.torch.onnx.class_hierarchy±['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.batchnorm.BatchNorm2d', 'aten._native_batch_norm_legit_no_training.default']J§
-pkg.torch.onnx.fx_nodeâ%_native_batch_norm_legit_no_training_2 : [num_users=1] = call_function[target=torch.ops.aten._native_batch_norm_legit_no_training.default](args = (%conv2d_2, %p_stem_7_weight, %p_stem_7_bias, %b_stem_7_running_mean, %b_stem_7_running_var, 0.1, 1e-05), kwargs = {})J^
-pkg.torch.onnx.name_scopes@['', 'stem', 'stem.7', '_native_batch_norm_legit_no_training_2']J∞
-pkg.torch.onnx.stack_traceëFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/batchnorm.py", line 210, in forward
-    return F.batch_norm(
-ö
-	getitem_6val_24node_Sigmoid_24"SigmoidJ§
-	namespaceñ: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.8: torch.nn.modules.activation.SiLU/silu_2: aten.silu.defaultJÆ
-pkg.torch.onnx.class_hierarchyã['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.SiLU', 'aten.silu.default']Jà
-pkg.torch.onnx.fx_noden%silu_2 : [num_users=1] = call_function[target=torch.ops.aten.silu.default](args = (%getitem_6,), kwargs = {})J>
-pkg.torch.onnx.name_scopes ['', 'stem', 'stem.8', 'silu_2']J«
-pkg.torch.onnx.stack_trace®File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/activation.py", line 476, in forward
-    return F.silu(input, inplace=self.inplace)
-ö
-	getitem_6
-val_24silu_2node_silu_2"MulJ§
-	namespaceñ: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.8: torch.nn.modules.activation.SiLU/silu_2: aten.silu.defaultJÆ
-pkg.torch.onnx.class_hierarchyã['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.SiLU', 'aten.silu.default']Jà
-pkg.torch.onnx.fx_noden%silu_2 : [num_users=1] = call_function[target=torch.ops.aten.silu.default](args = (%getitem_6,), kwargs = {})J>
-pkg.torch.onnx.name_scopes ['', 'stem', 'stem.8', 'silu_2']J«
-pkg.torch.onnx.stack_trace®File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/activation.py", line 476, in forward
-    return F.silu(input, inplace=self.inplace)
-Ê	
-silu_2
-avg_pool2dnode_avg_pool2d"AveragePool*
-count_include_pad†*
-	ceil_mode †*
-pads@ @ @ @ †*
-kernel_shape@@†*
-strides@@†*
-auto_pad"NOTSET†J∏
-	namespace™: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.9: torch.nn.modules.pooling.AdaptiveAvgPool2d/avg_pool2d: aten.avg_pool2d.defaultJæ
-pkg.torch.onnx.class_hierarchyõ['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.pooling.AdaptiveAvgPool2d', 'aten.avg_pool2d.default']Jü
-pkg.torch.onnx.fx_nodeÑ%avg_pool2d : [num_users=1] = call_function[target=torch.ops.aten.avg_pool2d.default](args = (%silu_2, [4, 4], [4, 4]), kwargs = {})JB
-pkg.torch.onnx.name_scopes$['', 'stem', 'stem.9', 'avg_pool2d']J–
-pkg.torch.onnx.stack_trace±File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/pooling.py", line 1514, in forward
-    return F.adaptive_avg_pool2d(input, self.output_size)
-ﬁ	
-
-avg_pool2d
-stem.10.weight
-stem.10.biasconv2d_3node_conv2d_3"Conv*
-group†*
-pads@ @ @ @ †*
-kernel_shape@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†J•
-	namespaceó: __main__.LightweightYOLODetectorGraph/stem: torch.nn.modules.container.Sequential/stem.10: torch.nn.modules.conv.Conv2d/conv2d_3: aten.conv2d.defaultJ¨
-pkg.torch.onnx.class_hierarchyâ['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.conv.Conv2d', 'aten.conv2d.default']J±
-pkg.torch.onnx.fx_nodeñ%conv2d_3 : [num_users=2] = call_function[target=torch.ops.aten.conv2d.default](args = (%avg_pool2d, %p_stem_10_weight, %p_stem_10_bias), kwargs = {})JA
-pkg.torch.onnx.name_scopes#['', 'stem', 'stem.10', 'conv2d_3']Jœ
-pkg.torch.onnx.stack_trace∞File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 55, in forward
-    feat = self.stem(x) # [B, 84, 20, 20]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/container.py", line 259, in forward
-    input = module(input)
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/conv.py", line 565, in forward
-    return self._conv_forward(input, self.weight, self.bias)
-Ω
-conv2d_3
-val_288viewnode_Reshape_356"Reshape*
-	allowzero†JL
-	namespace?: __main__.LightweightYOLODetectorGraph/view: aten.view.defaultJ<
-!pkg.onnxscript.rewriter.rule_nameMaterializeReshapeShapeJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.view.default']J¢
-pkg.torch.onnx.fx_nodeá%view : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%conv2d_3, [%sym_size_int_10, 84, 400]), kwargs = {})J*
-pkg.torch.onnx.name_scopes['', 'view']Jµ
-pkg.torch.onnx.stack_traceñFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 57, in forward
-    feat_flat = feat.view(B, C, H * W) # [B, 84, 400]
-”
-view
-val_30val_31node_MatMul_31"MatMulJu
-	namespaceh: __main__.LightweightYOLODetectorGraph/proj: torch.nn.modules.linear.Linear/linear: aten.linear.defaultJÑ
-pkg.torch.onnx.class_hierarchyb['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.linear.Linear', 'aten.linear.default']J£
-pkg.torch.onnx.fx_nodeà%linear : [num_users=5] = call_function[target=torch.ops.aten.linear.default](args = (%view, %p_proj_weight, %p_proj_bias), kwargs = {})J4
-pkg.torch.onnx.name_scopes['', 'proj', 'linear']J»
-pkg.torch.onnx.stack_trace©File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 58, in forward
-    out = self.proj(feat_flat) # [B, 84, 8400]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/linear.py", line 134, in forward
-    return F.linear(input, self.weight, self.bias)
-“
-val_31
-	proj.biaslinearnode_linear"AddJu
-	namespaceh: __main__.LightweightYOLODetectorGraph/proj: torch.nn.modules.linear.Linear/linear: aten.linear.defaultJÑ
-pkg.torch.onnx.class_hierarchyb['__main__.LightweightYOLODetectorGraph', 'torch.nn.modules.linear.Linear', 'aten.linear.default']J£
-pkg.torch.onnx.fx_nodeà%linear : [num_users=5] = call_function[target=torch.ops.aten.linear.default](args = (%view, %p_proj_weight, %p_proj_bias), kwargs = {})J4
-pkg.torch.onnx.name_scopes['', 'proj', 'linear']J»
-pkg.torch.onnx.stack_trace©File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 58, in forward
-    out = self.proj(feat_flat) # [B, 84, 8400]
-  File "/opt/miniconda3/lib/python3.13/site-packages/torch/nn/modules/linear.py", line 134, in forward
-    return F.linear(input, self.weight, self.bias)
-˘
-linear
-val_46
-val_49
-val_49
-val_49slice_2node_slice_2"SliceJO
-	namespaceB: __main__.LightweightYOLODetectorGraph/slice_2: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%slice_2 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_1, 1, 0, 1), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'slice_2']Jº
-pkg.torch.onnx.stack_traceùFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 61, in forward
-    cx = (torch.sigmoid(out[:, 0:1, :]) * 0.4 + 0.3) * 640.0
-›
-slice_2sigmoidnode_sigmoid"SigmoidJR
-	namespaceE: __main__.LightweightYOLODetectorGraph/sigmoid: aten.sigmoid.defaultJc
-pkg.torch.onnx.class_hierarchyA['__main__.LightweightYOLODetectorGraph', 'aten.sigmoid.default']Jä
-pkg.torch.onnx.fx_nodep%sigmoid : [num_users=1] = call_function[target=torch.ops.aten.sigmoid.default](args = (%slice_2,), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'sigmoid']Jº
-pkg.torch.onnx.stack_traceùFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 61, in forward
-    cx = (torch.sigmoid(out[:, 0:1, :]) * 0.4 + 0.3) * 640.0
-—
-sigmoid
-val_54mul_41node_mul_41"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_41: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jà
-pkg.torch.onnx.fx_noden%mul_41 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%sigmoid, 0.4), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_41']Jº
-pkg.torch.onnx.stack_traceùFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 61, in forward
-    cx = (torch.sigmoid(out[:, 0:1, :]) * 0.4 + 0.3) * 640.0
-œ
-mul_41
-val_55add_79node_add_79"AddJL
-	namespace?: __main__.LightweightYOLODetectorGraph/add_79: aten.add.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.add.Tensor']Já
-pkg.torch.onnx.fx_nodem%add_79 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%mul_41, 0.3), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'add_79']Jº
-pkg.torch.onnx.stack_traceùFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 61, in forward
-    cx = (torch.sigmoid(out[:, 0:1, :]) * 0.4 + 0.3) * 640.0
-—
-add_79
-val_56mul_46node_mul_46"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_46: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%mul_46 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%add_79, 640.0), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_46']Jº
-pkg.torch.onnx.stack_traceùFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 61, in forward
-    cx = (torch.sigmoid(out[:, 0:1, :]) * 0.4 + 0.3) * 640.0
-˙
-linear
-val_49
-val_73
-val_49
-val_49slice_4node_slice_4"SliceJO
-	namespaceB: __main__.LightweightYOLODetectorGraph/slice_4: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%slice_4 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_3, 1, 1, 2), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'slice_4']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 62, in forward
-    cy = (torch.sigmoid(out[:, 1:2, :]) * 0.5 + 0.25) * 640.0
-Ë
-slice_4	sigmoid_1node_sigmoid_1"SigmoidJT
-	namespaceG: __main__.LightweightYOLODetectorGraph/sigmoid_1: aten.sigmoid.defaultJc
-pkg.torch.onnx.class_hierarchyA['__main__.LightweightYOLODetectorGraph', 'aten.sigmoid.default']Jå
-pkg.torch.onnx.fx_noder%sigmoid_1 : [num_users=1] = call_function[target=torch.ops.aten.sigmoid.default](args = (%slice_4,), kwargs = {})J/
-pkg.torch.onnx.name_scopes['', 'sigmoid_1']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 62, in forward
-    cy = (torch.sigmoid(out[:, 1:2, :]) * 0.5 + 0.25) * 640.0
-÷
-	sigmoid_1
-val_78mul_55node_mul_55"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_55: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jä
-pkg.torch.onnx.fx_nodep%mul_55 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%sigmoid_1, 0.5), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_55']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 62, in forward
-    cy = (torch.sigmoid(out[:, 1:2, :]) * 0.5 + 0.25) * 640.0
-÷
-mul_55
-val_79add_104node_add_104"AddJM
-	namespace@: __main__.LightweightYOLODetectorGraph/add_104: aten.add.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.add.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%add_104 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%mul_55, 0.25), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'add_104']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 62, in forward
-    cy = (torch.sigmoid(out[:, 1:2, :]) * 0.5 + 0.25) * 640.0
-‘
-add_104
-val_56mul_60node_mul_60"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_60: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jä
-pkg.torch.onnx.fx_nodep%mul_60 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%add_104, 640.0), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_60']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 62, in forward
-    cy = (torch.sigmoid(out[:, 1:2, :]) * 0.5 + 0.25) * 640.0
-˙
-linear
-val_73
-val_96
-val_49
-val_49slice_6node_slice_6"SliceJO
-	namespaceB: __main__.LightweightYOLODetectorGraph/slice_6: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%slice_6 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_5, 1, 2, 3), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'slice_6']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 63, in forward
-    w  = (torch.sigmoid(out[:, 2:3, :]) * 0.3 + 0.15) * 640.0
-Ë
-slice_6	sigmoid_2node_sigmoid_2"SigmoidJT
-	namespaceG: __main__.LightweightYOLODetectorGraph/sigmoid_2: aten.sigmoid.defaultJc
-pkg.torch.onnx.class_hierarchyA['__main__.LightweightYOLODetectorGraph', 'aten.sigmoid.default']Jå
-pkg.torch.onnx.fx_noder%sigmoid_2 : [num_users=1] = call_function[target=torch.ops.aten.sigmoid.default](args = (%slice_6,), kwargs = {})J/
-pkg.torch.onnx.name_scopes['', 'sigmoid_2']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 63, in forward
-    w  = (torch.sigmoid(out[:, 2:3, :]) * 0.3 + 0.15) * 640.0
-÷
-	sigmoid_2
-val_55mul_69node_mul_69"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_69: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jä
-pkg.torch.onnx.fx_nodep%mul_69 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%sigmoid_2, 0.3), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_69']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 63, in forward
-    w  = (torch.sigmoid(out[:, 2:3, :]) * 0.3 + 0.15) * 640.0
-◊
-mul_69
-val_101add_129node_add_129"AddJM
-	namespace@: __main__.LightweightYOLODetectorGraph/add_129: aten.add.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.add.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%add_129 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%mul_69, 0.15), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'add_129']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 63, in forward
-    w  = (torch.sigmoid(out[:, 2:3, :]) * 0.3 + 0.15) * 640.0
-‘
-add_129
-val_56mul_74node_mul_74"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_74: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jä
-pkg.torch.onnx.fx_nodep%mul_74 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%add_129, 640.0), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_74']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 63, in forward
-    w  = (torch.sigmoid(out[:, 2:3, :]) * 0.3 + 0.15) * 640.0
-˚
-linear
-val_96
-val_118
-val_49
-val_49slice_8node_slice_8"SliceJO
-	namespaceB: __main__.LightweightYOLODetectorGraph/slice_8: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%slice_8 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_7, 1, 3, 4), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'slice_8']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 64, in forward
-    h  = (torch.sigmoid(out[:, 3:4, :]) * 0.4 + 0.25) * 640.0
-Ë
-slice_8	sigmoid_3node_sigmoid_3"SigmoidJT
-	namespaceG: __main__.LightweightYOLODetectorGraph/sigmoid_3: aten.sigmoid.defaultJc
-pkg.torch.onnx.class_hierarchyA['__main__.LightweightYOLODetectorGraph', 'aten.sigmoid.default']Jå
-pkg.torch.onnx.fx_noder%sigmoid_3 : [num_users=1] = call_function[target=torch.ops.aten.sigmoid.default](args = (%slice_8,), kwargs = {})J/
-pkg.torch.onnx.name_scopes['', 'sigmoid_3']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 64, in forward
-    h  = (torch.sigmoid(out[:, 3:4, :]) * 0.4 + 0.25) * 640.0
-÷
-	sigmoid_3
-val_54mul_83node_mul_83"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_83: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jä
-pkg.torch.onnx.fx_nodep%mul_83 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%sigmoid_3, 0.4), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_83']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 64, in forward
-    h  = (torch.sigmoid(out[:, 3:4, :]) * 0.4 + 0.25) * 640.0
-÷
-mul_83
-val_79add_154node_add_154"AddJM
-	namespace@: __main__.LightweightYOLODetectorGraph/add_154: aten.add.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.add.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%add_154 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%mul_83, 0.25), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'add_154']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 64, in forward
-    h  = (torch.sigmoid(out[:, 3:4, :]) * 0.4 + 0.25) * 640.0
-‘
-add_154
-val_56mul_88node_mul_88"MulJL
-	namespace?: __main__.LightweightYOLODetectorGraph/mul_88: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jä
-pkg.torch.onnx.fx_nodep%mul_88 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%add_154, 640.0), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'mul_88']JΩ
-pkg.torch.onnx.stack_traceûFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 64, in forward
-    h  = (torch.sigmoid(out[:, 3:4, :]) * 0.4 + 0.25) * 640.0
-Ô
-mul_46
-mul_60
-mul_74
-mul_88catnode_cat"Concat*
-axis†JJ
-	namespace=: __main__.LightweightYOLODetectorGraph/cat: aten.cat.defaultJ_
-pkg.torch.onnx.class_hierarchy=['__main__.LightweightYOLODetectorGraph', 'aten.cat.default']J°
-pkg.torch.onnx.fx_nodeÜ%cat : [num_users=1] = call_function[target=torch.ops.aten.cat.default](args = ([%mul_46, %mul_60, %mul_74, %mul_88], 1), kwargs = {})J)
-pkg.torch.onnx.name_scopes['', 'cat']J¨
-pkg.torch.onnx.stack_traceçFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 65, in forward
-    boxes = torch.cat([cx, cy, w, h], dim=1)
-Ü
-linear
-val_118
-val_138
-val_49
-val_49slice_10node_slice_10"SliceJP
-	namespaceC: __main__.LightweightYOLODetectorGraph/slice_10: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']J£
-pkg.torch.onnx.fx_nodeà%slice_10 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_9, 1, 4, 9223372036854775807), kwargs = {})J.
-pkg.torch.onnx.name_scopes['', 'slice_10']JØ
-pkg.torch.onnx.stack_traceêFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 68, in forward
-    scores = torch.sigmoid(out[:, 4:, :] - 3.5)
-«
-slice_10
-val_143sub_40node_sub_40"SubJL
-	namespace?: __main__.LightweightYOLODetectorGraph/sub_40: aten.sub.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.sub.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%sub_40 : [num_users=1] = call_function[target=torch.ops.aten.sub.Tensor](args = (%slice_10, 3.5), kwargs = {})J,
-pkg.torch.onnx.name_scopes['', 'sub_40']JØ
-pkg.torch.onnx.stack_traceêFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 68, in forward
-    scores = torch.sigmoid(out[:, 4:, :] - 3.5)
-ÿ
-sub_40	sigmoid_4node_sigmoid_4"SigmoidJT
-	namespaceG: __main__.LightweightYOLODetectorGraph/sigmoid_4: aten.sigmoid.defaultJc
-pkg.torch.onnx.class_hierarchyA['__main__.LightweightYOLODetectorGraph', 'aten.sigmoid.default']Jã
-pkg.torch.onnx.fx_nodeq%sigmoid_4 : [num_users=4] = call_function[target=torch.ops.aten.sigmoid.default](args = (%sub_40,), kwargs = {})J/
-pkg.torch.onnx.name_scopes['', 'sigmoid_4']JØ
-pkg.torch.onnx.stack_traceêFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 68, in forward
-    scores = torch.sigmoid(out[:, 4:, :] - 3.5)
-¥
-conv2d_3
-val_46
-val_49
-val_49
-val_49slice_12node_slice_12"SliceJP
-	namespaceC: __main__.LightweightYOLODetectorGraph/slice_12: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']Jë
-pkg.torch.onnx.fx_nodew%slice_12 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_11, 1, 0, 1), kwargs = {})J.
-pkg.torch.onnx.name_scopes['', 'slice_12']JÔ
-pkg.torch.onnx.stack_trace–File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 70, in forward
-    person_intensity = torch.sigmoid(feat[:, 0:1, :, :].mean(dim=(2, 3), keepdim=True)).squeeze(-1) * 2.5 + 0.6
-µ
-slice_12
-val_166mean	node_mean"
-ReduceMean*
-noop_with_empty_axes †*
-keepdims†JH
-	namespace;: __main__.LightweightYOLODetectorGraph/mean: aten.mean.dimJ\
-pkg.torch.onnx.class_hierarchy:['__main__.LightweightYOLODetectorGraph', 'aten.mean.dim']Jé
-pkg.torch.onnx.fx_nodet%mean : [num_users=1] = call_function[target=torch.ops.aten.mean.dim](args = (%slice_12, [2, 3], True), kwargs = {})J*
-pkg.torch.onnx.name_scopes['', 'mean']JÔ
-pkg.torch.onnx.stack_trace–File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 70, in forward
-    person_intensity = torch.sigmoid(feat[:, 0:1, :, :].mean(dim=(2, 3), keepdim=True)).squeeze(-1) * 2.5 + 0.6
-î
-mean	sigmoid_5node_sigmoid_5"SigmoidJT
-	namespaceG: __main__.LightweightYOLODetectorGraph/sigmoid_5: aten.sigmoid.defaultJc
-pkg.torch.onnx.class_hierarchyA['__main__.LightweightYOLODetectorGraph', 'aten.sigmoid.default']Jâ
-pkg.torch.onnx.fx_nodeo%sigmoid_5 : [num_users=1] = call_function[target=torch.ops.aten.sigmoid.default](args = (%mean,), kwargs = {})J/
-pkg.torch.onnx.name_scopes['', 'sigmoid_5']JÔ
-pkg.torch.onnx.stack_trace–File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 70, in forward
-    person_intensity = torch.sigmoid(feat[:, 0:1, :, :].mean(dim=(2, 3), keepdim=True)).squeeze(-1) * 2.5 + 0.6
-î
-	sigmoid_5
-val_167squeezenode_squeeze"SqueezeJN
-	namespaceA: __main__.LightweightYOLODetectorGraph/squeeze: aten.squeeze.dimJ_
-pkg.torch.onnx.class_hierarchy=['__main__.LightweightYOLODetectorGraph', 'aten.squeeze.dim']Jã
-pkg.torch.onnx.fx_nodeq%squeeze : [num_users=1] = call_function[target=torch.ops.aten.squeeze.dim](args = (%sigmoid_5, -1), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'squeeze']JÔ
-pkg.torch.onnx.stack_trace–File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 70, in forward
-    person_intensity = torch.sigmoid(feat[:, 0:1, :, :].mean(dim=(2, 3), keepdim=True)).squeeze(-1) * 2.5 + 0.6
-ä
-squeeze
-val_168mul_108node_mul_108"MulJM
-	namespace@: __main__.LightweightYOLODetectorGraph/mul_108: aten.mul.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.mul.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%mul_108 : [num_users=1] = call_function[target=torch.ops.aten.mul.Tensor](args = (%squeeze, 2.5), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'mul_108']JÔ
-pkg.torch.onnx.stack_trace–File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 70, in forward
-    person_intensity = torch.sigmoid(feat[:, 0:1, :, :].mean(dim=(2, 3), keepdim=True)).squeeze(-1) * 2.5 + 0.6
-ä
-mul_108
-val_169add_211node_add_211"AddJM
-	namespace@: __main__.LightweightYOLODetectorGraph/add_211: aten.add.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.add.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%add_211 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%mul_108, 0.6), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'add_211']JÔ
-pkg.torch.onnx.stack_trace–File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 70, in forward
-    person_intensity = torch.sigmoid(feat[:, 0:1, :, :].mean(dim=(2, 3), keepdim=True)).squeeze(-1) * 2.5 + 0.6
-ú
-	sigmoid_4
-val_46
-val_49
-val_49
-val_49slice_14node_slice_14"SliceJP
-	namespaceC: __main__.LightweightYOLODetectorGraph/slice_14: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']Jë
-pkg.torch.onnx.fx_nodew%slice_14 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_13, 1, 0, 1), kwargs = {})J.
-pkg.torch.onnx.name_scopes['', 'slice_14']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-ú
-slice_14
-val_46
-val_196
-val_73
-val_49slice_15node_slice_15"SliceJP
-	namespaceC: __main__.LightweightYOLODetectorGraph/slice_15: aten.slice.TensorJ`
-pkg.torch.onnx.class_hierarchy>['__main__.LightweightYOLODetectorGraph', 'aten.slice.Tensor']Jë
-pkg.torch.onnx.fx_nodew%slice_15 : [num_users=1] = call_function[target=torch.ops.aten.slice.Tensor](args = (%slice_14, 2, 0, 5), kwargs = {})J.
-pkg.torch.onnx.name_scopes['', 'slice_15']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-¯
-slice_15
-add_211add_228node_add_228"AddJM
-	namespace@: __main__.LightweightYOLODetectorGraph/add_228: aten.add.TensorJ^
-pkg.torch.onnx.class_hierarchy<['__main__.LightweightYOLODetectorGraph', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_228 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%slice_15, %add_211), kwargs = {})J-
-pkg.torch.onnx.name_scopes['', 'add_228']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-Ä
-add_228
-val_202
-val_204clamp
-node_clamp"ClipJN
-	namespaceA: __main__.LightweightYOLODetectorGraph/clamp: aten.clamp.defaultJa
-pkg.torch.onnx.class_hierarchy?['__main__.LightweightYOLODetectorGraph', 'aten.clamp.default']Jê
-pkg.torch.onnx.fx_nodev%clamp : [num_users=1] = call_function[target=torch.ops.aten.clamp.default](args = (%add_228, 0.0, 0.88), kwargs = {})J+
-pkg.torch.onnx.name_scopes['', 'clamp']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-ª
-slice_14val_256node_Shape_256"Shape*
-start †J^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-√
-val_256
-val_70val_257node_Gather_257"Gather*
-axis †J^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-ª
-val_32
-val_257
-val_1val_258node_Range_258"RangeJ^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-Õ
-val_258
-val_46
-val_196
-val_46
-val_49val_262node_Slice_262"SliceJ^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-Ω
-val_262
-val_167val_263node_Unsqueeze_263"	UnsqueezeJ^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-√
-clampval_264node_Transpose_264"	Transpose*
-perm@@@ †J^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-∆
-slice_14val_265node_Transpose_265"	Transpose*
-perm@@@ †J^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-‹
-val_265
-val_263
-val_264val_266node_ScatterND_266"	ScatterND*
-	reduction"none†J^
-	namespaceQ: __main__.LightweightYOLODetectorGraph/slice_scatter: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']Jß
-pkg.torch.onnx.fx_nodeå%slice_scatter : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_20, %copy, 2, 0, 5), kwargs = {})J3
-pkg.torch.onnx.name_scopes['', 'slice_scatter']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-À
-	sigmoid_4val_268node_Shape_268"Shape*
-start †J`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-—
-val_268
-val_1val_269node_Gather_269"Gather*
-axis †J`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
- 
-val_32
-val_269
-val_1val_270node_Range_270"RangeJ`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-€
-val_270
-val_46
-val_49
-val_46
-val_49val_274node_Slice_274"SliceJ`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-Ã
-val_274
-val_167val_275node_Unsqueeze_275"	UnsqueezeJ`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-ç
-val_266val_276node_Transpose_366"	Transpose*
-perm@@@ †J`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJ7
-!pkg.onnxscript.rewriter.rule_nameTransposeTransposeJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-÷
-	sigmoid_4val_277node_Transpose_277"	Transpose*
-perm@@ @†J`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-Î
-val_277
-val_275
-val_276val_278node_ScatterND_278"	ScatterND*
-	reduction"none†J`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-ﬁ
-val_278slice_scatter_1node_slice_scatter_1"	Transpose*
-perm@@ @†J`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_1: aten.slice_scatter.defaultJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J≤
-pkg.torch.onnx.fx_nodeó%slice_scatter_1 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%slice_19, %slice_scatter, 1, 0, 1), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_1']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-û
-slice_scatter_1slice_scatter_2node_Identity_368"IdentityJ`
-	namespaceS: __main__.LightweightYOLODetectorGraph/slice_scatter_2: aten.slice_scatter.defaultJ6
-!pkg.onnxscript.rewriter.rule_nameScatterAllDynamicJi
-pkg.torch.onnx.class_hierarchyG['__main__.LightweightYOLODetectorGraph', 'aten.slice_scatter.default']J«
-pkg.torch.onnx.fx_node¨%slice_scatter_2 : [num_users=1] = call_function[target=torch.ops.aten.slice_scatter.default](args = (%sigmoid_4, %slice_scatter_1, 0, 0, 9223372036854775807), kwargs = {})J5
-pkg.torch.onnx.name_scopes['', 'slice_scatter_2']J÷
-pkg.torch.onnx.stack_trace∑File "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 71, in forward
-    scores[:, 0:1, :5] = torch.clamp(scores[:, 0:1, :5] + person_intensity, 0.0, 0.88)
-‰
-cat
-slice_scatter_2output0
-node_cat_1"Concat*
-axis†JL
-	namespace?: __main__.LightweightYOLODetectorGraph/cat_1: aten.cat.defaultJ_
-pkg.torch.onnx.class_hierarchy=['__main__.LightweightYOLODetectorGraph', 'aten.cat.default']Jñ
-pkg.torch.onnx.fx_node|%cat_1 : [num_users=1] = call_function[target=torch.ops.aten.cat.default](args = ([%cat, %slice_scatter_2], 1), kwargs = {})J+
-pkg.torch.onnx.name_scopes['', 'cat_1']J¨
-pkg.torch.onnx.stack_traceçFile "/Users/krishnagera/smart-spectator/scripts/export_detection_model.py", line 73, in forward
-    return torch.cat([boxes, scores], dim=1)
-main_graph*YBstem.0.weightj
-locationyolov8n.onnx.dataj
-offset336j
-length1728p*SBstem.0.biasJ@S7>2ú‘Ω“7⁄=4¸Dæ5ˆ(æ√÷7ævCk=≤˙∂ª±ﬂW∫
->Æ?Ωè±æÛÎ Ω“ÏΩ>ÔB>©§4Ω*î Bstem.3.biasJÄR&åªﬂ&Á<®Ã<ø·∑ºI¢ç=ëΩò=DJãΩŒë;ıã=u‘-Ω∂Ãå=s¨àºÖád=ˆ¶Ωo(ìΩÀFQ=NT<êö=∑Ø<ÉãΩè|ñ=©çΩı;FΩL…ΩI¸Ωåjê<AÃS=5”D<≥wRΩ√t∫<§œYΩËuç<*î@Bstem.6.biasJÄ¢˙º§Z6=–NTΩwˆºiA=%º´<§ÑA=pJ;öué<ÀG[Ωñõàº$—RΩO—[<∞ä<¿[U<ÃãΩ∑F"=zÄÿº˜Ω=¿bΩ´úTΩÙ‚GΩØ@·<ô¸º¥–ÿº	öÇºrK$:‘ô∏«Z<o˙Ù<(Ωu•àªêyd=@ò<Ω¸˚=}´=ŒÛÈºnf=¢hÜºÎ÷^ΩQãºπSFΩ|À<#MD=eˇºˆ≤ºu¸6Ω+≈°º2 º*f=I3="=Çºªºy«=<Dmjº>¨y;k1ΩqByº4ü<'b&ΩuA=g-
-ºl*ñ<PyΩ*OTBstem.10.biasj
-locationyolov8n.onnx.dataj
-offset0j
-length336p*[ Bstem.3.weightj
-locationyolov8n.onnx.dataj
-offset2064j
-length18432p*\@ Bstem.6.weightj
-locationyolov8n.onnx.dataj
-offset75600j
-length73728p*]T@Bstem.10.weightj
-locationyolov8n.onnx.dataj
-offset20496j
-length21504p*S–AB	proj.biasj
-locationyolov8n.onnx.dataj
-offset42000j
-length33600p*Wê–ABval_30j
-locationyolov8n.onnx.dataj
-offset196608j
-length13440000p*Bval_46J        *Bval_49J       *Bval_73J       *Bval_96J       *Bval_118J       *Bval_138Jˇˇˇˇˇˇˇ*Bval_166J              *Bval_196J       *Bval_202J    *Bval_204JÆGa?*Bval_1J       *'Bval_288JˇˇˇˇˇˇˇˇT       ê      *Bval_32J        *Bval_54JÕÃÃ>*Bval_55Jöôô>*Bval_56J   D*Bval_70J       *Bval_78J   ?*Bval_79J  Ä>*Bval_101Jöô>*Bval_143J  `@*Bval_167Jˇˇˇˇˇˇˇˇ*Bval_168J   @*Bval_169Jöô?Z“
-images"
- 
-
-batch_size
-
-Ä
-Ä"=
-/pkg.torch.export.graph_signature.InputSpec.kind
-USER_INPUT"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone"&
-!pkg.torch.onnx.original_node_namexbï
-output0
-
-
-batch_size
-T
-–A"?
-0pkg.torch.export.graph_signature.OutputSpec.kindUSER_OUTPUT"*
-!pkg.torch.onnx.original_node_namecat_1j'
-stem.0.weight
-
-
-
-
-j
-stem.0.bias
-
-
-j
-stem.3.bias
-
-
- j
-stem.6.bias
-
-
-@jÃ
-stem.10.bias
-
-
-T"<
-/pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone"3
-!pkg.torch.onnx.original_node_namep_stem_10_biasj'
-stem.3.weight
-
- 
-
-
-j'
-stem.6.weight
-
-@
- 
-
-j‹
-stem.10.weight
-
-T
-@
-
-"<
-/pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone"5
-!pkg.torch.onnx.original_node_namep_stem_10_weightj«
-	proj.bias
-	
-–A"<
-/pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone"0
-!pkg.torch.onnx.original_node_namep_proj_biasjS
-val_30
-
-
-ê
-–A"7
-$pkg.onnxscript.optimizer.folded_from['proj.weight']j\
-val_46
-
-
-"F
-$pkg.onnxscript.optimizer.folded_from['val_32', 'val_44', 'val_45']j[
-val_49
-
-
-"E
-$pkg.onnxscript.optimizer.folded_from['val_1', 'val_47', 'val_48']j\
-val_73
-
-
-"F
-$pkg.onnxscript.optimizer.folded_from['val_70', 'val_71', 'val_72']j\
-val_96
-
-
-"F
-$pkg.onnxscript.optimizer.folded_from['val_93', 'val_94', 'val_95']j`
-val_118
-
-
-"I
-$pkg.onnxscript.optimizer.folded_from!['val_115', 'val_116', 'val_117']j_
-val_138
-
-
-"H
-$pkg.onnxscript.optimizer.folded_from ['val_136', 'val_137', 'val_36']jU
-val_166
-
-
-">
-$pkg.onnxscript.optimizer.folded_from['val_164', 'val_165']j`
-val_196
-
-
-"I
-$pkg.onnxscript.optimizer.folded_from!['val_193', 'val_194', 'val_195']jF
-val_202
- "3
-$pkg.onnxscript.optimizer.folded_from['val_201']jF
-val_204
- "3
-$pkg.onnxscript.optimizer.folded_from['val_203']j
-val_1
- j
-val_288
-
-
-j
-val_32
- j
-val_54
- j
-val_55
- j
-val_56
- j
-val_70
- j
-val_78
- j
-val_79
- j
-val_101
- j
-val_143
- j
-val_167
-
-
-j
-val_168
- j
-val_169
- j-
-getitem"
- 
-
-batch_size
-
-¿
-¿j,
-val_10"
- 
-
-batch_size
-
-¿
-¿j*
-silu"
- 
-
-batch_size
-
-¿
-¿j/
-	getitem_3"
- 
-
-batch_size
- 
-†
-†j,
-val_17"
- 
-
-batch_size
- 
-†
-†j,
-silu_1"
- 
-
-batch_size
- 
-†
-†j-
-	getitem_6 
-
-
-batch_size
-@
-P
-Pj*
-val_24 
-
-
-batch_size
-@
-P
-Pj*
-silu_2 
-
-
-batch_size
-@
-P
-Pj.
-
-avg_pool2d 
-
-
-batch_size
-@
-
-j,
-conv2d_3 
-
-
-batch_size
-T
-
-j%
-view
-
-
-batch_size
-T
-êj'
-val_31
-
-
-batch_size
-T
-–Aj'
-linear
-
-
-batch_size
-T
-–Aj(
-slice_2
-
-
-batch_size
-
-–Aj(
-sigmoid
-
-
-batch_size
-
-–Aj'
-mul_41
-
-
-batch_size
-
-–Aj'
-add_79
-
-
-batch_size
-
-–Aj'
-mul_46
-
-
-batch_size
-
-–Aj(
-slice_4
-
-
-batch_size
-
-–Aj*
-	sigmoid_1
-
-
-batch_size
-
-–Aj'
-mul_55
-
-
-batch_size
-
-–Aj(
-add_104
-
-
-batch_size
-
-–Aj'
-mul_60
-
-
-batch_size
-
-–Aj(
-slice_6
-
-
-batch_size
-
-–Aj*
-	sigmoid_2
-
-
-batch_size
-
-–Aj'
-mul_69
-
-
-batch_size
-
-–Aj(
-add_129
-
-
-batch_size
-
-–Aj'
-mul_74
-
-
-batch_size
-
-–Aj(
-slice_8
-
-
-batch_size
-
-–Aj*
-	sigmoid_3
-
-
-batch_size
-
-–Aj'
-mul_83
-
-
-batch_size
-
-–Aj(
-add_154
-
-
-batch_size
-
-–Aj'
-mul_88
-
-
-batch_size
-
-–Aj$
-cat
-
-
-batch_size
-
-–Aj)
-slice_10
-
-
-batch_size
-P
-–Aj'
-sub_40
-
-
-batch_size
-P
-–Aj*
-	sigmoid_4
-
-
-batch_size
-P
-–Aj,
-slice_12 
-
-
-batch_size
-
-
-j(
-mean 
-
-
-batch_size
-
-
-j-
-	sigmoid_5 
-
-
-batch_size
-
-
-j'
-squeeze
-
-
-batch_size
-
-j'
-mul_108
-
-
-batch_size
-
-j'
-add_211
-
-
-batch_size
-
-j)
-slice_14
-
-
-batch_size
-
-–Aj(
-slice_15
-
-
-batch_size
-
-j'
-add_228
-
-
-batch_size
-
-j%
-clamp
-
-
-batch_size
-
-j
-val_256
-
-
-j
-val_257
- j
-val_258
-
- j
-val_262
-
- j
-val_263
-
-
- 
-j'
-val_264
-
-
-
-
-batch_sizej(
-val_265
-
-–A
-
-
-batch_sizej(
-val_266
-
-–A
-
-
-batch_sizej
-val_268
-
-
-j
-val_269
- j
-val_270
-
- j
-val_274
-
- j
-val_275
-
-
- 
-j(
-val_276
-
-
-
-batch_size
-–Aj(
-val_277
-
-P
-
-batch_size
-–Aj(
-val_278
-
-P
-
-batch_size
-–Aj0
-slice_scatter_1
-
-
-batch_size
-P
-–Aj0
-slice_scatter_2
-
-
-batch_size
-P
-–AÇÆ
-0pkg.torch.export.ExportedProgram.graph_signature˘
-# inputs
-p_stem_0_weight: PARAMETER target='stem.0.weight'
-p_stem_0_bias: PARAMETER target='stem.0.bias'
-p_stem_1_weight: PARAMETER target='stem.1.weight'
-p_stem_1_bias: PARAMETER target='stem.1.bias'
-p_stem_3_weight: PARAMETER target='stem.3.weight'
-p_stem_3_bias: PARAMETER target='stem.3.bias'
-p_stem_4_weight: PARAMETER target='stem.4.weight'
-p_stem_4_bias: PARAMETER target='stem.4.bias'
-p_stem_6_weight: PARAMETER target='stem.6.weight'
-p_stem_6_bias: PARAMETER target='stem.6.bias'
-p_stem_7_weight: PARAMETER target='stem.7.weight'
-p_stem_7_bias: PARAMETER target='stem.7.bias'
-p_stem_10_weight: PARAMETER target='stem.10.weight'
-p_stem_10_bias: PARAMETER target='stem.10.bias'
-p_proj_weight: PARAMETER target='proj.weight'
-p_proj_bias: PARAMETER target='proj.bias'
-b_stem_1_running_mean: BUFFER target='stem.1.running_mean' persistent=True
-b_stem_1_running_var: BUFFER target='stem.1.running_var' persistent=True
-b_stem_1_num_batches_tracked: BUFFER target='stem.1.num_batches_tracked' persistent=True
-b_stem_4_running_mean: BUFFER target='stem.4.running_mean' persistent=True
-b_stem_4_running_var: BUFFER target='stem.4.running_var' persistent=True
-b_stem_4_num_batches_tracked: BUFFER target='stem.4.num_batches_tracked' persistent=True
-b_stem_7_running_mean: BUFFER target='stem.7.running_mean' persistent=True
-b_stem_7_running_var: BUFFER target='stem.7.running_var' persistent=True
-b_stem_7_num_batches_tracked: BUFFER target='stem.7.num_batches_tracked' persistent=True
-x: USER_INPUT
-
-# outputs
-cat_1: USER_OUTPUT
-ÇJ
-2pkg.torch.export.ExportedProgram.range_constraints{s77: VR[0, int_oo]}B
- 

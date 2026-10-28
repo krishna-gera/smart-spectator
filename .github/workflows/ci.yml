@@ -101,29 +101,3 @@ jobs:
           if git grep -nE 'gsk_[A-Za-z0-9]{20,}|xai-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' -- . ':!**/package-lock.json'; then
             echo "::error::Something that looks like an API key or private key is committed"; exit 1
           fi
-
-  legacy-hub:
-    name: Legacy PC-hub backend (Python) — tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: System dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1 ffmpeg
-      - name: Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio flake8
-      - name: Syntax check
-        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=apps,node_modules,.venv
-      - name: Tests
-        env:
-          SMART_SPECTATOR_ENV: test
-          PYTHONPATH: .
-        run: pytest -q tests/
