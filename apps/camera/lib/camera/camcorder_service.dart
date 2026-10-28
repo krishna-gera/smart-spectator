@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/discovery/hub_discovery.dart';
 import '../core/pairing/code_guard.dart';
 import '../core/platform/system_bridge.dart';
 import '../core/storage/credential_store.dart';
@@ -53,6 +55,25 @@ class CamcorderService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// iOS can close an app's listening socket while it is in the background.
+  /// Called on resume: restarts the "add by code" server if it stopped answering.
+  Future<void> ensureServer() async {
+    final port = _server?.port;
+    if (port != null) {
+      try {
+        final client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+        final req = await client.get('127.0.0.1', port, '/api/v1/camera/info');
+        final res = await req.close().timeout(const Duration(seconds: 1));
+        await res.drain<void>();
+        client.close(force: true);
+        if (res.statusCode == 200) return;
+      } catch (_) {}
+    }
+    await _server?.stop();
+    _server = null;
+    await start();
+  }
+
   Future<void> reload() async {
     _creds = await CredentialStore.load();
     notifyListeners();
@@ -65,6 +86,37 @@ class CamcorderService extends ChangeNotifier {
     await _server?.stop();
     _server = null;
     await start();
+  }
+
+  final Map<String, DateTime> _lastRelocate = {};
+
+  /// A main phone stopped answering: look for it on the Wi-Fi (its address
+  /// may have changed) and update the link. At most once every 30 s per link.
+  Future<bool> relocate(HubLink link) async {
+    final now = DateTime.now();
+    final last = _lastRelocate[link.key];
+    if (last != null && now.difference(last) < const Duration(seconds: 30)) return false;
+    _lastRelocate[link.key] = now;
+    final (result, found) = await HubDiscovery.relocate(link);
+    if (result == LinkCheck.removed) {
+      // The main phone removed this camera: forget it (shows the code again
+      // if it was the last one).
+      await removeHub(link.key);
+      return true;
+    }
+    if (found == null || (found.address.host == link.hubHost && found.address.port == link.hubPort)) return false;
+    await CredentialStore.moveHub(
+      link.key,
+      HubLink(
+        hubHost: found.address.host,
+        hubPort: found.address.port,
+        hubName: found.name,
+        cameraId: link.cameraId,
+        deviceToken: link.deviceToken,
+      ),
+    );
+    await reload();
+    return true;
   }
 
   Future<void> removeHub(String key) async {

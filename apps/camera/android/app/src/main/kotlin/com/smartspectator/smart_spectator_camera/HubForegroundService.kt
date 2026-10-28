@@ -63,7 +63,8 @@ class HubForegroundService : Service() {
         return builder
             .setContentTitle("VYRO is running")
             .setContentText(text)
-            .setSmallIcon(applicationInfo.icon)
+            .setSmallIcon(R.drawable.ic_stat_vyro)
+            .setColor(0xFFFACC2E.toInt())
             .setContentIntent(openApp)
             .setOngoing(true)
             .build()

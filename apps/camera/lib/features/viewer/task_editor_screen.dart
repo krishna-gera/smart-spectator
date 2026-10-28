@@ -136,6 +136,10 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               maxLines: 5,
               maxLength: 300,
               textCapitalization: TextCapitalization.sentences,
+              // Return closes the keyboard instead of adding a new line.
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => FocusScope.of(context).unfocus(),
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
               decoration: const InputDecoration(hintText: 'e.g. Tell me when the water reaches the MAX line'),
             ),
             Wrap(spacing: 8, runSpacing: 8, children: [

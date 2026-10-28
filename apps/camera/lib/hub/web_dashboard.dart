@@ -139,7 +139,7 @@ const String _html = r'''<!doctype html>
   <div class="login-card">
     <img class="logo" src="%VYRO_LOGO%" alt="">
     <h1>VYRO</h1>
-    <div class="muted">Enter the pairing code shown on your main phone (Cameras screen).</div>
+    <div class="muted">Enter the dashboard code from your main phone (Settings → Web dashboard code).</div>
     <input id="code" class="code-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
     <button id="signin" class="btn primary">Sign in</button>
     <div id="login-error" class="error"></div>
@@ -295,7 +295,7 @@ function renderCameras(d) {
   if (top) top.replaceWith(header); else root.prepend(header);
   if (!d.cameras.length) {
     root.replaceChildren(header, el("div", { class:"banner" }, el("div", {}, el("b", {}, "Add a camera"),
-      el("span", {}, "On another phone open VYRO, choose Camera, and enter the main phone's pairing code.")), el("div", { class:"round" }, "+")));
+      el("span", {}, "On another phone open VYRO and choose Camera. Then on the main phone tap Add camera and type the code it shows.")), el("div", { class:"round" }, "+")));
     return;
   }
   let grid = root.querySelector(".grid");

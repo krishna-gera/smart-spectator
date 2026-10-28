@@ -45,7 +45,9 @@ class AlertService {
   Future<void> onMotion(CameraEvent event) async {
     final settings = store.settingsFor(event.cameraId);
     AiResult? result;
-    if (aiAvailableFor(event.cameraId)) {
+    // Motion descriptions share the AI's per-minute picture budget with watch
+    // tasks; when it is used up the alert goes out without a description.
+    if (aiAvailableFor(event.cameraId) && ai.canSendPicture) {
       final file = store.snapshotOf(event);
       if (file != null && await file.exists()) {
         // The analysis keeps running (and saves its result) even if we stop waiting.

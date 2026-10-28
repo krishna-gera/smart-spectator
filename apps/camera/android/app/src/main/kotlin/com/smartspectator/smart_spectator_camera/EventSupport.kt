@@ -16,7 +16,7 @@ import java.io.ByteArrayOutputStream
 
 /** JPEG snapshot of a camera frame given as YUV420 planes with strides. */
 object SnapshotJpeg {
-    fun encode(planes: List<PlaneData>, width: Int, height: Int, quality: Int): ByteArray? {
+    fun encode(planes: List<PlaneData>, width: Int, height: Int, quality: Int, maxSize: Int = 0): ByteArray? {
         if (planes.size < 3 || width <= 0 || height <= 0) return null
         // NV21 = full Y plane followed by interleaved V/U at half resolution.
         val nv21 = ByteArray(width * height * 3 / 2)
@@ -42,7 +42,20 @@ object SnapshotJpeg {
         val stream = ByteArrayOutputStream()
         val ok = YuvImage(nv21, ImageFormat.NV21, width, height, null)
             .compressToJpeg(Rect(0, 0, width, height), quality.coerceIn(30, 95), stream)
-        return if (ok) stream.toByteArray() else null
+        if (!ok) return null
+        val full = stream.toByteArray()
+        val longSide = maxOf(width, height)
+        if (maxSize <= 0 || longSide <= maxSize) return full
+        // Smaller pictures cost fewer AI tokens.
+        val bitmap = android.graphics.BitmapFactory.decodeByteArray(full, 0, full.size) ?: return full
+        val scale = maxSize.toFloat() / longSide
+        val scaled = android.graphics.Bitmap.createScaledBitmap(
+            bitmap, (width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1), true)
+        val out = ByteArrayOutputStream()
+        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality.coerceIn(30, 95), out)
+        bitmap.recycle()
+        scaled.recycle()
+        return out.toByteArray()
     }
 }
 
@@ -79,7 +92,8 @@ class EventNotifier(private val context: Context) {
         val notification = builder
             .setContentTitle(title)
             .setContentText(body)
-            .setSmallIcon(context.applicationInfo.icon)
+            .setSmallIcon(R.drawable.ic_stat_vyro)
+            .setColor(0xFFFACC2E.toInt())
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .build()

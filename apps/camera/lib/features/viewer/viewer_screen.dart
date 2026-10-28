@@ -34,7 +34,7 @@ class ViewerScreen extends StatefulWidget {
   State<ViewerScreen> createState() => _ViewerScreenState();
 }
 
-class _ViewerScreenState extends State<ViewerScreen> {
+class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver {
   late final DeviceRegistry _registry = DeviceRegistry(store: SharedPrefsDeviceStore());
   late final HubServer _server = HubServer(registry: _registry);
   final AiClient _ai = AiClient(AiConfig.fromEnvironment());
@@ -55,7 +55,13 @@ class _ViewerScreenState extends State<ViewerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _start();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _ready) _server.ensureListening();
   }
 
   Future<void> _start() async {
@@ -75,12 +81,15 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ai: _ai,
         snapshot: (id) => _server.requestFrame(id, timeout: const Duration(seconds: 5)),
         rotationOf: (id) => _server.cameras.where((c) => c.cameraId == id).firstOrNull?.rotationDegrees ?? 0,
+        isCameraOnline: (id) => _server.cameras.any((c) => c.cameraId == id && c.controlConnected),
         notify: SystemBridge.notify,
         onWatchChanged: _server.setAiWatch,
       );
       _server
         ..events = events
         ..onMotionStarted = (event, _) async {
+          // Watch tasks on this camera check right away (catches brief moments).
+          unawaited(_tasks?.onMotion(event.cameraId));
           await alerts.onMotion(event);
           if (mounted) setState(() {});
         };
@@ -94,6 +103,11 @@ class _ViewerScreenState extends State<ViewerScreen> {
           return cam == null ? const AiResult.failed('Unknown camera.') : _askAi(cam);
         };
       await _server.start();
+      // Tasks left over from cameras removed earlier must not keep running.
+      final known = _server.cameras.map((c) => c.cameraId).toSet();
+      for (final id in taskStore.tasks.map((t) => t.cameraId).where((id) => !known.contains(id)).toSet()) {
+        await _tasks!.forgetCamera(id);
+      }
       _tasks!.start();
       _tasksSub = _tasks!.changes.listen((_) {
         if (mounted) setState(() {});
@@ -136,6 +150,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     _changesSub?.cancel();
     for (final c in _live.values) {
@@ -169,7 +184,6 @@ class _ViewerScreenState extends State<ViewerScreen> {
         registry: _registry,
         hubPort: port,
         hubName: _server.displayName,
-        hubCode: _registry.hubCode,
       ),
     ));
     if (mounted) setState(() {});
@@ -177,8 +191,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   Future<void> _changeCode() async {
     if (await confirm(context,
-        title: 'Change pairing code?',
-        message: 'Cameras already connected stay connected. New cameras will need the new code.',
+        title: 'Change dashboard code?',
+        message: 'Browsers signed in to the web dashboard stay signed in until they sign out. New sign-ins need the new code.',
         action: 'Change')) {
       await _registry.changeHubCode();
       if (mounted) setState(() {});
@@ -192,30 +206,12 @@ class _ViewerScreenState extends State<ViewerScreen> {
         action: 'Remove',
         destructive: true)) {
       await _server.revokeDevice(cam.deviceId);
+      await _tasks?.forgetCamera(cam.cameraId);
     }
   }
 
   Future<void> _renameCamera(CameraLink cam) async {
-    final controller = TextEditingController(text: cam.deviceName);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rename camera', style: TextStyle(fontWeight: FontWeight.w800)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 40,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(hintText: 'e.g. Laundry room'),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Save')),
-        ],
-      ),
-    );
-    controller.dispose();
+    final name = await showDialog<String>(context: context, builder: (_) => _RenameDialog(initial: cam.deviceName));
     if (name == null || name.trim().isEmpty || name.trim() == cam.deviceName) return;
     if (await _server.renameCamera(cam.cameraId, name)) {
       HapticFeedback.lightImpact();
@@ -401,16 +397,21 @@ class _ViewerScreenState extends State<ViewerScreen> {
         if (_server.isRunning)
           ActionBanner(
             title: 'Add camera',
-            subtitle: cameras.isEmpty ? 'Pair a phone with this code or by its camera code' : 'Pair another phone in seconds',
+            subtitle: cameras.isEmpty ? 'Type the code shown on the camera phone' : 'Type another camera\'s code',
             icon: Icons.add_rounded,
             onTap: _addCamera,
           ),
         if (cameras.isEmpty && _server.isRunning) ...[
           const SizedBox(height: 16),
-          CodeDisplay(
-            code: _registry.hubCode,
-            caption: 'On the camera phone choose Camera and enter this code',
-            onChange: _changeCode,
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(18),
+              child: Text(
+                'On a spare phone open VYRO and choose Camera. It shows a 6-digit code — tap Add camera here and type it.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textMuted, height: 1.45),
+              ),
+            ),
           ),
         ],
         if (cameras.isNotEmpty) ...[
@@ -440,10 +441,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
             ]);
           }),
         ],
-        if (cameras.isNotEmpty && _tasks != null) ..._aiTasksSection(),
+        if ((cameras.isNotEmpty || (_tasks?.store.tasks.isNotEmpty ?? false)) && _tasks != null) ..._aiTasksSection(),
         if (cameras.isNotEmpty) ...[
-          const CenteredLabel('Pairing code', icon: Icons.key_rounded),
-          CodeDisplay(code: _registry.hubCode, caption: 'Enter this on a camera phone to connect it', compact: true, onChange: _changeCode),
         ],
         if (address != null)
           Padding(
@@ -728,4 +727,43 @@ class _TaskCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Rename dialog; owns its text controller so it outlives the closing animation.
+class _RenameDialog extends StatefulWidget {
+  final String initial;
+  const _RenameDialog({required this.initial});
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  // The old name starts selected, so typing replaces it.
+  late final _controller = TextEditingController(text: widget.initial)
+    ..selection = TextSelection(baseOffset: 0, extentOffset: widget.initial.length);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Rename camera', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLength: 40,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(hintText: 'e.g. Laundry room'),
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, _controller.text), child: const Text('Save')),
+        ],
+      );
 }

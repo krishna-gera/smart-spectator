@@ -92,13 +92,16 @@ class H264HardwareEncoder {
   }
 
   /// JPEG of one camera frame (for event snapshots); null if it fails.
-  static Future<Uint8List?> snapshotJpeg(CameraImage image, {int quality = 70}) async {
+  /// [maxSize] limits the longer side (0 = full size); AI pictures are
+  /// sent smaller because the AI provider limits tokens per minute.
+  static Future<Uint8List?> snapshotJpeg(CameraImage image, {int quality = 70, int maxSize = 0}) async {
     try {
       return await _channel.invokeMethod<Uint8List>('snapshotJpeg', {
         'planes': planesOf(image),
         'width': image.width,
         'height': image.height,
         'quality': quality,
+        'maxSize': maxSize,
       });
     } on PlatformException {
       return null;

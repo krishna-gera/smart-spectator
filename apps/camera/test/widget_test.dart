@@ -22,7 +22,7 @@ void main() {
     expect(find.text('Camera'), findsOneWidget);
   });
 
-  testWidgets('Camera mode offers both ways to connect: main phone code or this camera\'s code', (tester) async {
+  testWidgets('Camera mode only shows this camera\'s code; nothing to type', (tester) async {
     SharedPreferences.setMockInitialValues({'ss_app_role': 'camcorder', 'ss_camera_code': '482913'});
     // The camera link server binds a real socket, so let real async work run.
     await tester.runAsync(() async {
@@ -35,10 +35,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Connect camera'), findsOneWidget);
-    expect(find.text("Enter the main phone's code"), findsOneWidget);
-    expect(find.text('Main phones on this Wi-Fi'), findsOneWidget);
-    // The camera's own code is further down the list.
-    await tester.scrollUntilVisible(find.text('482 913'), 300, scrollable: find.byType(Scrollable).first);
+    expect(find.text('Enter this code on your main phone'), findsOneWidget);
     expect(find.text('482 913'), findsOneWidget, reason: "this camera's own code is shown");
+    expect(find.byType(TextField), findsNothing, reason: 'the camera side never asks for a code');
   });
 }

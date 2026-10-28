@@ -298,6 +298,13 @@ class DeviceRegistry {
     return (device, rawToken);
   }
 
+  /// True if [rawToken] belonged to a camera that was removed from this phone.
+  bool isRemovedToken(String? rawToken) {
+    if (rawToken == null || !rawToken.startsWith(tokenPrefix)) return false;
+    final hash = _hashToken(rawToken);
+    return _devices.values.any((d) => d.revoked && _constantTimeEquals(d.tokenHash, hash));
+  }
+
   /// Returns the paired, non-revoked device that owns [rawToken], or null.
   PairedDevice? authenticate(String? rawToken) {
     if (rawToken == null || !rawToken.startsWith(tokenPrefix)) return null;

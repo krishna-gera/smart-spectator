@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -8,20 +6,14 @@ import '../../hub/device_registry.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 
-/// Main phone: add a camera phone by the code shown on that camera.
+/// Main phone: add a camera by typing the code shown on the camera phone.
+/// Finding the camera on the Wi-Fi and linking it happen automatically.
 class AddCameraScreen extends StatefulWidget {
   final DeviceRegistry registry;
   final int hubPort;
   final String hubName;
-  final String hubCode;
 
-  const AddCameraScreen({
-    super.key,
-    required this.registry,
-    required this.hubPort,
-    required this.hubName,
-    required this.hubCode,
-  });
+  const AddCameraScreen({super.key, required this.registry, required this.hubPort, required this.hubName});
 
   @override
   State<AddCameraScreen> createState() => _AddCameraScreenState();
@@ -29,159 +21,124 @@ class AddCameraScreen extends StatefulWidget {
 
 class _AddCameraScreenState extends State<AddCameraScreen> {
   final _code = TextEditingController();
-  final List<DiscoveredCamera> _cameras = [];
-  DiscoveredCamera? _selected;
-  StreamSubscription<DiscoveredCamera>? _sub;
-  bool _searching = false;
+  final _focus = FocusNode();
   bool _busy = false;
-  String? _message;
+  String? _status;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _code.addListener(() => setState(() {}));
-    _search();
+    _code.addListener(() {
+      setState(() {});
+      // Six digits typed: connect without needing a button or Enter key.
+      if (_code.text.length == 6 && !_busy) _add();
+    });
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
     _code.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  void _search() {
-    _sub?.cancel();
-    final known = widget.registry.devices.where((d) => !d.revoked).map((d) => d.deviceId).toSet();
-    setState(() {
-      _searching = true;
-      _cameras.clear();
-      _selected = null;
-    });
-    _sub = CameraAdder.discover().listen(
-      (cam) {
-        if (!mounted || known.contains(cam.deviceId)) return;
-        setState(() {
-          _cameras.add(cam);
-          _selected ??= cam;
-        });
-      },
-      onDone: () {
-        if (mounted) setState(() => _searching = false);
-      },
-    );
-  }
-
   Future<void> _add() async {
-    final cam = _selected;
-    if (cam == null) return;
+    if (_busy || _code.text.trim().length != 6) return;
+    FocusScope.of(context).unfocus();
     setState(() {
       _busy = true;
-      _message = null;
+      _error = null;
+      _status = 'Looking for the camera on this Wi-Fi…';
     });
-    final error = await CameraAdder.add(
-      camera: cam,
-      code: _code.text,
-      registry: widget.registry,
-      hubPort: widget.hubPort,
-      hubName: widget.hubName,
-    );
-    if (!mounted) return;
-    if (error == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${cam.name} added. Start streaming on the camera.')));
+    try {
+      final name = await CameraAdder.addByCode(
+        code: _code.text,
+        registry: widget.registry,
+        hubPort: widget.hubPort,
+        hubName: widget.hubName,
+        onStatus: (s) => mounted ? setState(() => _status = s) : null,
+      );
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$name added. Tap Start streaming on the camera.')));
       Navigator.of(context).pop(true);
-      return;
+    } on AddCameraError catch (e) {
+      if (!mounted) return;
+      HapticFeedback.heavyImpact();
+      setState(() {
+        _busy = false;
+        _status = null;
+        _error = e.message;
+      });
     }
-    setState(() {
-      _busy = false;
-      _message = error;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final canAdd = !_busy && _selected != null && _code.text.trim().length == 6;
     return Scaffold(
       appBar: AppBar(title: const Text('Add camera')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+            constraints: const BoxConstraints(maxWidth: 520),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+              padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
               children: [
-                const Text('Pick a camera and enter its code',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
-                const SizedBox(height: 6),
-                const Text(
-                  'On the camera phone, open VYRO as Camera and tap "Camera code". '
-                  'The same camera can be added to several main phones.',
-                  style: TextStyle(color: AppColors.textMuted, height: 1.4),
+                const RingHeader(
+                  icon: Icons.add_a_photo_rounded,
+                  color: AppColors.ringCameras,
+                  progress: 0.5,
+                  title: 'Enter the camera code',
+                  countRest: 'It is shown on the camera phone',
                 ),
-                SectionHeader(
-                  'Cameras on this Wi-Fi',
-                  trailing: _searching
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : IconButton(
-                          icon: const Icon(Icons.refresh, size: 20, color: AppColors.primary),
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'Search again',
-                          onPressed: _search,
-                        ),
-                ),
-                if (_cameras.isEmpty)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        _searching
-                            ? 'Looking for camera phones…'
-                            : 'No new cameras found. Open VYRO as Camera on the other phone, on the same Wi-Fi.',
-                        style: const TextStyle(color: AppColors.textMuted),
-                      ),
-                    ),
-                  ),
-                for (final cam in _cameras)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Card(
-                      color: cam.deviceId == _selected?.deviceId ? AppColors.primary.withValues(alpha: 0.12) : null,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: cam.deviceId == _selected?.deviceId ? AppColors.primary : AppColors.border),
-                      ),
-                      child: ListTile(
-                        onTap: () => setState(() => _selected = cam),
-                        leading: const Icon(Icons.videocam_outlined, color: AppColors.primary),
-                        title: Text(cam.name),
-                        subtitle: Text(cam.address.host, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                        trailing: cam.deviceId == _selected?.deviceId ? const Icon(Icons.check_circle, color: AppColors.primary) : null,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 12),
                 TextField(
                   controller: _code,
+                  focusNode: _focus,
+                  autofocus: true,
+                  enabled: !_busy,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  maxLength: 6,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _add(),
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.code, fontSize: 34, letterSpacing: 10, fontWeight: FontWeight.w800),
-                  decoration: const InputDecoration(counterText: '', hintText: 'Camera code'),
+                  style: const TextStyle(color: AppColors.code, fontSize: 38, letterSpacing: 12, fontWeight: FontWeight.w800),
+                  decoration: const InputDecoration(counterText: '', hintText: '••••••'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: canAdd ? _add : null,
+                  onPressed: !_busy && _code.text.length == 6 ? _add : null,
                   child: _busy
-                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary))
                       : const Text('Add camera'),
                 ),
-                if (_message != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_message!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.danger)),
-                ],
-                const SectionHeader('Or, on the camera phone'),
-                CodeDisplay(code: widget.hubCode, caption: 'Enter this main phone\'s code on the camera', compact: true),
+                const SizedBox(height: 14),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _error != null
+                      ? Text(_error!, key: const ValueKey('e'), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.danger, height: 1.4))
+                      : Text(_status ?? '', key: ValueKey(_status), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textMuted)),
+                ),
+                const SizedBox(height: 26),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                      Text('Where is the code?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                      SizedBox(height: 8),
+                      Text(
+                        '1. On the camera phone, open VYRO and choose Camera.\n'
+                        '2. Its 6-digit code is shown on screen (or tap "Camera code").\n'
+                        '3. Type it here — VYRO finds the camera on your Wi-Fi and connects it.',
+                        style: TextStyle(color: AppColors.textMuted, height: 1.55),
+                      ),
+                      SizedBox(height: 8),
+                      Text('Both phones must be on the same Wi-Fi. One camera can be added to several main phones.',
+                          style: TextStyle(color: AppColors.textFaint, fontSize: 12.5, height: 1.4)),
+                    ]),
+                  ),
+                ),
               ],
             ),
           ),

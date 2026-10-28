@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'camera/camcorder_service.dart';
+import 'core/platform/system_bridge.dart';
 import 'core/storage/app_prefs.dart';
 import 'core/storage/role_store.dart';
 import 'features/camera/camera_screen.dart';
@@ -22,7 +23,7 @@ class SmartSpectatorApp extends StatefulWidget {
   State<SmartSpectatorApp> createState() => _SmartSpectatorAppState();
 }
 
-class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
+class _SmartSpectatorAppState extends State<SmartSpectatorApp> with WidgetsBindingObserver {
   final _navigator = GlobalKey<NavigatorState>();
   AppRole? _role;
   bool _loading = true;
@@ -32,13 +33,20 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _camcorder?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _camcorder?.ensureServer();
   }
 
   Future<void> _load() async {
@@ -62,11 +70,15 @@ class _SmartSpectatorAppState extends State<SmartSpectatorApp> {
     if (_camcorder != null) return;
     final service = CamcorderService();
     _camcorder = service;
+    // A camera phone must not auto-lock: iOS freezes locked apps, and then
+    // main phones can neither find nor reach it. Power saver blacks the screen.
+    await SystemBridge.keepScreenOn(true);
     service.addListener(_onCamcorderChanged);
     await service.start();
   }
 
   void _stopCamcorder() {
+    if (_camcorder != null) SystemBridge.keepScreenOn(false);
     _camcorder
       ?..removeListener(_onCamcorderChanged)
       ..dispose();

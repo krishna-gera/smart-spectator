@@ -200,16 +200,29 @@ class TaskStore {
 }
 
 /// Runs watch tasks on the main phone: periodic snapshots, skip when the scene
-/// is unchanged, AI check, two confirmations, alert, reminders, auto-stop.
+/// is unchanged, AI check, confirmation, alert, reminders, auto-stop.
+///
+/// Gradual tasks ("water reaches MAX", "download at 100%") need two "yes"
+/// answers in a row. One-off moments ("someone waves", "parcel taken") are
+/// over quickly, so one confident "yes" is enough, and motion on the camera
+/// triggers an immediate check instead of waiting for the next interval.
 class TaskWatcher {
   static const confirmationsNeeded = 2;
   static const minConfidence = 0.6;
+
+  /// A one-off moment counts on a single answer at least this sure.
+  static const momentConfidence = 0.8;
+
+  /// Motion can trigger a check at most this often per task.
+  static const motionCheckSpacing = Duration(seconds: 8);
+
 
   /// Share of the picture that must change before another AI check is spent.
   static const minSceneChange = 0.01;
   static const reminderEvery = Duration(minutes: 2);
   static const maxReminders = 30;
-  static const retryDelay = Duration(seconds: 30);
+  /// The AI provider's per-minute token limit resets within about a minute.
+  static const retryDelay = Duration(seconds: 60);
   static const intervals = [15, 30, 60, 300];
 
   final TaskStore store;
@@ -218,6 +231,10 @@ class TaskWatcher {
   final Future<CameraSnapshot?> Function(String cameraId) snapshot;
   final int Function(String cameraId) rotationOf;
   final Notifier notify;
+
+  /// Whether the camera is connected (for a clearer message when it is
+  /// online but sends no picture).
+  final bool Function(String cameraId) isCameraOnline;
 
   /// Active task descriptions per camera changed (drives the camera's badge).
   final void Function(String cameraId, List<String> descriptions) onWatchChanged;
@@ -236,8 +253,10 @@ class TaskWatcher {
     required this.notify,
     required this.onWatchChanged,
     int Function(String cameraId)? rotationOf,
+    bool Function(String cameraId)? isCameraOnline,
     DateTime Function()? now,
   })  : rotationOf = rotationOf ?? ((_) => 0),
+        isCameraOnline = isCameraOnline ?? ((_) => false),
         _now = now ?? DateTime.now;
 
   Stream<void> get changes => _changes.stream;
@@ -297,8 +316,19 @@ class TaskWatcher {
   /// "Test now": how the AI understands the task for the current picture.
   Future<AiReply<TaskPlan>> preview({required String cameraId, required String cameraName, required String description}) async {
     final snap = await snapshot(cameraId);
-    if (snap == null) return const AiReply.failed('The camera did not send a picture. Is it streaming?');
+    if (snap == null) return const AiReply.failed('The camera did not send a picture. Is VYRO open on the camera phone?');
     return ai.planTask(jpeg: snap.jpeg, taskId: 'preview_$cameraId', cameraName: cameraName, task: description.trim());
+  }
+
+  /// A camera was removed from this main phone: stop its tasks.
+  Future<void> forgetCamera(String cameraId) async {
+    for (final t in store.tasks.where((t) => t.cameraId == cameraId && (t.isActive || t.status == TaskStatus.paused))) {
+      t
+        ..status = TaskStatus.stopped
+        ..lastError = 'Camera removed from this main phone.';
+    }
+    await store.save();
+    _announce(cameraId);
   }
 
   Future<void> pause(WatchTask t) => _set(t, TaskStatus.paused);
@@ -335,33 +365,57 @@ class TaskWatcher {
 
   // ---------------------------------------------------------------- scheduling
 
+  /// The camera reported motion: check its watching tasks right away.
+  Future<void> onMotion(String cameraId) async {
+    final now = _now();
+    for (final t in store.tasks.where((t) => t.cameraId == cameraId && t.status == TaskStatus.watching)) {
+      final last = t.lastCheckAt;
+      final retryOk = t.retryAfter == null || !now.isBefore(t.retryAfter!);
+      // The AI's picture budget is shared (see [AiClient.canSendPicture]):
+      // due checks wait their turn rather than being refused.
+      if (retryOk && (last == null || now.difference(last) >= motionCheckSpacing) && ai.canSendPicture) {
+        await checkNow(t, motion: true);
+      }
+    }
+  }
+
   Future<void> tick() async {
     final now = _now();
-    for (final t in store.tasks) {
+    final due = <WatchTask>[];
+    for (final t in List.of(store.tasks)) {
       if (t.status == TaskStatus.watching) {
         if (now.difference(t.startedAt) >= Duration(minutes: t.autoStopMinutes)) {
           await _expire(t);
           continue;
         }
-        final due = t.lastCheckAt == null || now.difference(t.lastCheckAt!) >= Duration(seconds: t.intervalSeconds);
+        final isDue = t.lastCheckAt == null || now.difference(t.lastCheckAt!) >= Duration(seconds: t.intervalSeconds);
         final retryOk = t.retryAfter == null || !now.isBefore(t.retryAfter!);
-        if (due && retryOk && !_inFlight.contains(t.id)) await checkNow(t);
+        if (isDue && retryOk && !_inFlight.contains(t.id)) due.add(t);
       } else if (t.needsAcknowledgement && t.remindersSent < maxReminders) {
         final last = t.lastReminderAt ?? t.completedAt;
         if (last != null && now.difference(last) >= reminderEvery) await _remind(t);
       }
     }
+    // Fair turns on the shared AI budget: the task that waited longest first.
+    due.sort((a, b) => (a.lastCheckAt ?? DateTime(0)).compareTo(b.lastCheckAt ?? DateTime(0)));
+    for (final t in due) {
+      if (!ai.canSendPicture) break;
+      await checkNow(t);
+    }
   }
 
-  /// One check of [t] (also used directly by tests).
-  Future<void> checkNow(WatchTask t) async {
+  /// One check of [t] (also used directly by tests). [motion] skips the
+  /// unchanged-scene shortcut, since the camera just saw something move.
+  Future<void> checkNow(WatchTask t, {bool motion = false}) async {
     if (!_inFlight.add(t.id)) return;
     try {
       final now = _now();
       t.lastCheckAt = now;
       final snap = await snapshot(t.cameraId);
       if (snap == null) {
-        t.lastError = 'Waiting for the camera to stream.';
+        t.lastError = isCameraOnline(t.cameraId)
+            ? 'The camera did not send a picture — keep VYRO open on the camera phone with its camera free.'
+            : 'Camera offline — open VYRO on the camera phone (it does not need to be streaming).';
         return;
       }
 
@@ -379,12 +433,12 @@ class TaskWatcher {
           ..progressApplicable = p.progressApplicable
           ..lastObservation = p.currentState
           ..lastError = p.targetVisible ? null : (p.advice.isEmpty ? 'The AI cannot see what to watch.' : p.advice);
-        return; // The actual check runs on the next interval.
+        // Check the same picture straight away; it may already be happening.
       }
 
       // Skip the AI when the picture has not changed since its last look.
       final grid = snap.grid;
-      if (grid != null && t.lastGrid != null && t.consecutiveMet == 0) {
+      if (!motion && grid != null && t.lastGrid != null && t.consecutiveMet == 0) {
         final previous = base64Decode(t.lastGrid!);
         if (MotionDetector.gridChange(previous, grid) < minSceneChange) {
           t.skippedChecks++;
@@ -422,7 +476,8 @@ class TaskWatcher {
         return;
       }
       t.consecutiveMet++;
-      if (t.consecutiveMet >= confirmationsNeeded && !t.waitingForReset) {
+      final needed = !t.progressApplicable && c.confidence >= momentConfidence ? 1 : confirmationsNeeded;
+      if (t.consecutiveMet >= needed && !t.waitingForReset) {
         await _complete(t, snap, c);
       }
     } finally {

@@ -29,9 +29,14 @@ class ControlClient {
   /// Called when the control channel connects or drops.
   final void Function(bool connected)? onConnectionChanged;
 
+  /// Called after several failed attempts in a row (the main phone may have
+  /// a new Wi-Fi address), and again every few attempts while it lasts.
+  final void Function()? onUnreachable;
+
   /// Retry delays after a failed or dropped connection (the last repeats).
   static const retryDelays = [Duration(seconds: 2), Duration(seconds: 4), Duration(seconds: 8), Duration(seconds: 15)];
   int _failures = 0;
+  static const connectTimeout = Duration(seconds: 5);
 
   WebSocketChannel? _channel;
   Timer? _telemetryTimer;
@@ -50,6 +55,7 @@ class ControlClient {
     this.rotationProvider,
     this.fpsProvider,
     this.onConnectionChanged,
+    this.onUnreachable,
   });
 
   bool get isConnected => _channel != null;
@@ -78,7 +84,8 @@ class ControlClient {
 
     try {
       final channel = WebSocketChannel.connect(wsUrl);
-      await channel.ready;
+      // An address that no longer exists can hang for a minute; give up sooner.
+      await channel.ready.timeout(connectTimeout);
       if (!_isRunning) {
         await channel.sink.close();
         return;
@@ -152,6 +159,7 @@ class ControlClient {
     if (_isRunning) {
       final delay = retryDelays[_failures.clamp(0, retryDelays.length - 1)];
       _failures++;
+      if (_failures == 2 || (_failures > 2 && _failures % 3 == 0)) onUnreachable?.call();
       _retryTimer = Timer(delay, _connect);
     }
   }

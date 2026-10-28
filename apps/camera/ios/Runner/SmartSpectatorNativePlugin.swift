@@ -88,15 +88,25 @@ final class SmartSpectatorNativePlugin: NSObject, FlutterPlugin, UNUserNotificat
       let width = args["width"] as? Int ?? 0
       let height = args["height"] as? Int ?? 0
       let quality = Double(args["quality"] as? Int ?? 70) / 100
+      // Optional limit on the longer side (smaller pictures cost fewer AI tokens).
+      let maxSize = args["maxSize"] as? Int ?? 0
       encoder.queue.async {
         var jpeg: FlutterStandardTypedData?
         if width > 0, height > 0, let pb = H264Encoder.makeNV12(planes: planes, width: width, height: height),
-          let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-          let data = self.ciContext.jpegRepresentation(
-            of: CIImage(cvPixelBuffer: pb), colorSpace: colorSpace,
-            options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): quality])
+          let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         {
-          jpeg = FlutterStandardTypedData(bytes: data)
+          var image = CIImage(cvPixelBuffer: pb)
+          let longSide = max(width, height)
+          if maxSize > 0 && longSide > maxSize {
+            let s = CGFloat(maxSize) / CGFloat(longSide)
+            image = image.transformed(by: CGAffineTransform(scaleX: s, y: s))
+          }
+          if let data = self.ciContext.jpegRepresentation(
+            of: image, colorSpace: colorSpace,
+            options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): quality])
+          {
+            jpeg = FlutterStandardTypedData(bytes: data)
+          }
         }
         DispatchQueue.main.async { result(jpeg) }
       }

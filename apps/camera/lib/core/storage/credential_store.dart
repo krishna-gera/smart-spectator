@@ -107,10 +107,18 @@ class CredentialStore {
     return DeviceCredentials(deviceId: deviceId, cameraCode: code, hubs: hubs);
   }
 
-  /// Adds a main phone, replacing an older link to the same address.
+  /// Adds a main phone, replacing an older link to the same address or from
+  /// the same main phone (same camera id; e.g. re-added after it moved).
   static Future<void> addHub(HubLink link) async {
     final prefs = await SharedPreferences.getInstance();
-    final hubs = (await load()).hubs.where((h) => h.key != link.key).toList()..add(link);
+    final hubs = (await load()).hubs.where((h) => h.key != link.key && h.cameraId != link.cameraId).toList()..add(link);
+    await _saveHubs(prefs, hubs);
+  }
+
+  /// The main phone at [oldKey] moved (its Wi-Fi address changed).
+  static Future<void> moveHub(String oldKey, HubLink moved) async {
+    final prefs = await SharedPreferences.getInstance();
+    final hubs = (await load()).hubs.where((h) => h.key != oldKey && h.key != moved.key).toList()..add(moved);
     await _saveHubs(prefs, hubs);
   }
 

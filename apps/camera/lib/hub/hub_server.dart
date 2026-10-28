@@ -208,6 +208,23 @@ class HubServer {
     _notify();
   }
 
+  /// iOS can close the listening socket while the app is in the background.
+  /// Called on resume: restarts the server if it no longer answers.
+  Future<void> ensureListening() async {
+    final p = boundPort;
+    if (p == null) return;
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+      final req = await client.get('127.0.0.1', p, '/api/v1/health');
+      final res = await req.close().timeout(const Duration(seconds: 1));
+      await res.drain<void>();
+      client.close(force: true);
+      if (res.statusCode == 200) return;
+    } catch (_) {}
+    await stop();
+    await start();
+  }
+
   Future<void> stop() async {
     for (final ws in [..._controlSockets.values, ..._ingestSockets.values]) {
       await ws.close(WebSocketStatus.goingAway);
@@ -277,6 +294,17 @@ class HubServer {
           'name': displayName,
           'pairing': ['code', 'request_verify'],
         });
+      }
+      // A camera checks its token here to find this main phone again after
+      // the main phone's Wi-Fi address changed.
+      if (path == '/api/v1/devices/me' && req.method == 'GET') {
+        final device = registry.authenticate(_token(req));
+        if (device == null) {
+          // 410 tells a removed camera to forget this main phone.
+          if (registry.isRemovedToken(_token(req))) return await _json(req.response, 410, {'detail': 'removed'});
+          return await _json(req.response, 401, {'detail': 'Invalid or revoked token'});
+        }
+        return await _json(req.response, 200, {'camera_id': device.cameraId, 'hub_name': displayName});
       }
       if (path == '/api/v1/devices/pair/code' && req.method == 'POST') {
         return await _pairWithCode(req);

@@ -82,6 +82,49 @@ void main() {
         contains('Could not reach the camera'));
   });
 
+  test('one-step add by code: the main phone finds the right camera among several', () async {
+    final otherLinks = <HubLink>[];
+    final other = CameraLinkServer(
+      deviceId: 'dev_cam_garage',
+      deviceName: 'Camera G1',
+      guard: CodeGuard(code: '111222'),
+      bindAddress: InternetAddress.loopbackIPv4,
+      onLinked: (l) async => otherLinks.add(l),
+    );
+    final otherCam = (await CameraAdder.probe(HubAddress('127.0.0.1', await other.start(preferredPort: 0))))!;
+    final phone = await mainPhone();
+    final statuses = <String>[];
+
+    final name = await CameraAdder.addByCode(
+      code: '482913',
+      registry: phone,
+      hubPort: 8000,
+      hubName: 'Main',
+      onStatus: statuses.add,
+      discovery: () => Stream.fromIterable([otherCam, discovered]),
+    );
+    expect(name, 'Camera K1');
+    expect(links.single.hubName, 'Main');
+    expect(otherLinks, isEmpty);
+    expect(phone.devices.single.deviceId, 'dev_cam_kitchen');
+    expect(statuses.first, contains('Looking'));
+    await other.stop();
+  });
+
+  test('one-step add by code: clear errors when nothing is found or the code is wrong', () async {
+    final phone = await mainPhone();
+    expect(
+      () => CameraAdder.addByCode(code: '482913', registry: phone, hubPort: 8000, hubName: 'Main', discovery: () => const Stream.empty()),
+      throwsA(isA<AddCameraError>().having((e) => e.message, 'message', contains('No camera found'))),
+    );
+    await expectLater(
+      CameraAdder.addByCode(code: '000000', registry: phone, hubPort: 8000, hubName: 'Main', discovery: () => Stream.value(discovered)),
+      throwsA(isA<AddCameraError>()),
+    );
+    expect(links, isEmpty);
+    expect(phone.devices, isEmpty);
+  });
+
   test('code guard: permanent until changed, lockout expires', () {
     var now = DateTime(2026, 10, 28);
     final g = CodeGuard(code: '123456', maxFailures: 2, lockout: const Duration(minutes: 5), now: () => now);

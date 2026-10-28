@@ -135,13 +135,39 @@ class AiClient {
   final AiConfig config;
   final http.Client _http;
 
-  AiClient(this.config, {http.Client? httpClient}) : _http = httpClient ?? http.Client();
+  /// Shared picture budget. The AI provider limits input tokens per minute
+  /// (about three camera pictures a minute on the current plan), so all
+  /// background AI work — watch tasks and motion descriptions — takes turns:
+  /// at most one picture per [pictureSpacing], and after a "rate limited"
+  /// answer everything pauses for [rateLimitPause].
+  final Duration pictureSpacing;
+  static const rateLimitPause = Duration(seconds: 60);
+  final DateTime Function() _now;
+  DateTime? _lastPicture;
+  DateTime? _pausedUntil;
+
+  AiClient(this.config, {http.Client? httpClient, this.pictureSpacing = const Duration(seconds: 20), DateTime Function()? now})
+      : _http = httpClient ?? http.Client(),
+        _now = now ?? DateTime.now;
+
+  /// Whether background AI work may send a picture now.
+  bool get canSendPicture {
+    final now = _now();
+    if (_pausedUntil != null && now.isBefore(_pausedUntil!)) return false;
+    return _lastPicture == null || now.difference(_lastPicture!) >= pictureSpacing;
+  }
+
+  void _sentPicture() => _lastPicture = _now();
+
+  void _noteError(String? code) {
+    if (code == 'ai_rate_limited') _pausedUntil = _now().add(rateLimitPause);
+  }
 
   static const _messages = {
     'ai_not_authorised': 'The AI service rejected its API key (check the Groq key and account).',
     'daily_limit_reached': 'Daily AI limit reached.',
     'too_frequent': 'This camera was analysed moments ago.',
-    'ai_rate_limited': 'The AI is busy; try again shortly.',
+    'ai_rate_limited': 'The AI is at its per-minute limit; trying again in a minute.',
     'unauthorised': 'This app is not allowed to use the AI service.',
     'proxy_not_configured': 'The AI service is missing its key.',
   };
@@ -178,6 +204,7 @@ class AiClient {
   Future<AiReply<T>> _post<T>(String path, Map<String, Object?> payload, T Function(Map<String, dynamic>) parse) async {
     final base = config.proxyUrl;
     if (!config.isConfigured || base == null) return const AiReply.failed('AI is not set up in this build.');
+    _sentPicture();
     try {
       final res = await _http
           .post(base.resolve(path),
@@ -186,6 +213,7 @@ class AiClient {
       final body = jsonDecode(res.body);
       if (res.statusCode == 200 && body is Map) return AiReply.ok(parse(Map<String, dynamic>.from(body)));
       final code = body is Map ? body['error'] as String? : null;
+      _noteError(code);
       return AiReply.failed(_messages[code] ?? 'AI request failed (${res.statusCode}).',
           retryLater: code == 'ai_rate_limited' || code == 'too_frequent');
     } catch (_) {
@@ -196,6 +224,7 @@ class AiClient {
   Future<AiResult> analyze({required Uint8List jpeg, required String cameraId, required String cameraName}) async {
     final base = config.proxyUrl;
     if (!config.isConfigured || base == null) return const AiResult.failed('AI is not set up in this build.');
+    _sentPicture();
     try {
       final res = await _http
           .post(
@@ -209,6 +238,7 @@ class AiClient {
         return AiResult.ok(AiInsight.fromJson(Map<String, dynamic>.from(body)));
       }
       final code = body is Map ? body['error'] as String? : null;
+      _noteError(code);
       return AiResult.failed(_messages[code] ?? 'AI request failed (${res.statusCode}).');
     } catch (_) {
       return const AiResult.failed('Could not reach the AI service.');

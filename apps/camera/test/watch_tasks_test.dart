@@ -34,7 +34,8 @@ class FakeAi {
   int status = 200;
   String? errorCode;
 
-  AiClient client() => AiClient(AiConfig(proxyUrl: Uri.parse('http://proxy.test'), token: 't'), httpClient: MockClient((req) async {
+  AiClient client({DateTime Function()? now}) =>
+      AiClient(AiConfig(proxyUrl: Uri.parse('http://proxy.test'), token: 't'), now: now, httpClient: MockClient((req) async {
         calls.add(req.url.path);
         if (status != 200) return http.Response(jsonEncode({'error': errorCode}), status);
         if (req.url.path == '/v1/plan-task') return http.Response(jsonEncode(plan), 200);
@@ -73,7 +74,7 @@ void main() {
   TaskWatcher watcher() => TaskWatcher(
         store: store,
         events: events,
-        ai: ai.client(),
+        ai: ai.client(now: () => now),
         snapshot: (_) async => nextSnapshot,
         notify: ({required id, required title, required body}) async => notifications.add((title, body)),
         onWatchChanged: (cam, tasks) => badges[cam] = tasks,
@@ -90,10 +91,10 @@ void main() {
     final t = await w.create(cameraId: 'cam_wm', cameraName: 'Laundry', description: 'Tell me when the water reaches MAX');
     expect(badges['cam_wm'], ['Tell me when the water reaches MAX'], reason: 'camera shows the AI-watching badge');
 
-    await w.tick(); // plan
-    expect(ai.calls, ['/v1/plan-task']);
+    await w.tick(); // plan, then check the same picture straight away
+    expect(ai.calls, ['/v1/plan-task', '/v1/check-task']);
     expect(t.question, 'Is the water at or above the MAX line?');
-    expect(t.lastObservation, 'The drum is half full.');
+    expect(t.progressApplicable, isTrue, reason: 'gradual task: needs two "yes" answers');
 
     ai.checks.addAll([_check(false, progress: 70, obs: 'About 70% full.'), _check(true, progress: 100, obs: 'At MAX.'), _check(true, progress: 100, obs: 'At MAX.')]);
     nextSnapshot = CameraSnapshot(_jpeg, grid(100, changedBlocks: 40));
@@ -199,15 +200,15 @@ void main() {
       ..status = 502
       ..errorCode = 'ai_rate_limited';
     await w.tick();
-    expect(t.lastError, contains('busy'));
-    await advance(w, 15);
+    expect(t.lastError, contains('per-minute limit'));
+    await advance(w, 30);
     expect(ai.calls.length, 1, reason: 'held back for the retry delay');
-    await advance(w, 15);
+    await advance(w, 30);
     expect(ai.calls.length, 2);
 
     ai.status = 200;
     nextSnapshot = null;
-    await advance(w, 30); // past the retry delay
+    await advance(w, 60); // past the retry delay
     expect(t.lastError, contains('camera'));
   });
 
@@ -226,6 +227,81 @@ void main() {
 
     await w.delete(t);
     expect(store.tasks, isEmpty);
+  });
+
+  test('one-off moment: a single confident "yes" alerts', () async {
+    final w = watcher();
+    final t = await w.create(cameraId: 'c', cameraName: 'Door', description: 'tell me when someone waves',
+        plan: const TaskPlan(question: 'Is someone waving?', targetVisible: true));
+    ai.checks.add(_check(true, confidence: 0.9, obs: 'A girl is waving.'));
+    await w.tick();
+    expect(t.status, TaskStatus.done);
+    expect(notifications.single.$2, contains('A girl is waving.'));
+  });
+
+  test('one-off moment: a less sure "yes" still needs a second look', () async {
+    final w = watcher();
+    final t = await w.create(cameraId: 'c', cameraName: 'Door', description: 'someone waves',
+        plan: const TaskPlan(question: 'q?', targetVisible: true));
+    ai.checks.addAll([_check(true, confidence: 0.7), _check(true, confidence: 0.7)]);
+    await w.tick();
+    expect(t.status, TaskStatus.watching);
+    nextSnapshot = CameraSnapshot(_jpeg, grid(100, changedBlocks: 50));
+    await advance(w, 30);
+    expect(t.status, TaskStatus.done);
+  });
+
+  test('motion on the camera triggers an immediate check, at most every few seconds', () async {
+    final w = watcher();
+    await w.create(cameraId: 'c', cameraName: 'Door', description: 'someone waves', intervalSeconds: 300,
+        plan: const TaskPlan(question: 'q?', targetVisible: true));
+    await w.tick();
+    expect(ai.calls.length, 1);
+    now = now.add(const Duration(seconds: 3));
+    await w.onMotion('c');
+    expect(ai.calls.length, 1, reason: 'too soon after the last check');
+    now = now.add(const Duration(seconds: 18)); // past the AI's shared picture spacing
+    await w.onMotion('c'); // same picture, but motion skips the unchanged-scene shortcut
+    expect(ai.calls.length, 2);
+    await w.onMotion('other_camera');
+    expect(ai.calls.length, 2);
+  });
+
+  test('camera offline: clear message', () async {
+    final w = watcher();
+    final t = await w.create(cameraId: 'c', cameraName: 'C', description: 'd', plan: const TaskPlan(question: 'q?', targetVisible: true));
+    nextSnapshot = null;
+    await w.tick();
+    expect(t.lastError, contains('open VYRO on the camera phone'));
+  });
+
+  test('removing a camera stops its tasks', () async {
+    final w = watcher();
+    final a = await w.create(cameraId: 'c', cameraName: 'C', description: 'water at max');
+    final b = await w.create(cameraId: 'c', cameraName: 'C', description: 'kettle done');
+    await w.pause(b);
+    final other = await w.create(cameraId: 'x', cameraName: 'X', description: 'printer done');
+    await w.forgetCamera('c');
+    expect((a.status, b.status, other.status), (TaskStatus.stopped, TaskStatus.stopped, TaskStatus.watching));
+    expect(badges['c'], isEmpty);
+    expect(a.lastError, contains('removed'));
+  });
+
+  test('several tasks share the AI: calls are spaced out, not refused', () async {
+    final w = watcher();
+    for (final d in ['water at max', 'kettle done', 'printer done']) {
+      await w.create(cameraId: 'c', cameraName: 'C', description: d, plan: const TaskPlan(question: 'q?', targetVisible: true));
+    }
+    await w.tick();
+    expect(ai.calls.length, 1, reason: 'one picture per spacing window');
+    await advance(w, 10);
+    expect(ai.calls.length, 1);
+    await advance(w, 10);
+    expect(ai.calls.length, 2);
+    await advance(w, 20);
+    expect(ai.calls.length, 3);
+    // Every task got a turn (none starved by the first one in the list).
+    expect(store.tasks.every((t) => t.aiChecks == 1), isTrue);
   });
 
   test('status line', () {

@@ -62,7 +62,8 @@ class MediaTransport {
 
     try {
       _channel = WebSocketChannel.connect(wsUrl);
-      await _channel!.ready;
+      // An address that no longer exists can hang for a minute; give up sooner.
+      await _channel!.ready.timeout(const Duration(seconds: 5));
       _updateStatus(TransportStatus.connected);
       // Reset backoff counter on successful handshake (Section 7)
       _reconnectAttempts = 0;

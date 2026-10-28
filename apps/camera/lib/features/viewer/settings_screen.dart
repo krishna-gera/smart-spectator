@@ -105,10 +105,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
-          const SectionHeader('Pairing code'),
+          const SectionHeader('Web dashboard code'),
           CodeDisplay(
             code: widget.pairingCode(),
-            caption: 'Enter this on a camera phone, or sign in to the web dashboard',
+            caption: 'Sign in to the web dashboard with this code',
             compact: true,
             onChange: () async {
               await widget.onChangeCode();
@@ -120,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: ListTile(
               leading: const Icon(Icons.language_rounded, color: AppColors.primary),
               title: Text(widget.dashboardAddress != null ? 'http://${widget.dashboardAddress}' : 'Starting…'),
-              subtitle: const Text('Open on a computer on the same Wi-Fi and sign in with the pairing code.',
+              subtitle: const Text('Open on a computer on the same Wi-Fi and sign in with the code above.',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
             ),
           ),

@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:smart_spectator_camera/core/control/control_client.dart';
 import 'package:smart_spectator_camera/core/motion/motion_reporter.dart';
 import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
@@ -151,6 +153,20 @@ void main() {
       }
       expect(link.health(), CameraHealth.reconnecting);
       expect(link.droppedWhileStreaming, isFalse);
+    });
+
+    test('a camera can find its main phone again by checking its token', () async {
+      final cam = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_a', deviceName: 'Hall', code: registry.hubCode);
+      final ok = await http.get(hub.uri('/api/v1/devices/me'), headers: {'Authorization': 'Bearer ${cam.deviceToken}'});
+      expect(ok.statusCode, 200);
+      expect(jsonDecode(ok.body)['camera_id'], cam.cameraId);
+      final bad = await http.get(hub.uri('/api/v1/devices/me'), headers: {'Authorization': 'Bearer ss_tok_v1_nope'});
+      expect(bad.statusCode, 401);
+
+      // Removed on the main phone: the camera is told to forget this link.
+      await server.revokeDevice('dev_a');
+      final gone = await http.get(hub.uri('/api/v1/devices/me'), headers: {'Authorization': 'Bearer ${cam.deviceToken}'});
+      expect(gone.statusCode, 410);
     });
 
     test('rename is saved on the main phone and validated', () async {

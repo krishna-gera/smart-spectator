@@ -71,6 +71,7 @@ class MainActivity : FlutterActivity() {
                     val width = call.argument<Int>("width") ?: 0
                     val height = call.argument<Int>("height") ?: 0
                     val quality = call.argument<Int>("quality") ?: 70
+                    val maxSize = call.argument<Int>("maxSize") ?: 0
                     if (rawPlanes == null) {
                         result.error("INVALID_ARGS", "Expected YUV planes", null)
                         return@setMethodCallHandler
@@ -80,7 +81,7 @@ class MainActivity : FlutterActivity() {
                     }
                     encoder.post {
                         val jpeg = try {
-                            SnapshotJpeg.encode(planes, width, height, quality)
+                            SnapshotJpeg.encode(planes, width, height, quality, maxSize)
                         } catch (e: Exception) {
                             null
                         }
