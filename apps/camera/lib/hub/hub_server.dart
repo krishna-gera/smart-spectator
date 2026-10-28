@@ -89,6 +89,9 @@ class HubServer {
 
   final DeviceRegistry registry;
   final int port;
+
+  /// Name camera phones show in their "nearby main phones" list.
+  String displayName;
   final InternetAddress bindAddress;
 
   HttpServer? _server;
@@ -101,6 +104,7 @@ class HubServer {
   HubServer({
     required this.registry,
     this.port = defaultPort,
+    this.displayName = 'Smart Spectator main phone',
     InternetAddress? bindAddress,
   }) : bindAddress = bindAddress ?? InternetAddress.anyIPv4;
 
@@ -183,7 +187,16 @@ class HubServer {
     final path = req.uri.path;
     try {
       if (path == '/api/v1/health' && req.method == 'GET') {
-        return await _json(req.response, 200, {'status': 'ok', 'role': 'main_phone', 'protocol': 'ss_v1'});
+        return await _json(req.response, 200, {
+          'status': 'ok',
+          'role': 'main_phone',
+          'protocol': 'ss_v1',
+          'name': displayName,
+          'pairing': ['code', 'request_verify'],
+        });
+      }
+      if (path == '/api/v1/devices/pair/code' && req.method == 'POST') {
+        return await _pairWithCode(req);
       }
       if (path == '/api/v1/devices/pair/request' && req.method == 'POST') {
         return await _pairRequest(req);
@@ -229,6 +242,25 @@ class HubServer {
     });
   }
 
+  /// One-step pairing with the code shown on the main phone's screen.
+  Future<void> _pairWithCode(HttpRequest req) async {
+    final body = await _readJson(req);
+    if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON body'});
+    final deviceId = body['device_id'];
+    final deviceName = body['device_name'];
+    final code = body['code'];
+    if (deviceId is! String || !DeviceRegistry.isValidDeviceId(deviceId)) {
+      return _json(req.response, 422, {'detail': 'Invalid device_id'});
+    }
+    if (deviceName is! String || deviceName.isEmpty || deviceName.length > 128) {
+      return _json(req.response, 422, {'detail': 'Invalid device_name'});
+    }
+    if (code is! String || !RegExp(r'^[0-9]{6}$').hasMatch(code.trim())) {
+      return _json(req.response, 422, {'detail': 'The code has 6 digits'});
+    }
+    return _sendVerifyResult(req, await registry.pairWithHubCode(deviceId, deviceName, code));
+  }
+
   Future<void> _pairVerify(HttpRequest req) async {
     final body = await _readJson(req);
     if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON body'});
@@ -240,7 +272,10 @@ class HubServer {
     if (code is! String || !RegExp(r'^[0-9]{6}$').hasMatch(code.trim())) {
       return _json(req.response, 422, {'detail': 'verification_code must be 6 digits'});
     }
-    final result = await registry.verifyPairing(deviceId, code);
+    return _sendVerifyResult(req, await registry.verifyPairing(deviceId, code));
+  }
+
+  Future<void> _sendVerifyResult(HttpRequest req, VerifyResult result) async {
     _notify();
     switch (result) {
       case VerifySuccess(:final device, :final rawToken):

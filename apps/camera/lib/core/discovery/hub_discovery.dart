@@ -1,60 +1,75 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
+import '../pairing/pairing_client.dart';
 import '../platform/system_bridge.dart';
 
 class DiscoveredHub {
-  final String ip;
-  final int port;
+  final HubAddress address;
   final String name;
 
-  DiscoveredHub({
-    required this.ip,
-    required this.port,
-    required this.name,
-  });
+  DiscoveredHub({required this.address, required this.name});
+
+  String get ip => address.host;
+  int get port => address.port;
 }
 
 class HubDiscovery {
-  /// Confirms a Smart Spectator main phone (or legacy hub) answers at [ip].
-  static Future<DiscoveredHub?> probeHub(String ip, {int port = 8000, String name = 'Smart Spectator main phone'}) async {
+  /// Confirms a Smart Spectator main phone answers at [address].
+  static Future<DiscoveredHub?> probeHub(HubAddress address, {String? name}) async {
     try {
-      final uri = Uri.parse('http://$ip:$port/api/v1/health');
-      final res = await http.get(uri).timeout(const Duration(milliseconds: 1200));
-      if (res.statusCode == 200) {
-        return DiscoveredHub(ip: ip, port: port, name: name);
-      }
-    } catch (_) {}
-    return null;
+      final res = await http.get(address.uri('/api/v1/health')).timeout(const Duration(milliseconds: 1500));
+      if (res.statusCode != 200) return null;
+      final body = jsonDecode(res.body);
+      if (body is! Map || body['role'] != 'main_phone') return null;
+      return DiscoveredHub(address: address, name: body['name'] as String? ?? name ?? 'Smart Spectator main phone');
+    } catch (_) {
+      return null;
+    }
   }
 
-  /// Finds main phones on the Wi-Fi: mDNS/NSD first (the main phone
-  /// advertises itself), then a quick probe of common addresses as fallback.
-  static Stream<DiscoveredHub> discoverHubs() async* {
-    final seen = <String>{};
+  /// Finds main phones on this Wi-Fi: Bonjour/NSD (the main phone announces
+  /// itself) plus a quick parallel probe of common addresses for networks
+  /// that block multicast. Results arrive as they are confirmed.
+  static Stream<DiscoveredHub> discoverHubs({Duration timeout = const Duration(seconds: 3)}) {
+    final out = StreamController<DiscoveredHub>();
+    final seen = <HubAddress>{};
+    final pending = <Future<void>>[];
 
-    for (final (host, port, name) in await SystemBridge.discoverHubs()) {
-      final hub = await probeHub(host, port: port, name: name);
-      if (hub != null && seen.add('$host:$port')) yield hub;
+    void check(HubAddress a, {String? name}) {
+      if (!seen.add(a)) return;
+      pending.add(probeHub(a, name: name).then((hub) {
+        if (hub != null && !out.isClosed) out.add(hub);
+      }));
     }
 
-    // Fallback for networks that block multicast.
-    try {
-      final interfaces = await NetworkInterface.list(includeLinkLocal: false, type: InternetAddressType.IPv4);
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          final parts = addr.address.split('.');
-          if (parts.length != 4 || addr.isLoopback) continue;
-          final subnetPrefix = '${parts[0]}.${parts[1]}.${parts[2]}';
-          for (final octet in const [1, 2, 10, 15, 20, 50, 100, 150]) {
-            final targetIp = '$subnetPrefix.$octet';
-            if (targetIp == addr.address || seen.contains('$targetIp:8000')) continue;
-            final hub = await probeHub(targetIp);
-            if (hub != null && seen.add('$targetIp:8000')) yield hub;
+    Future<void> run() async {
+      final nsd = SystemBridge.discoverHubs(timeout: timeout).then((found) {
+        for (final (host, port, name) in found) {
+          check(HubAddress(host, port), name: name);
+        }
+      });
+      try {
+        final interfaces = await NetworkInterface.list(includeLinkLocal: false, type: InternetAddressType.IPv4);
+        for (final iface in interfaces) {
+          for (final addr in iface.addresses) {
+            final parts = addr.address.split('.');
+            if (parts.length != 4 || addr.isLoopback) continue;
+            for (final octet in const [1, 2, 10, 15, 20, 50, 100, 150]) {
+              final ip = '${parts[0]}.${parts[1]}.${parts[2]}.$octet';
+              if (ip != addr.address) check(HubAddress(ip));
+            }
           }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+      await nsd;
+      await Future.wait(pending);
+      await out.close();
+    }
+
+    run();
+    return out.stream;
   }
 }

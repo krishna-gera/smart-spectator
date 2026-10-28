@@ -37,7 +37,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
       _localIp = await HubServer.localIpAddress();
       // Keep receiving with the screen off, and let camera phones find us.
       await SystemBridge.startHubService(text: 'Main phone hub at ${_localIp ?? 'this phone'}:${_server.boundPort}');
-      await SystemBridge.advertiseHub(_server.boundPort!, 'Smart Spectator ${_localIp ?? ''}'.trim());
+      _server.displayName = 'Main phone${_localIp != null ? ' ($_localIp)' : ''}';
+      await SystemBridge.advertiseHub(_server.boundPort!, _server.displayName);
       _changesSub = _server.changes.listen((_) {
         _syncLiveVideo();
         if (mounted) setState(() {});
@@ -127,6 +128,12 @@ class _ViewerScreenState extends State<ViewerScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _HubStatusCard(running: _server.isRunning, ip: _localIp, port: _server.boundPort, error: _error),
+          if (_server.isRunning) ...[
+            const SizedBox(height: 16),
+            _PairingCodeCard(code: _registry.hubCode, expiresAt: _registry.hubCodeExpiresAt, onNewCode: () {
+              setState(_registry.rotateHubCode);
+            }),
+          ],
           const SizedBox(height: 16),
           if (pending.isNotEmpty) ...[
             const _SectionTitle('Pairing requests'),
@@ -157,7 +164,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                'No cameras yet. On another phone choose Camcorder Mode, enter the address above, and tap "Get pairing code".',
+                'No cameras yet. On another phone choose Camcorder Mode and enter the pairing code above.',
                 style: TextStyle(color: Color(0xFF94A3B8)),
               ),
             ),
@@ -204,10 +211,12 @@ class _HubStatusCard extends StatelessWidget {
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ]),
           const SizedBox(height: 8),
-          Text('Camera phones connect to: $address', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 16)),
           const SizedBox(height: 4),
-          const Text('Keep this app open while cameras are streaming. Both phones must be on the same Wi-Fi.',
+          const Text('Keep this app open while cameras are streaming. Camera phones on the same Wi-Fi find this phone automatically.',
               style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+          const SizedBox(height: 4),
+          Text('Address (only if a camera can\'t find this phone): $address',
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
           if (error != null) ...[
             const SizedBox(height: 8),
             Text(error!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
@@ -382,6 +391,40 @@ class _FullScreenView extends StatelessWidget {
         title: Text(camera.deviceName),
       ),
       body: SafeArea(child: _LiveVideo(camera: camera, controller: controller)),
+    );
+  }
+}
+
+/// The code camera phones type to connect; rotates every few minutes.
+class _PairingCodeCard extends StatelessWidget {
+  final String code;
+  final DateTime expiresAt;
+  final VoidCallback onNewCode;
+  const _PairingCodeCard({required this.code, required this.expiresAt, required this.onNewCode});
+
+  @override
+  Widget build(BuildContext context) {
+    final left = expiresAt.difference(DateTime.now());
+    final mm = left.inMinutes.clamp(0, 99);
+    final ss = (left.inSeconds % 60).clamp(0, 59).toString().padLeft(2, '0');
+    final spaced = '${code.substring(0, 3)} ${code.substring(3)}';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF090D16),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(children: [
+        const Text('PAIRING CODE', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, letterSpacing: 1.2)),
+        const SizedBox(height: 6),
+        Text(spaced,
+            style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 40, letterSpacing: 6, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text('On a camera phone: Camcorder Mode → enter this code · new code in $mm:$ss',
+            textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+        TextButton(onPressed: onNewCode, child: const Text('Show a new code')),
+      ]),
     );
   }
 }

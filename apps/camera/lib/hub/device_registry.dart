@@ -149,10 +149,19 @@ class DeviceRegistry {
   final Map<String, PairedDevice> _devices = {};
   late List<int> _secret;
 
+  /// Code shown permanently on the main phone; any camera that enters it pairs.
+  final Duration hubCodeTtl;
+  final int maxHubCodeFailures;
+  String _hubCode = '';
+  DateTime _hubCodeExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _hubCodeFailures = 0;
+
   DeviceRegistry({
     required this.store,
     this.pinTtl = const Duration(minutes: 5),
     this.maxPendingRequests = 16,
+    this.hubCodeTtl = const Duration(minutes: 10),
+    this.maxHubCodeFailures = 10,
     DateTime Function()? now,
     Random? random,
   })  : _now = now ?? DateTime.now,
@@ -178,6 +187,41 @@ class DeviceRegistry {
   }
 
   List<PairedDevice> get devices => _devices.values.toList();
+
+  /// The current 6-digit pairing code; rotates when it expires.
+  String get hubCode {
+    if (_hubCode.isEmpty || !_now().isBefore(_hubCodeExpiresAt)) rotateHubCode();
+    return _hubCode;
+  }
+
+  DateTime get hubCodeExpiresAt {
+    hubCode; // refresh if expired
+    return _hubCodeExpiresAt;
+  }
+
+  void rotateHubCode() {
+    _hubCode = (100000 + _random.nextInt(900000)).toString();
+    _hubCodeExpiresAt = _now().add(hubCodeTtl);
+    _hubCodeFailures = 0;
+  }
+
+  /// One-step pairing: a camera sends the code shown on the main phone.
+  /// Too many wrong guesses (from any device) replace the code.
+  Future<VerifyResult> pairWithHubCode(String deviceId, String deviceName, String submittedCode) async {
+    final current = hubCode;
+    if (!_constantTimeEquals(current, submittedCode.trim())) {
+      _hubCodeFailures++;
+      if (_hubCodeFailures >= maxHubCodeFailures) {
+        rotateHubCode();
+        return VerifyFailure('Too many wrong codes. A new code is now shown on the main phone.');
+      }
+      return VerifyFailure('That code is not correct. Check the code on the main phone.');
+    }
+    _hubCodeFailures = 0;
+    _pending.remove(deviceId);
+    final (device, rawToken) = await _issueToken(deviceId, deviceName);
+    return VerifySuccess(device, rawToken);
+  }
 
   /// Creates a PIN, or returns the existing one while it is still valid.
   /// Returns null when too many unrelated requests are already pending.
@@ -213,20 +257,25 @@ class DeviceRegistry {
       return VerifyFailure('Invalid code. ${req.attemptsRemaining} attempt(s) remaining.');
     }
 
+    _pending.remove(deviceId);
+    final (device, rawToken) = await _issueToken(deviceId, req.deviceName);
+    return VerifySuccess(device, rawToken);
+  }
+
+  Future<(PairedDevice, String)> _issueToken(String deviceId, String deviceName) async {
     final rawToken = '$tokenPrefix${_randomHex(24)}';
     final previous = _devices[deviceId];
     final device = PairedDevice(
       deviceId: deviceId,
-      deviceName: req.deviceName,
+      deviceName: deviceName,
       // Re-pairing keeps the same camera identity so history stays attached.
       cameraId: previous?.cameraId ?? 'cam_${_randomHex(6)}',
       tokenHash: _hashToken(rawToken),
       pairedAt: _now(),
     );
     _devices[deviceId] = device;
-    _pending.remove(deviceId);
     await store.saveDevices(devices);
-    return VerifySuccess(device, rawToken);
+    return (device, rawToken);
   }
 
   /// Returns the paired, non-revoked device that owns [rawToken], or null.
