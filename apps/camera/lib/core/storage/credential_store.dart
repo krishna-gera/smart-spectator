@@ -22,6 +22,10 @@ class HubLink {
 
   String get key => '$hubHost:$hubPort';
 
+  /// Same main phone address and the same login as [other]. A main phone that
+  /// adds this camera again issues a new login and the old one stops working.
+  bool sameLogin(HubLink other) => key == other.key && cameraId == other.cameraId && deviceToken == other.deviceToken;
+
   Map<String, dynamic> toJson() => {
         'hub_host': hubHost,
         'hub_port': hubPort,

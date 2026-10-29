@@ -237,7 +237,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   void _syncHubs() {
     final links = {for (final l in widget.service.hubs) l.key: l};
-    for (final key in _hubs.keys.where((k) => !links.containsKey(k)).toList()) {
+    // Close connections to main phones that are gone, or that added this
+    // camera again: the old login no longer works, so reconnect with the new one.
+    for (final key in _hubs.keys.where((k) => !(links[k]?.sameLogin(_hubs[k]!.link) ?? false)).toList()) {
       _hubs.remove(key)!.dispose();
     }
     final deviceId = widget.service.credentials?.deviceId ?? '';

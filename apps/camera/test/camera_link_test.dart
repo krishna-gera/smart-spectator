@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_spectator_camera/camera/camera_link_server.dart';
 import 'package:smart_spectator_camera/core/pairing/code_guard.dart';
 import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
@@ -70,6 +71,36 @@ void main() {
     expect(phoneA.authenticate(links[0].deviceToken)?.deviceId, 'dev_cam_kitchen');
     expect(phoneB.authenticate(links[1].deviceToken)?.deviceId, 'dev_cam_kitchen');
     expect(phoneA.authenticate(links[1].deviceToken), isNull);
+  });
+
+  test('adding a camera again replaces its login, and the camera sees the change', () async {
+    SharedPreferences.setMockInitialValues({});
+    final phone = await mainPhone();
+    // The camera saves each link it is given, as Camera mode does.
+    Future<HubLink> addAndSave() async {
+      expect(await CameraAdder.add(camera: discovered, code: '482913', registry: phone, hubPort: 8000, hubName: 'Main'), isNull);
+      await CredentialStore.addHub(links.last);
+      return (await CredentialStore.load()).hubs.single;
+    }
+
+    final before = await addAndSave();
+    final after = await addAndSave();
+
+    expect(phone.authenticate(before.deviceToken), isNull, reason: 'the old login stops working');
+    expect(phone.authenticate(after.deviceToken)?.deviceId, 'dev_cam_kitchen');
+    // Same main phone address: the camera must compare logins, not only
+    // addresses, to drop its connection that still uses the old login.
+    expect(after.key, before.key);
+    expect(after.sameLogin(before), isFalse);
+    expect(after.sameLogin(after), isTrue);
+    final renamed = HubLink(
+      hubHost: after.hubHost,
+      hubPort: after.hubPort,
+      hubName: 'Renamed',
+      cameraId: after.cameraId,
+      deviceToken: after.deviceToken,
+    );
+    expect(renamed.sameLogin(after), isTrue, reason: 'a new name alone keeps the connection');
   });
 
   test('a wrong code changes nothing on either phone', () async {
