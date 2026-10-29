@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../camera/camcorder_service.dart';
+import '../../camera/camera_link_server.dart';
 import '../../core/storage/credential_store.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
+import '../camera/allow_main_phone.dart';
 
 /// Camcorder Mode: shows this camera's code and waits. The owner types the
 /// code on the main phone (Cameras → Add camera); the main phone finds this
@@ -33,10 +35,16 @@ class PairingScreen extends StatefulWidget {
 
 class _PairingScreenState extends State<PairingScreen> {
   StreamSubscription<HubLink>? _linkedSub;
+  Future<bool> Function(LinkRequest)? _previousApprover;
+
+  // This screen shows the code, so it asks the owner while it is on top.
+  Future<bool> _askToAllow(LinkRequest request) async => mounted ? askToAllowMainPhone(context, request) : false;
 
   @override
   void initState() {
     super.initState();
+    _previousApprover = widget.service.approver;
+    widget.service.approver = _askToAllow;
     _linkedSub = widget.service.linked.listen((link) {
       if (!mounted) return;
       HapticFeedback.mediumImpact();
@@ -48,6 +56,7 @@ class _PairingScreenState extends State<PairingScreen> {
   @override
   void dispose() {
     _linkedSub?.cancel();
+    if (widget.service.approver == _askToAllow) widget.service.approver = _previousApprover;
     super.dispose();
   }
 
@@ -85,7 +94,7 @@ class _PairingScreenState extends State<PairingScreen> {
                     textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
                 const SizedBox(height: 8),
                 const Text(
-                  'On the main phone open VYRO → Add camera and type the code. It connects by itself.',
+                  'On the main phone open VYRO → Add camera and type the code, then tap Allow here.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textMuted, height: 1.4),
                 ),
@@ -104,7 +113,7 @@ class _PairingScreenState extends State<PairingScreen> {
                 const SizedBox(height: 26),
                 const Text(
                   'Keep both phones on the same Wi-Fi with VYRO open. The code never changes unless you change it, '
-                  'and several main phones can use it.',
+                  'and several main phones can use it — you allow each one on this phone.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textFaint, fontSize: 12.5, height: 1.4),
                 ),

@@ -117,6 +117,45 @@ void main() {
     control.stop();
   });
 
+  test('the camera is told whenever its pictures can go to the AI (badge)', () async {
+    final cam = await pair('dev_a');
+    final commands = StreamController<Map<String, dynamic>>.broadcast();
+    final control = ControlClient(
+      hubIp: '127.0.0.1',
+      hubPort: hub.port,
+      deviceId: 'dev_a',
+      cameraId: cam.cameraId,
+      deviceToken: cam.deviceToken,
+      onCommand: commands.add,
+    );
+    Future<Map<String, dynamic>> next(String action) =>
+        commands.stream.firstWhere((c) => c['action'] == action).timeout(const Duration(seconds: 2));
+
+    server.web.aiAvailable = true;
+    final first = next('set_ai_watch');
+    await control.start();
+    expect((await first)['descriptions'], isFalse, reason: 'AI descriptions are off by default');
+
+    var watch = next('set_ai_watch');
+    await server.updateCameraSettings(cam.cameraId, const CameraSettings(aiEnabled: true));
+    expect((await watch)['descriptions'], isTrue);
+
+    // Without the AI service in this build nothing is sent, so no badge.
+    server.web.aiAvailable = false;
+    watch = next('set_ai_watch');
+    await server.updateCameraSettings(cam.cameraId, const CameraSettings(aiEnabled: true, sensitivity: 0.4));
+    expect((await watch)['descriptions'], isFalse);
+
+    // "Ask AI" pictures are marked so the camera can show it; dashboard frames are not.
+    var capture = next('capture_snapshot');
+    unawaited(server.requestSnapshot(cam.cameraId, timeout: const Duration(milliseconds: 200), forAi: true));
+    expect((await capture)['for_ai'], isTrue);
+    capture = next('capture_snapshot');
+    unawaited(server.requestSnapshot(cam.cameraId, timeout: const Duration(milliseconds: 200)));
+    expect((await capture).containsKey('for_ai'), isFalse);
+    control.stop();
+  });
+
   test('camera disconnecting mid-motion closes the open event', () async {
     final cam = await pair('dev_a');
     final ws = await WebSocket.connect('ws://127.0.0.1:${hub.port}/api/v1/control/ws?token=${cam.deviceToken}');

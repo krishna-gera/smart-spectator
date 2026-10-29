@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../camera/camcorder_service.dart';
+import '../../camera/camera_link_server.dart';
 import '../../core/codec/h264_encoder.dart';
 import '../../core/control/control_client.dart';
 import '../../core/motion/motion_detector.dart';
@@ -17,6 +18,7 @@ import '../../core/storage/credential_store.dart';
 import '../../core/streaming/media_transport.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
+import 'allow_main_phone.dart';
 
 /// Longest side of pictures sent to the main phone (motion events, AI checks,
 /// "last picture"). Enough detail for the AI, far fewer tokens than full size.
@@ -85,14 +87,23 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   bool _motionEnabled = true;
   bool _motionActive = false;
 
-  // AI watch tasks per main phone (shown as a badge for privacy).
+  // What the AI does with this camera, per main phone (shown as a badge for
+  // privacy): watch tasks, AI descriptions of motion snapshots, and when a
+  // picture was last sent for "Ask AI".
   final Map<String, List<String>> _aiWatch = {};
+  final Set<String> _aiDescribing = {};
+  DateTime? _aiPictureAt;
+  Timer? _aiPictureTimer;
+  static const _aiPictureShownFor = Duration(seconds: 15);
 
   // "Ask AI now" requests waiting for the next frame: (connection key, request id).
   final List<(String, String)> _snapshotRequests = [];
 
   // A one-off picture taken while not streaming (for AI tasks).
   Future<void>? _still;
+
+  // Whoever asked the owner before this screen opened (restored on close).
+  Future<bool> Function(LinkRequest)? _previousApprover;
 
   // Power saver: a black screen while streaming untouched (OLED pixels off).
   static const _dimAfter = Duration(seconds: 30);
@@ -105,6 +116,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.service.addListener(_syncHubs);
+    _previousApprover = widget.service.approver;
+    widget.service.approver = _askToAllow;
     _syncHubs();
     _initCamera();
     AppPrefs.powerSaver().then((on) {
@@ -119,6 +132,26 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     if (_powerSaver) _dimTimer = Timer(_dimAfter, () => mounted ? setState(() => _dimmed = true) : null);
   }
 
+  /// The AI badge's label and what it covers, or null when no AI is in use.
+  (String, String)? _aiBadge() {
+    final tasks = _aiWatch.values.expand((t) => t).toList();
+    final recent = _aiPictureAt != null && DateTime.now().difference(_aiPictureAt!) < _aiPictureShownFor;
+    final reasons = [
+      for (final t in tasks) 'Watch task: $t',
+      if (_aiDescribing.isNotEmpty) 'Motion snapshots are sent to AI for a description',
+      if (recent) 'A picture was just sent to AI',
+    ];
+    if (reasons.isEmpty) return null;
+    return (tasks.isNotEmpty ? 'AI watching' : (_aiDescribing.isNotEmpty ? 'AI on' : 'AI checked'), reasons.join('\n'));
+  }
+
+  /// A main phone typed this camera's code: wake the screen and ask.
+  Future<bool> _askToAllow(LinkRequest request) async {
+    if (!mounted) return false;
+    _wake();
+    return askToAllowMainPhone(context, request);
+  }
+
   Future<void> _setPowerSaver(bool on) async {
     await AppPrefs.setPowerSaver(on);
     setState(() => _powerSaver = on);
@@ -129,7 +162,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.service.removeListener(_syncHubs);
+    if (widget.service.approver == _askToAllow) widget.service.approver = _previousApprover;
     _dimTimer?.cancel();
+    _aiPictureTimer?.cancel();
     _stopStreaming();
     for (final h in _hubs.values) {
       h.dispose();
@@ -258,9 +293,20 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         if (mounted) setState(() => _motionEnabled = enabled);
       case 'set_ai_watch':
         final tasks = (cmd['tasks'] as List?)?.whereType<String>().toList() ?? const <String>[];
-        if (mounted) setState(() => tasks.isEmpty ? _aiWatch.remove(hubKey) : _aiWatch[hubKey] = tasks);
+        final describing = cmd['descriptions'] == true;
+        if (mounted) {
+          setState(() {
+            tasks.isEmpty ? _aiWatch.remove(hubKey) : _aiWatch[hubKey] = tasks;
+            describing ? _aiDescribing.add(hubKey) : _aiDescribing.remove(hubKey);
+          });
+        }
       case 'capture_snapshot':
         final id = cmd['request_id'];
+        if (cmd['for_ai'] == true && mounted) {
+          setState(() => _aiPictureAt = DateTime.now());
+          _aiPictureTimer?.cancel();
+          _aiPictureTimer = Timer(_aiPictureShownFor, () => mounted ? setState(() {}) : null);
+        }
         if (id is String) {
           _snapshotRequests.add((hubKey, id));
           // AI tasks and "Ask AI" also work while not streaming.
@@ -490,8 +536,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               const Text('Add this camera to a main phone', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
               const Text(
-                'On the main phone open VYRO → Add camera and type this code. It connects by itself. '
-                'Several main phones can use the same code.',
+                'On the main phone open VYRO → Add camera and type this code, then tap Allow here. '
+                'Several main phones can use the same code; you allow each one on this phone.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textMuted, height: 1.4),
               ),
@@ -587,7 +633,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           streaming: _streaming,
           motionEnabled: _motionEnabled,
           motionActive: _motionActive,
-          aiWatching: _aiWatch.values.expand((t) => t).toList(),
+          ai: _aiBadge(),
           reconnecting: _streaming && _hubs.values.any((h) => h.status == TransportStatus.reconnecting || h.status == TransportStatus.failed),
           mainPhoneOffline: total > 0 && !_streaming && !_hubs.values.any((h) => h.controlUp),
           onChangeRole: widget.onChangeRole,
@@ -667,7 +713,8 @@ class _TopBar extends StatelessWidget {
   final bool streaming;
   final bool motionEnabled;
   final bool motionActive;
-  final List<String> aiWatching;
+  /// AI badge label and details (null: no AI in use on this camera).
+  final (String, String)? ai;
   final bool reconnecting;
   final bool mainPhoneOffline;
   final VoidCallback onChangeRole;
@@ -676,7 +723,7 @@ class _TopBar extends StatelessWidget {
     required this.streaming,
     required this.motionEnabled,
     required this.motionActive,
-    required this.aiWatching,
+    required this.ai,
     required this.reconnecting,
     required this.mainPhoneOffline,
     required this.onChangeRole,
@@ -693,10 +740,10 @@ class _TopBar extends StatelessWidget {
           const SizedBox(width: 10),
           StatusChip(streaming ? 'LIVE' : 'READY', color: streaming ? AppColors.danger : AppColors.textMuted, filled: streaming),
           const SizedBox(width: 8),
-          if (aiWatching.isNotEmpty) ...[
+          if (ai != null) ...[
             Tooltip(
-              message: 'AI is watching: ${aiWatching.join('; ')}',
-              child: const StatusChip('AI watching', color: AppColors.ai, filled: true, icon: Icons.auto_awesome),
+              message: ai!.$2,
+              child: StatusChip(ai!.$1, color: AppColors.ai, filled: true, icon: Icons.auto_awesome),
             ),
             const SizedBox(width: 8),
           ],

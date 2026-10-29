@@ -26,6 +26,10 @@ class CamcorderService extends ChangeNotifier {
   /// Fires when a main phone adds this camera by its code.
   Stream<HubLink> get linked => _linked.stream;
 
+  /// Set by the camera screen while it is open: asks the owner whether a main
+  /// phone may receive video. With no screen to ask on, requests are refused.
+  Future<bool> Function(LinkRequest request)? approver;
+
   String get deviceName {
     final id = _creds?.deviceId ?? '';
     final suffix = id.length >= 4 ? id.substring(id.length - 4).toUpperCase() : id;
@@ -39,6 +43,7 @@ class CamcorderService extends ChangeNotifier {
       deviceId: _creds!.deviceId,
       deviceName: deviceName,
       guard: _guard!,
+      approve: (request) async => await approver?.call(request) ?? false,
       onLinked: (link) async {
         await CredentialStore.addHub(link);
         await reload();

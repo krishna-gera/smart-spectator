@@ -582,7 +582,7 @@ function addCameraDialog() {
   let busy = false;
   const submit = async () => {
     if (busy || !/^\d{6}$/.test(input.value)) return;
-    busy = true; go.disabled = true; input.disabled = true; msg.style.color = ""; msg.textContent = "Looking for the camera on this Wi-Fi…";
+    busy = true; go.disabled = true; input.disabled = true; msg.style.color = ""; msg.textContent = "Looking for the camera… then tap Allow on the camera phone.";
     const res = await api("/api/v1/web/cameras/add", { method:"POST", body:JSON.stringify({ code: input.value }) });
     if (res.ok) { const b = await res.json(); closeDialog(); toast(`${b.name} added. Tap Start streaming on the camera.`); refresh(); return; }
     msg.style.color = "var(--danger)"; msg.textContent = await detail(res, "Could not add the camera.");

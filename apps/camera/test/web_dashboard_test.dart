@@ -259,6 +259,63 @@ void main() {
     expect((await browser.json('PUT', '/api/v1/web/cameras/${cam.cameraId}/settings', {'sensitivity': 0.3})).$1, 200);
   });
 
+  test('only this dashboard page can sign in or change things', () async {
+    final port = server.boundPort!;
+    Future<int> post(String path, String body, {String type = 'application/json', String? origin, String? host, List<Cookie> cookies = const []}) async {
+      final client = HttpClient();
+      final req = await client.post('127.0.0.1', port, path);
+      req.cookies.addAll(cookies);
+      req.headers.set(HttpHeaders.contentTypeHeader, type);
+      if (origin != null) req.headers.set('origin', origin);
+      if (host != null) req.headers.set(HttpHeaders.hostHeader, host);
+      req.write(body);
+      final status = (await req.close()).statusCode;
+      client.close(force: true);
+      return status;
+    }
+
+    final right = jsonEncode({'code': registry.hubCode});
+    final wrong = jsonEncode({'code': registry.hubCode == '111111' ? '222222' : '111111'});
+    // Another website, a form-style body, or another domain name pointed at the phone.
+    expect(await post('/api/v1/web/login', wrong, origin: 'https://evil.example'), 403);
+    expect(await post('/api/v1/web/login', wrong, origin: 'null'), 403);
+    expect(await post('/api/v1/web/login', wrong, type: 'text/plain'), 415);
+    expect(await post('/api/v1/web/login', wrong, host: 'rebind.example.com'), 421);
+    for (var i = 0; i < 5; i++) {
+      await post('/api/v1/web/login', wrong, origin: 'https://evil.example');
+    }
+    expect(registry.checkHubCode(registry.hubCode, caller: '127.0.0.1').ok, isTrue,
+        reason: 'refused requests are never counted as guesses, so they cannot lock anyone out');
+
+    // The dashboard page itself (its own origin) works.
+    expect(await post('/api/v1/web/login', right, origin: 'http://127.0.0.1:$port'), 200);
+    final (page, _, _) = await browser.send('GET', '/');
+    expect(page, 200);
+
+    // Signed in, changes still need the page's own origin.
+    await signIn();
+    final cam = await addCamera(registry, 'dev_a', 'A');
+    final rename = jsonEncode({'name': 'Hacked'});
+    expect(await post('/api/v1/web/cameras/${cam.cameraId}/rename', rename, origin: 'https://evil.example', cookies: browser.cookies), 403);
+    expect(server.cameras.single.deviceName, 'A');
+  });
+
+  test('changing the dashboard code signs out every browser', () async {
+    await signIn();
+    final other = Browser(server.boundPort!);
+    expect((await other.json('POST', '/api/v1/web/login', {'code': registry.hubCode})).$1, 200);
+    final old = registry.hubCode;
+
+    final fresh = await server.changeDashboardCode();
+    expect(fresh, isNot(old));
+    expect((await browser.json('GET', '/api/v1/web/state')).$1, 401);
+    expect((await other.json('GET', '/api/v1/web/state')).$1, 401);
+    expect((await browser.json('POST', '/api/v1/web/login', {'code': old})).$1, 401);
+    expect((await browser.json('POST', '/api/v1/web/login', {'code': fresh})).$1, 200);
+    expect((await browser.json('GET', '/api/v1/web/state')).$1, 200);
+    other.close();
+  });
+
   test('sign out ends the session', () async {
     await signIn();
     expect((await browser.json('POST', '/api/v1/web/logout')).$1, 200);

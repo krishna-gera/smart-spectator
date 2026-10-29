@@ -98,18 +98,26 @@ class CameraAdder {
     return out.stream;
   }
 
+  /// How long the main phone waits for the camera's owner to tap Allow.
+  static const approvalWait = Duration(seconds: 75);
+
   /// Adds [camera] to this main phone. Returns null on success, or a message.
   ///
   /// 1. Check the code with the camera (nothing changes if it is wrong).
-  /// 2. Issue the camera's credential on this main phone.
-  /// 3. Hand the credential to the camera, which then streams here.
+  /// 2. The camera asks its owner to allow this main phone.
+  /// 3. Issue the camera's credential on this main phone.
+  /// 4. Hand the credential to the camera, which then streams here.
   static Future<String?> add({
     required DiscoveredCamera camera,
     required String code,
     required DeviceRegistry registry,
     required int hubPort,
     required String hubName,
+    void Function(String status)? onStatus,
   }) async {
+    final known = registry.devices.any((d) => d.deviceId == camera.deviceId);
+    var issued = false;
+    var waitingForAllow = false;
     try {
       final check = await http
           .post(camera.address.uri('/api/v1/camera/link/check'),
@@ -117,21 +125,43 @@ class CameraAdder {
           .timeout(const Duration(seconds: 5));
       if (check.statusCode != 200) return _detail(check.body) ?? 'The camera refused the code.';
 
+      onStatus?.call('Tap Allow on ${camera.name} to finish…');
+      waitingForAllow = true;
+      final approve = await http
+          .post(camera.address.uri('/api/v1/camera/link/approve'),
+              headers: {'Content-Type': 'application/json'}, body: jsonEncode({'code': code.trim(), 'hub_name': hubName}))
+          .timeout(approvalWait);
+      waitingForAllow = false;
+      if (approve.statusCode == 404) return 'Update VYRO on ${camera.name}, then add it again.';
+      if (approve.statusCode != 200) return _detail(approve.body) ?? 'The camera phone did not allow this main phone.';
+      final approval = (jsonDecode(approve.body) as Map)['approval'];
+
+      onStatus?.call('Connecting ${camera.name}…');
       final (device, token) = await registry.issueCredential(camera.deviceId, camera.name);
+      issued = true;
       final link = await http
           .post(camera.address.uri('/api/v1/camera/link'),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode({
                 'code': code.trim(),
+                'approval': approval,
                 'hub_port': hubPort,
                 'hub_name': hubName,
                 'camera_id': device.cameraId,
                 'device_token': token,
               }))
           .timeout(const Duration(seconds: 5));
-      if (link.statusCode != 200) return _detail(link.body) ?? 'The camera could not be added.';
+      if (link.statusCode != 200) {
+        if (!known) await registry.forget(camera.deviceId);
+        return _detail(link.body) ?? 'The camera could not be added.';
+      }
       return null;
+    } on TimeoutException {
+      if (issued && !known) await registry.forget(camera.deviceId);
+      if (waitingForAllow) return 'Nobody answered on ${camera.name}. Add it again and tap Allow on the camera.';
+      return 'Could not reach the camera. Make sure it is open in Camcorder Mode on the same Wi-Fi.';
     } catch (_) {
+      if (issued && !known) await registry.forget(camera.deviceId);
       return 'Could not reach the camera. Make sure it is open in Camcorder Mode on the same Wi-Fi.';
     }
   }
@@ -156,8 +186,7 @@ class CameraAdder {
       onStatus?.call('Checking ${cam.name}…');
       final check = await _checkCode(cam, code);
       if (check == null) {
-        onStatus?.call('Connecting ${cam.name}…');
-        final error = await add(camera: cam, code: code, registry: registry, hubPort: hubPort, hubName: hubName);
+        final error = await add(camera: cam, code: code, registry: registry, hubPort: hubPort, hubName: hubName, onStatus: onStatus);
         if (error == null) return cam.name;
         lastError = error;
       } else {

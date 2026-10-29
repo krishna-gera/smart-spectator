@@ -96,7 +96,7 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
         store: taskStore,
         events: events,
         ai: _ai,
-        snapshot: (id) => _server.requestFrame(id, timeout: const Duration(seconds: 5)),
+        snapshot: (id) => _server.requestFrame(id, timeout: const Duration(seconds: 5), forAi: true),
         rotationOf: (id) => _server.cameras.where((c) => c.cameraId == id).firstOrNull?.rotationDegrees ?? 0,
         isCameraOnline: (id) => _server.cameras.any((c) => c.cameraId == id && c.controlConnected),
         notify: SystemBridge.notify,
@@ -211,9 +211,9 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
   Future<void> _changeCode() async {
     if (await confirm(context,
         title: 'Change dashboard code?',
-        message: 'Browsers signed in to the web dashboard stay signed in until they sign out. New sign-ins need the new code.',
+        message: 'Browsers signed in to the web dashboard are signed out and need the new code. Cameras stay connected.',
         action: 'Change')) {
-      await _registry.changeHubCode();
+      await _server.changeDashboardCode();
       unawaited(_registerWithWebApps());
       if (mounted) setState(() {});
     }
@@ -306,7 +306,7 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
   Future<AiResult> _askAi(CameraLink cam) async {
     final alerts = _alerts;
     if (alerts == null) return const AiResult.failed('Not ready yet.');
-    final jpeg = await _server.requestSnapshot(cam.cameraId);
+    final jpeg = await _server.requestSnapshot(cam.cameraId, forAi: true);
     if (jpeg == null) return const AiResult.failed('The camera did not send a snapshot. Is it streaming?');
     final (_, result) = await alerts.analyzeSnapshot(
       cameraId: cam.cameraId,

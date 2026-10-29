@@ -14,10 +14,12 @@ import 'web_dashboard.dart';
 
 /// Browser dashboard served by the main phone at `http://<main-phone>:8000/`.
 ///
-/// Sign-in uses the main phone's pairing code (same lockout as cameras) and
-/// creates an HttpOnly, SameSite=Strict session cookie, so images and API
-/// calls are authenticated without tokens in URLs. Works only while the main
-/// phone app is open and on the same network.
+/// Sign-in uses the main phone's dashboard code (wrong codes lock out the
+/// device that sent them) and creates an HttpOnly, SameSite=Strict session
+/// cookie, so images and API calls are authenticated without tokens in URLs.
+/// Requests that change something must come from this page itself: other
+/// websites' requests (by Origin) and non-JSON bodies are refused. Works only
+/// while the main phone app is open and on the same network.
 ///
 ///   GET    /                                   dashboard page
 ///   POST   /api/v1/web/login                   {"code"} → sets cookie
@@ -71,13 +73,30 @@ class WebApi {
         ..headers.contentType = ContentType.json;
       res.write(jsonEncode({'detail': 'Request too large'}));
       return res.close();
+    } on _NotJson {
+      return _json(req.response, HttpStatus.unsupportedMediaType, {'detail': 'Send JSON.'});
     }
+  }
+
+  /// Signs out every browser (the dashboard code changed).
+  void signOutAll() => _sessions.clear();
+
+  /// A browser sends Origin with requests that change something; it must be
+  /// this dashboard itself (`http://` plus the address in the Host header).
+  static bool _fromThisPage(HttpRequest req) {
+    final origin = req.headers.value('origin');
+    if (origin == null) return true; // not a browser
+    final host = req.headers.value(HttpHeaders.hostHeader);
+    return host != null && origin.toLowerCase() == 'http://${host.toLowerCase()}';
   }
 
   Future<void> _route(HttpRequest req) async {
     final path = req.uri.path;
     final res = req.response;
     _securityHeaders(res);
+    if (req.method != 'GET' && req.method != 'HEAD' && !_fromThisPage(req)) {
+      return _json(res, 403, {'detail': 'Requests from other websites are not accepted.'});
+    }
 
     if (path == '/' && req.method == 'GET') {
       res.headers.contentType = ContentType.html;
@@ -170,7 +189,7 @@ class WebApi {
     final body = await _body(req, maxBytes: maxLoginBytes);
     final code = body?['code'];
     if (code is! String) return _json(req.response, 400, {'detail': 'Enter the 6-digit code.'});
-    final check = server.registry.checkHubCode(code);
+    final check = server.registry.checkHubCode(code, caller: req.connectionInfo?.remoteAddress.address ?? '');
     if (!check.ok) return _json(req.response, check.locked ? 429 : 401, {'detail': check.message});
 
     final token = List.generate(32, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
@@ -356,8 +375,11 @@ class WebApi {
   }
 
   /// Reads a small JSON object body. Stops reading as soon as [maxBytes] is
-  /// passed (answered with 413 by [handle]); null for anything not a JSON object.
+  /// passed (answered with 413 by [handle]); a body that is not sent as JSON
+  /// gets 415, so other websites cannot post forms here without the browser
+  /// asking first. Null for anything not a JSON object.
   Future<Map<String, dynamic>?> _body(HttpRequest req, {int maxBytes = maxBodyBytes}) async {
+    if (req.headers.contentType?.mimeType != 'application/json') throw const _NotJson();
     if (req.headers.contentLength > maxBytes) throw const _BodyTooLarge();
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in req) {
@@ -457,4 +479,8 @@ class WebApi {
 
 class _BodyTooLarge implements Exception {
   const _BodyTooLarge();
+}
+
+class _NotJson implements Exception {
+  const _NotJson();
 }

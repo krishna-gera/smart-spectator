@@ -9,6 +9,8 @@ typedef Notifier = Future<void> Function({required int id, required String title
 /// Decides what happens after a camera reports motion on the main phone:
 /// optional AI analysis (per-camera opt-in), then at most one notification per
 /// camera per [cooldown], worded with the AI's description when available.
+/// The AI only words the alert; it never stops one, because a wrong "nothing
+/// here" would hide real motion from a security camera.
 class AlertService {
   final EventStore store;
   final AiClient ai;
@@ -57,7 +59,6 @@ class AlertService {
     }
 
     if (!settings.notify) return;
-    if (result?.insight?.isQuiet ?? false) return; // AI saw nothing worth an alert.
     final now = _now();
     final last = _lastAlert[event.cameraId];
     if (last != null && now.difference(last) < cooldown) return;
@@ -66,13 +67,20 @@ class AlertService {
     final insight = result?.insight;
     final t = event.startedAt.toLocal();
     final hhmm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    await notify(
-      id: event.id.hashCode & 0x7fffffff,
-      title: insight != null
-          ? '${event.cameraName}: ${categoryLabels[insight.category] ?? 'Motion'}${insight.threatLevel == 'high' ? ' ⚠️' : ''}'
-          : 'Motion · ${event.cameraName}',
-      body: insight?.summary ?? 'Motion detected at $hhmm. Open VYRO to see the snapshot.',
-    );
+    final String title;
+    final String body;
+    if (insight == null) {
+      title = 'Motion · ${event.cameraName}';
+      body = 'Motion detected at $hhmm. Open VYRO to see the snapshot.';
+    } else if (insight.isQuiet) {
+      // Still an alert: the AI may be wrong. Check the snapshot to be sure.
+      title = 'Motion · ${event.cameraName}';
+      body = 'AI saw nothing notable: ${insight.summary} Check the snapshot to be sure.';
+    } else {
+      title = '${event.cameraName}: ${categoryLabels[insight.category] ?? 'Motion'}${insight.threatLevel == 'high' ? ' ⚠️' : ''}';
+      body = insight.summary;
+    }
+    await notify(id: event.id.hashCode & 0x7fffffff, title: title, body: body);
   }
 
   /// "Ask AI now": saves the snapshot as an event and records the AI's answer.

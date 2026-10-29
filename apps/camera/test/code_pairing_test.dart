@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_spectator_camera/core/discovery/hub_discovery.dart';
+import 'package:smart_spectator_camera/core/pairing/code_guard.dart';
 import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
 import 'package:smart_spectator_camera/hub/device_registry.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
@@ -62,6 +63,17 @@ void main() {
       expect(registry.checkHubCode(code).ok, isTrue);
     });
 
+    test('wrong guesses lock out only the device that sent them', () async {
+      final code = registry.hubCode;
+      final wrong = code == '111111' ? '222222' : '111111';
+      for (var i = 0; i < 3; i++) {
+        registry.checkHubCode(wrong, caller: '192.168.1.66');
+      }
+      expect(registry.checkHubCode(code, caller: '192.168.1.66').locked, isTrue);
+      expect(registry.checkHubCode(code, caller: '192.168.1.20').ok, isTrue, reason: 'your own browser still signs in');
+      expect(registry.hubCodeLockedFor, isNull);
+    });
+
     test('change code replaces it, keeps cameras, and persists', () async {
       final old = registry.hubCode;
       final (_, token) = await registry.issueCredential('dev_a', 'A');
@@ -103,5 +115,23 @@ void main() {
       expect(await HubDiscovery.probeHub(HubAddress('127.0.0.1', other.port)), isNull);
       await other.close(force: true);
     });
+  });
+
+  test('code guard: many devices guessing together still get paused', () {
+    var now = DateTime(2026, 10, 29);
+    final g = CodeGuard(code: '123456', maxFailures: 3, maxTotalFailures: 7, now: () => now);
+    for (var i = 0; i < 3; i++) {
+      g.check('000000', caller: 'a');
+    }
+    expect(g.check('123456', caller: 'a').ok, isFalse);
+    for (final caller in ['c', 'd', 'e']) {
+      expect(g.check('000000', caller: caller).locked, isFalse);
+    }
+    expect(g.check('000000', caller: 'f').locked, isTrue, reason: '7 wrong codes in all');
+    expect(g.lockedFor, isNotNull);
+    expect(g.check('123456', caller: 'b').ok, isFalse, reason: 'everyone waits out the shared pause');
+    now = now.add(const Duration(minutes: 6));
+    expect(g.check('123456', caller: 'b').ok, isTrue);
+    expect(g.check('123456', caller: 'a').ok, isTrue);
   });
 }

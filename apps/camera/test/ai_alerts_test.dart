@@ -97,11 +97,12 @@ void main() {
       expect(store.byId(e.id)!.aiCategory, 'person');
     });
 
-    test('AI says nothing happened: no notification', () async {
+    test('AI says nothing happened: still an alert, so a wrong answer never hides motion', () async {
       await store.updateSettings('cam_a', const CameraSettings(aiEnabled: true));
       final ai = fakeAi([], body: {'summary': 'Sunlight moved across the floor.', 'category': 'no_activity', 'threat_level': 'none', 'people_count': 0, 'confidence': 0.8});
       await AlertService(store: store, ai: ai, notify: notify).onMotion(await motion());
-      expect(notifications, isEmpty);
+      expect(notifications.single,
+          ('Motion · Front door', 'AI saw nothing notable: Sunlight moved across the floor. Check the snapshot to be sure.'));
     });
 
     test('AI failure: still alerts, and records why there is no description', () async {

@@ -130,7 +130,8 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
                       Text(
                         '1. On the camera phone, open VYRO and choose Camera.\n'
                         '2. Its 6-digit code is shown on screen (or tap "Camera code").\n'
-                        '3. Type it here — VYRO finds the camera on your Wi-Fi and connects it.',
+                        '3. Type it here — VYRO finds the camera on your Wi-Fi.\n'
+                        '4. Tap Allow on the camera phone. Nothing is shared until you do.',
                         style: TextStyle(color: AppColors.textMuted, height: 1.55),
                       ),
                       SizedBox(height: 8),

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../core/net/local_host.dart';
 import '../core/protocol/packet_decoder.dart';
 import 'device_registry.dart';
 import 'event_store.dart';
@@ -284,6 +285,10 @@ class HubServer {
   Future<void> _handle(HttpRequest req) async {
     final path = req.uri.path;
     try {
+      // Only requests addressed to this phone by its address (see isLocalHost).
+      if (!isLocalHost(req.headers.value(HttpHeaders.hostHeader))) {
+        return await _json(req.response, 421, {'detail': 'Open VYRO by the phone\'s address.'});
+      }
       if (path == '/' || path.startsWith('/api/v1/web/') || WebApi.publicFiles.contains(path)) {
         return await web.handle(req);
       }
@@ -452,17 +457,21 @@ class HubServer {
   Future<void> updateCameraSettings(String cameraId, CameraSettings settings) async {
     await events?.updateSettings(cameraId, settings);
     final link = _links[cameraId];
-    if (link != null) _pushMotionSettings(link.deviceId, cameraId);
+    if (link != null) {
+      _pushMotionSettings(link.deviceId, cameraId);
+      _pushAiWatch(link.deviceId, cameraId); // AI descriptions may have changed
+    }
     _notify();
   }
 
   /// Asks a camera for a JPEG of its current picture ("Ask AI now").
   /// Returns null if the camera is offline or does not answer in [timeout].
-  Future<Uint8List?> requestSnapshot(String cameraId, {Duration timeout = const Duration(seconds: 6)}) async =>
-      (await requestFrame(cameraId, timeout: timeout))?.jpeg;
+  /// [forAi]: the picture goes to the AI, so the camera shows its AI badge.
+  Future<Uint8List?> requestSnapshot(String cameraId, {Duration timeout = const Duration(seconds: 6), bool forAi = false}) async =>
+      (await requestFrame(cameraId, timeout: timeout, forAi: forAi))?.jpeg;
 
   /// Like [requestSnapshot], also returning the camera's scene fingerprint.
-  Future<CameraSnapshot?> requestFrame(String cameraId, {Duration timeout = const Duration(seconds: 6)}) async {
+  Future<CameraSnapshot?> requestFrame(String cameraId, {Duration timeout = const Duration(seconds: 6), bool forAi = false}) async {
     final link = _links[cameraId];
     if (link == null) return null;
     final requestId = 'snap_${++_snapshotSeq}_${DateTime.now().millisecondsSinceEpoch}';
@@ -474,6 +483,7 @@ class HubServer {
       'target_camera_id': cameraId,
       'action': 'capture_snapshot',
       'request_id': requestId,
+      if (forAi) 'for_ai': true,
     });
     if (!sent) {
       _snapshotRequests.remove(requestId);
@@ -502,6 +512,14 @@ class HubServer {
         if (c.health(now) == CameraHealth.live && (c.lastPictureAt == null || now.difference(c.lastPictureAt!) >= maxAge))
           requestFrame(c.cameraId, timeout: const Duration(seconds: 4)),
     ]);
+  }
+
+  /// New web dashboard code ("Change code"). Browsers signed in with the old
+  /// code are signed out; cameras stay connected.
+  Future<String> changeDashboardCode() async {
+    final code = await registry.changeHubCode();
+    web.signOutAll();
+    return code;
   }
 
   /// Renames a camera on this main phone (the camera keeps its own name).
@@ -550,6 +568,8 @@ class HubServer {
   }
 
   /// Tells a camera which AI watch tasks are active on it (privacy badge).
+  /// The camera also shows the badge while AI descriptions of its motion
+  /// snapshots are on, and briefly after a picture is sent for "Ask AI".
   void setAiWatch(String cameraId, List<String> taskLabels) {
     if (taskLabels.isEmpty) {
       _aiWatch.remove(cameraId);
@@ -567,6 +587,7 @@ class HubServer {
       'target_camera_id': cameraId,
       'action': 'set_ai_watch',
       'tasks': _aiWatch[cameraId] ?? const <String>[],
+      'descriptions': web.aiAvailable && (events?.settingsFor(cameraId).aiEnabled ?? false),
     });
   }
 

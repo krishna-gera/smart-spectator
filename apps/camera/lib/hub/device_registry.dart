@@ -176,10 +176,12 @@ class DeviceRegistry {
   /// Remaining pause after too many wrong codes, or null.
   Duration? get hubCodeLockedFor => _hubCode.lockedFor;
 
-  /// Checks the web dashboard code, with lockout after repeated wrong codes.
-  CodeCheck checkHubCode(String code) => _hubCode.check(code);
+  /// Checks the web dashboard code from [caller] (a network address), with a
+  /// lockout per caller and a shared one after repeated wrong codes.
+  CodeCheck checkHubCode(String code, {String caller = ''}) => _hubCode.check(code, caller: caller);
 
-  /// Replaces the code ("Change code"); signed-in browsers and cameras stay.
+  /// Replaces the code ("Change code"); cameras stay. HubServer.changeDashboardCode
+  /// also signs out browsers that used the old code.
   Future<String> changeHubCode() async {
     final code = _hubCode.regenerate();
     await store.saveHubCode(code);

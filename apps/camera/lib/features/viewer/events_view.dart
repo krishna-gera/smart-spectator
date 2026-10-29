@@ -391,7 +391,7 @@ class _CameraSettingsSheetState extends State<CameraSettingsSheet> {
             secondary: const Icon(Icons.auto_awesome, color: AppColors.ai),
             title: const Text('AI descriptions (Groq)'),
             subtitle: Text(widget.aiConfigured
-                ? 'Describe motion snapshots and skip alerts for shadows or lighting changes.'
+                ? 'Describe motion snapshots in alerts. You still get every motion alert.'
                 : 'Not available in this build (AI service not configured).'),
             value: widget.aiConfigured && _s.aiEnabled,
             onChanged: widget.aiConfigured ? _toggleAi : null,
