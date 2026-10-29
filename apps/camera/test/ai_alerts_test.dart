@@ -14,6 +14,8 @@ import 'package:smart_spectator_camera/hub/device_registry.dart';
 import 'package:smart_spectator_camera/hub/event_store.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
 
+import 'support/cameras.dart';
+
 final _jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 4, 4, 4, 0xFF, 0xD9]);
 final _config = AiConfig(proxyUrl: Uri.parse('http://proxy.test'), token: 't0k');
 
@@ -148,17 +150,17 @@ void main() {
     final server = HubServer(registry: registry, port: 0, bindAddress: InternetAddress.loopbackIPv4);
     await server.start();
     final hub = HubAddress('127.0.0.1', server.boundPort!);
-    final cam = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_a', deviceName: 'A', code: registry.hubCode);
-    final other = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_b', deviceName: 'B', code: registry.hubCode);
+    final cam = await addCamera(registry, 'dev_a', 'A');
+    final other = await addCamera(registry, 'dev_b', 'B');
 
-    final reporter = MotionReporter(hub: hub, deviceToken: cam.deviceToken!);
-    final intruder = MotionReporter(hub: hub, deviceToken: other.deviceToken!);
+    final reporter = MotionReporter(hub: hub, deviceToken: cam.deviceToken);
+    final intruder = MotionReporter(hub: hub, deviceToken: other.deviceToken);
     final control = ControlClient(
       hubIp: '127.0.0.1',
       hubPort: hub.port,
       deviceId: 'dev_a',
-      cameraId: cam.cameraId!,
-      deviceToken: cam.deviceToken!,
+      cameraId: cam.cameraId,
+      deviceToken: cam.deviceToken,
       onCommand: (cmd) async {
         if (cmd['action'] != 'capture_snapshot') return;
         final id = cmd['request_id'] as String;
@@ -168,7 +170,7 @@ void main() {
     );
     await control.start();
 
-    expect(await server.requestSnapshot(cam.cameraId!), _jpeg);
+    expect(await server.requestSnapshot(cam.cameraId), _jpeg);
     expect(await server.requestSnapshot('cam_unknown'), isNull);
 
     control.stop();

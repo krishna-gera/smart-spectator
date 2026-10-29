@@ -224,7 +224,8 @@ class AiClient {
   /// Lets the VYRO web apps find this main phone by its dashboard code: the
   /// cloud service stores the phone's local address under a hash of the code.
   /// Returns true when registered.
-  Future<bool> registerHub({required String code, required String address, required int port, required String name, String? previousCode}) async {
+  Future<bool> registerHub(
+      {required String code, required String address, required int port, required String name, required String owner, String? previousCode}) async {
     final base = config.proxyUrl;
     if (!config.isConfigured || base == null) return false;
     try {
@@ -236,6 +237,7 @@ class AiClient {
                 'address': address,
                 'port': port,
                 'name': name,
+                'owner': owner,
                 if (previousCode != null && previousCode != code) 'previous_code': previousCode,
               }))
           .timeout(const Duration(seconds: 15));

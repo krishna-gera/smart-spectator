@@ -13,73 +13,39 @@ void main() {
     await registry.load();
   });
 
-  Future<VerifySuccess> pair(String deviceId) async {
-    final pin = registry.requestPairing(deviceId, 'Camera')!.pin;
-    return await registry.verifyPairing(deviceId, pin) as VerifySuccess;
-  }
+  // Cameras are added by their own code; CameraAdder then calls this.
+  Future<(PairedDevice, String)> pair(String deviceId) => registry.issueCredential(deviceId, 'Camera');
 
-  test('a repeated request keeps the same PIN while it is valid', () {
-    final first = registry.requestPairing('dev_a', 'Camera A')!;
-    final second = registry.requestPairing('dev_a', 'Camera A')!;
-    expect(second.pin, first.pin);
-    expect(first.pin, matches(RegExp(r'^\d{6}$')));
-  });
-
-  test('an expired PIN is replaced and cannot be verified', () async {
-    final first = registry.requestPairing('dev_a', 'Camera A')!;
-    now = now.add(const Duration(minutes: 6));
-    expect(await registry.verifyPairing('dev_a', first.pin), isA<VerifyFailure>());
-    final second = registry.requestPairing('dev_a', 'Camera A')!;
-    expect(second.expiresAt.isAfter(now), isTrue);
-  });
-
-  test('correct PIN issues a token that authenticates', () async {
-    final ok = await pair('dev_a');
-    expect(ok.rawToken, startsWith(DeviceRegistry.tokenPrefix));
-    expect(registry.authenticate(ok.rawToken)?.deviceId, 'dev_a');
-    expect(registry.pendingPairings, isEmpty);
-  });
-
-  test('three wrong PINs cancel the request', () async {
-    final req = registry.requestPairing('dev_a', 'Camera A')!;
-    final wrong = req.pin == '111111' ? '222222' : '111111';
-    expect((await registry.verifyPairing('dev_a', wrong) as VerifyFailure).message, contains('2 attempt'));
-    await registry.verifyPairing('dev_a', wrong);
-    expect((await registry.verifyPairing('dev_a', wrong) as VerifyFailure).message, contains('Request a new code'));
-    expect(await registry.verifyPairing('dev_a', req.pin), isA<VerifyFailure>());
+  test('an issued token authenticates its camera', () async {
+    final (device, token) = await pair('dev_a');
+    expect(token, startsWith(DeviceRegistry.tokenPrefix));
+    expect(registry.authenticate(token)?.deviceId, 'dev_a');
+    expect(device.cameraId, startsWith('cam_'));
   });
 
   test('unknown, malformed and revoked tokens are rejected', () async {
-    final ok = await pair('dev_a');
+    final (_, token) = await pair('dev_a');
     expect(registry.authenticate(null), isNull);
     expect(registry.authenticate('not_a_token'), isNull);
     expect(registry.authenticate('${DeviceRegistry.tokenPrefix}deadbeef'), isNull);
     await registry.revoke('dev_a');
-    expect(registry.authenticate(ok.rawToken), isNull);
+    expect(registry.authenticate(token), isNull);
+    expect(registry.isRemovedToken(token), isTrue);
   });
 
-  test('re-pairing keeps the camera id and invalidates the old token', () async {
-    final first = await pair('dev_a');
-    final second = await pair('dev_a');
-    expect(second.device.cameraId, first.device.cameraId);
-    expect(registry.authenticate(first.rawToken), isNull);
-    expect(registry.authenticate(second.rawToken), isNotNull);
+  test('re-adding keeps the camera id and invalidates the old token', () async {
+    final (first, firstToken) = await pair('dev_a');
+    final (second, secondToken) = await pair('dev_a');
+    expect(second.cameraId, first.cameraId);
+    expect(registry.authenticate(firstToken), isNull);
+    expect(registry.authenticate(secondToken), isNotNull);
   });
 
   test('paired devices and the token secret survive a restart', () async {
-    final ok = await pair('dev_a');
+    final (device, token) = await pair('dev_a');
     final reloaded = DeviceRegistry(store: store, now: () => now);
     await reloaded.load();
-    expect(reloaded.authenticate(ok.rawToken)?.cameraId, ok.device.cameraId);
-  });
-
-  test('limits how many pairing requests can be pending', () {
-    final limited = DeviceRegistry(store: store, maxPendingRequests: 2, now: () => now);
-    expect(limited.requestPairing('dev_1', 'a'), isNotNull);
-    expect(limited.requestPairing('dev_2', 'b'), isNotNull);
-    expect(limited.requestPairing('dev_3', 'c'), isNull);
-    // An existing request is still returned.
-    expect(limited.requestPairing('dev_1', 'a'), isNotNull);
+    expect(reloaded.authenticate(token)?.cameraId, device.cameraId);
   });
 
   test('device id validation', () {

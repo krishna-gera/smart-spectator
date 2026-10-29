@@ -229,28 +229,72 @@ const hubCall = (path, body, { token = env.PROXY_TOKEN, e, origin, ip = '1.2.3.4
     e,
   );
 
+const OWNER = 'phone-a-owner-secret-0123456789abcdef';
+const OTHER_OWNER = 'phone-b-owner-secret-0123456789abcdef';
+const lookup = (code, opts = {}) => hubCall('/v1/hub/lookup', { code }, { token: null, ...opts });
+
 test('main-phone directory: register, look up by code, codes are not stored', async () => {
   const kv = memoryKv();
   const e = { ...env, HUBS: kv, ALLOWED_ORIGINS: 'https://smart-vyro.vercel.app' };
-  assert.equal((await hubCall('/v1/hub/register', { code: '617088', address: '192.168.1.22', port: 8000, name: 'Main phone' }, { token: 'wrong', e })).status, 401);
-  assert.equal((await hubCall('/v1/hub/register', { code: '61708', address: '192.168.1.22' }, { e })).status, 422);
-  assert.equal((await hubCall('/v1/hub/register', { code: '617088', address: 'evil.example' }, { e })).status, 422);
-  assert.equal((await hubCall('/v1/hub/register', { code: '617088', address: '192.168.1.22', port: 8000, name: 'Main phone' }, { e })).status, 200);
+  const hub = { code: '617088', address: '192.168.1.22', port: 8000, name: 'Main phone', owner: OWNER };
+  assert.equal((await hubCall('/v1/hub/register', hub, { token: 'wrong', e })).status, 401);
+  assert.equal((await hubCall('/v1/hub/register', { ...hub, code: '61708' }, { e })).status, 422);
+  assert.equal((await hubCall('/v1/hub/register', { ...hub, owner: undefined }, { e })).status, 422);
+  assert.equal((await hubCall('/v1/hub/register', hub, { e })).status, 200);
   assert.ok(![...kv.m.keys()].some(k => k.includes('617088')), 'the code itself is never a key');
+  assert.ok(![...kv.m.values()].some(v => v.includes(OWNER)), 'the owner secret is stored only as a hash');
 
-  const found = await hubCall('/v1/hub/lookup', { code: '617088' }, { token: null, e, origin: 'https://smart-vyro.vercel.app' });
+  const found = await lookup('617088', { e, origin: 'https://smart-vyro.vercel.app' });
   assert.equal(found.status, 200);
   assert.equal(found.headers.get('access-control-allow-origin'), 'https://smart-vyro.vercel.app');
-  assert.deepEqual((({ address, port, name }) => ({ address, port, name }))(await found.json()), { address: '192.168.1.22', port: 8000, name: 'Main phone' });
+  const body = await found.json();
+  assert.deepEqual((({ address, port, name }) => ({ address, port, name }))(body), { address: '192.168.1.22', port: 8000, name: 'Main phone' });
+  assert.equal(body.owner, undefined, 'the owner hash is never returned');
 
-  const other = await hubCall('/v1/hub/lookup', { code: '111111' }, { token: null, e, origin: 'https://evil.example' });
+  const other = await lookup('111111', { e, origin: 'https://evil.example' });
   assert.equal(other.status, 404);
   assert.equal(other.headers.get('access-control-allow-origin'), null, 'other sites get no CORS access');
 
   // Changing the code moves the entry.
-  await hubCall('/v1/hub/register', { code: '222333', previous_code: '617088', address: '192.168.1.22' }, { e });
-  assert.equal((await hubCall('/v1/hub/lookup', { code: '617088' }, { token: null, e })).status, 404);
-  assert.equal((await hubCall('/v1/hub/lookup', { code: '222333' }, { token: null, e })).status, 200);
+  await hubCall('/v1/hub/register', { ...hub, code: '222333', previous_code: '617088' }, { e });
+  assert.equal((await lookup('617088', { e })).status, 404);
+  assert.equal((await lookup('222333', { e })).status, 200);
+});
+
+test('main-phone directory: only private home-network addresses are accepted', async () => {
+  const e = { ...env, HUBS: memoryKv() };
+  let n = 0; // a fresh visitor per call so the register rate limit does not interfere
+  const register = address => hubCall('/v1/hub/register', { code: '617088', address, port: 8000, owner: OWNER }, { e, ip: `3.3.3.${n++}` });
+  for (const address of ['10.0.0.5', '172.16.4.2', '172.31.255.1', '192.168.1.22', '169.254.10.3']) {
+    assert.equal((await register(address)).status, 200, address);
+  }
+  for (const address of ['8.8.8.8', '172.32.0.1', '172.15.0.1', '127.0.0.1', '0.0.0.0', '100.64.0.1', '192.169.0.1', '999.1.1.1', 'evil.example', '::1']) {
+    assert.equal((await register(address)).status, 422, address);
+  }
+  // An older entry with a public address is never handed to a web app.
+  e.HUBS.m.set([...e.HUBS.m.keys()][0], JSON.stringify({ address: '8.8.8.8', port: 8000, name: 'x', updated: 0 }));
+  assert.equal((await lookup('617088', { e })).status, 404);
+});
+
+test('main-phone directory: an entry can only be changed by the phone that created it', async () => {
+  const e = { ...env, HUBS: memoryKv() };
+  const register = (body, ip) => hubCall('/v1/hub/register', { port: 8000, name: 'Main phone', ...body }, { e, ip });
+  assert.equal((await register({ code: '617088', address: '192.168.1.22', owner: OWNER })).status, 200);
+
+  // Another phone with the app token cannot re-point or remove it.
+  assert.equal((await register({ code: '617088', address: '192.168.1.99', owner: OTHER_OWNER }, '5.5.5.5')).status, 409);
+  assert.equal((await register({ code: '444555', previous_code: '617088', address: '192.168.1.99', owner: OTHER_OWNER }, '5.5.5.5')).status, 200);
+  assert.equal((await (await lookup('617088', { e })).json()).address, '192.168.1.22');
+
+  // The owner can move to a new address on the same code.
+  assert.equal((await register({ code: '617088', address: '10.0.0.8', owner: OWNER })).status, 200);
+  assert.equal((await (await lookup('617088', { e })).json()).address, '10.0.0.8');
+
+  // Entries written before owners existed are claimed by the next registration.
+  const legacyKey = [...e.HUBS.m.keys()].find(k => JSON.parse(e.HUBS.m.get(k)).address === '10.0.0.8');
+  e.HUBS.m.set(legacyKey, JSON.stringify({ address: '10.0.0.8', port: 8000, name: 'Old', updated: 0 }));
+  assert.equal((await register({ code: '617088', address: '10.0.0.9', owner: OTHER_OWNER }, '6.6.6.6')).status, 200);
+  assert.equal((await register({ code: '617088', address: '10.0.0.10', owner: OWNER })).status, 409);
 });
 
 test('main-phone directory: lookups are rate limited per visitor and preflight is answered', async () => {
@@ -259,7 +303,17 @@ test('main-phone directory: lookups are rate limited per visitor and preflight i
   assert.equal(pre.status, 204);
   assert.match(pre.headers.get('access-control-allow-methods'), /POST/);
   let last;
-  for (let i = 0; i < 13; i++) last = await hubCall('/v1/hub/lookup', { code: '000000' }, { token: null, e, ip: '9.9.9.9' });
+  for (let i = 0; i < 11; i++) last = await lookup('000000', { e, ip: '9.9.9.9' });
   assert.equal(last.status, 429);
-  assert.equal((await hubCall('/v1/hub/lookup', { code: '000000' }, { token: null, e, ip: '8.8.8.8' })).status, 404);
+  assert.equal((await lookup('000000', { e, ip: '8.8.8.8' })).status, 404);
+});
+
+test('main-phone directory: the Workers rate limiter is used when bound', async () => {
+  const keys = [];
+  const LIMITER = { limit: async ({ key }) => { keys.push(key); return { success: keys.length <= 2 }; } };
+  const e = { ...env, HUBS: memoryKv(), LIMITER };
+  assert.equal((await lookup('000000', { e, ip: '7.7.7.7' })).status, 404);
+  assert.equal((await hubCall('/v1/hub/register', { code: '617088', address: '192.168.1.22', owner: OWNER }, { e, ip: '7.7.7.7' })).status, 200);
+  assert.equal((await lookup('617088', { e, ip: '7.7.7.7' })).status, 429);
+  assert.deepEqual(keys, ['lookup:7.7.7.7', 'register:7.7.7.7', 'lookup:7.7.7.7']);
 });

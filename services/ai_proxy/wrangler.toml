@@ -19,3 +19,11 @@ ALLOWED_ORIGINS = "https://smart-vyro.vercel.app,http://localhost:5173,http://12
 [[kv_namespaces]]
 binding = "HUBS"
 id = "1a2254901261477089f8d2ffc3ba40b7"
+
+# Rate limit for the directory (lookups and registrations, per visitor IP),
+# shared across Cloudflare locations. namespace_id is any number unique to
+# this account.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }

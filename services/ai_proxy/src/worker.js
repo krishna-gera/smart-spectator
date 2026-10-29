@@ -24,8 +24,9 @@
  *   TASK_MIN_INTERVAL_SECONDS        optional, default 10 between checks of the same task
  *
  * Main-phone directory (KV binding HUBS):
- *   POST /v1/hub/register  Bearer PROXY_TOKEN  {code, address, port, name, previous_code?}
+ *   POST /v1/hub/register  Bearer PROXY_TOKEN  {code, address (private IPv4), port, name, owner, previous_code?}
  *   POST /v1/hub/lookup    public, CORS (ALLOWED_ORIGINS), rate limited  {code} → {address, port, name}
+ *   Rate limits use the LIMITER binding (Workers rate limiting) when present.
  *
  * Endpoints (all POST, Bearer PROXY_TOKEN, body includes image_jpeg_base64):
  *   /v1/analyze     describe a motion snapshot
@@ -387,7 +388,7 @@ async function checkTask(request, env, now) {
 }
 
 export function resetLimitsForTests() {
-  lookupBuckets.clear();
+  fallbackBuckets.clear();
   for (const bucket of Object.values(state)) {
     bucket.day = '';
     bucket.count = 0;
@@ -401,13 +402,21 @@ const ROUTES = { '/v1/analyze': analyze, '/v1/plan-task': planTask, '/v1/check-t
 //
 // The VYRO web apps (smart-vyro.vercel.app/app/...) cannot search a home
 // network, so a main phone registers its local address here under its
-// dashboard code. Keys are an HMAC of the code (keyed with PROXY_TOKEN), so the
-// stored keys cannot be turned back into codes. Lookups are public but limited
-// per visitor; signing in still needs the code on the phone itself.
+// dashboard code. Protections:
+//  * keys are an HMAC of the code (keyed with PROXY_TOKEN), so stored keys
+//    cannot be turned back into codes;
+//  * only private home-network addresses are accepted or returned, so a code
+//    can never send a web app to a server on the internet;
+//  * each entry is locked to the phone that created it (a per-phone secret,
+//    stored only as a hash); other callers cannot change or remove it;
+//  * lookups and registrations are rate limited per visitor with the Workers
+//    rate-limiting binding (LIMITER), falling back to a per-isolate counter.
+// Signing in still needs the code on the phone itself, on the home Wi-Fi.
 
 const HUB_TTL_SECONDS = 2 * 24 * 3600;
-const LOOKUPS_PER_MINUTE = 12;
-const lookupBuckets = new Map(); // ip -> {minute, count}
+const LOOKUPS_PER_MINUTE = 10;
+const REGISTERS_PER_MINUTE = 10;
+const fallbackBuckets = new Map(); // key -> {minute, count}
 
 async function hubKey(env, code) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.PROXY_TOKEN), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -415,13 +424,43 @@ async function hubKey(env, code) {
   return 'hub:' + [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const validCode = code => typeof code === 'string' && /^\d{6}$/.test(code);
-const validAddress = a => typeof a === 'string' && /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(a);
+const validOwner = owner => typeof owner === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(owner);
+
+/** Private home-network IPv4 only: 10/8, 172.16/12, 192.168/16, 169.254/16 (link-local). */
+export function isPrivateAddress(a) {
+  if (typeof a !== 'string' || !/^\d{1,3}(\.\d{1,3}){3}$/.test(a)) return false;
+  const [p, q, r, t] = a.split('.').map(Number);
+  if ([p, q, r, t].some(n => n > 255)) return false;
+  return p === 10 || (p === 172 && q >= 16 && q <= 31) || (p === 192 && q === 168) || (p === 169 && q === 254);
+}
+
+/** True when [key] is still under [perMinute] this minute. */
+async function allowed(env, key, perMinute, now) {
+  if (env.LIMITER && typeof env.LIMITER.limit === 'function') {
+    try {
+      return (await env.LIMITER.limit({ key })).success;
+    } catch {
+      // Fall through to the local counter if the binding is unavailable.
+    }
+  }
+  const minute = Math.floor(now / 60000);
+  const bucket = fallbackBuckets.get(key);
+  if (bucket && bucket.minute === minute && bucket.count >= perMinute) return false;
+  fallbackBuckets.set(key, { minute, count: bucket && bucket.minute === minute ? bucket.count + 1 : 1 });
+  if (fallbackBuckets.size > 5000) fallbackBuckets.clear();
+  return true;
+}
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('origin') ?? '';
-  const allowed = String(env.ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
-  if (!allowed.includes(origin)) return {};
+  const allowedOrigins = String(env.ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!allowedOrigins.includes(origin)) return {};
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -431,19 +470,38 @@ function corsHeaders(request, env) {
   };
 }
 
-/** Main phone: {code, address, port, name} (Bearer PROXY_TOKEN). */
-async function hubRegister(request, env) {
+/** Main phone: {code, address, port, name, owner, previous_code?} (Bearer PROXY_TOKEN). */
+async function hubRegister(request, env, now) {
+  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  if (!(await allowed(env, `register:${ip}`, REGISTERS_PER_MINUTE, now))) return json(429, { error: 'too_many_requests' });
   let body;
   try { body = await request.json(); } catch { return json(400, { error: 'invalid_json' }); }
   const port = Number(body?.port ?? 8000);
   if (!validCode(body?.code)) return json(422, { error: 'code must be 6 digits' });
-  if (!validAddress(body?.address)) return json(422, { error: 'address must be an IPv4 address' });
+  if (!isPrivateAddress(body?.address)) return json(422, { error: 'address must be a private home-network IPv4 address' });
   if (!Number.isInteger(port) || port < 1 || port > 65535) return json(422, { error: 'invalid port' });
+  if (!validOwner(body?.owner)) return json(422, { error: 'owner must be a 32–128 character phone secret' });
+  const ownerHash = await sha256Hex(`vyro-owner:${body.owner}`);
+  const key = await hubKey(env, body.code);
+
+  // Only the phone that created an entry may change it (legacy entries
+  // without an owner are claimed by the next registration).
+  const existing = await env.HUBS.get(key);
+  if (existing) {
+    const prev = JSON.parse(existing);
+    if (prev.owner && prev.owner !== ownerHash) return json(409, { error: 'code_in_use' });
+  }
   const name = String(body?.name ?? 'Main phone').slice(0, 64);
-  const previous = validCode(body?.previous_code) && body.previous_code !== body.code ? body.previous_code : null;
-  await env.HUBS.put(await hubKey(env, body.code), JSON.stringify({ address: body.address, port, name, updated: Date.now() }),
+  await env.HUBS.put(key, JSON.stringify({ address: body.address, port, name, owner: ownerHash, updated: now }),
     { expirationTtl: HUB_TTL_SECONDS });
-  if (previous) await env.HUBS.delete(await hubKey(env, previous));
+
+  // Moving to a new code removes the old entry, but only if it is ours.
+  const previous = validCode(body?.previous_code) && body.previous_code !== body.code ? body.previous_code : null;
+  if (previous) {
+    const oldKey = await hubKey(env, previous);
+    const old = await env.HUBS.get(oldKey);
+    if (old && JSON.parse(old).owner === ownerHash) await env.HUBS.delete(oldKey);
+  }
   return json(200, { status: 'registered', expires_in_seconds: HUB_TTL_SECONDS });
 }
 
@@ -452,11 +510,7 @@ async function hubLookup(request, env, now) {
   const cors = corsHeaders(request, env);
   const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...cors } });
   const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
-  const minute = Math.floor(now / 60000);
-  const bucket = lookupBuckets.get(ip);
-  if (bucket && bucket.minute === minute && bucket.count >= LOOKUPS_PER_MINUTE) return reply(429, { error: 'too_many_lookups' });
-  lookupBuckets.set(ip, { minute, count: bucket && bucket.minute === minute ? bucket.count + 1 : 1 });
-  if (lookupBuckets.size > 5000) lookupBuckets.clear();
+  if (!(await allowed(env, `lookup:${ip}`, LOOKUPS_PER_MINUTE, now))) return reply(429, { error: 'too_many_lookups' });
 
   let body;
   try { body = await request.json(); } catch { return reply(400, { error: 'invalid_json' }); }
@@ -464,6 +518,8 @@ async function hubLookup(request, env, now) {
   const raw = await env.HUBS.get(await hubKey(env, body.code));
   if (!raw) return reply(404, { error: 'not_found' });
   const hub = JSON.parse(raw);
+  // Entries written before addresses were checked are ignored unless private.
+  if (!isPrivateAddress(hub.address)) return reply(404, { error: 'not_found' });
   return reply(200, { address: hub.address, port: hub.port, name: hub.name, updated: hub.updated });
 }
 

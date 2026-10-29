@@ -13,6 +13,8 @@ import 'package:smart_spectator_camera/hub/event_store.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
 import 'package:smart_spectator_camera/hub/watch_tasks.dart';
 
+import 'support/cameras.dart';
+
 final _jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 7, 7, 7, 0xFF, 0xD9]);
 
 /// Minimal browser: keeps the session cookie between requests.
@@ -109,9 +111,8 @@ void main() {
   });
 
   test('state lists cameras with settings and events with AI fields', () async {
-    final cam = await PairingClient.pairWithCode(
-        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'Front door', code: registry.hubCode);
-    final e = await events.startMotion(cameraId: cam.cameraId!, cameraName: 'Front door', score: 0.2, snapshotJpeg: _jpeg);
+    final cam = await addCamera(registry, 'dev_a', 'Front door');
+    final e = await events.startMotion(cameraId: cam.cameraId, cameraName: 'Front door', score: 0.2, snapshotJpeg: _jpeg);
     await events.setAiResult(e.id, summary: 'A person at the door.', category: 'person', threatLevel: 'none');
     await signIn();
 
@@ -134,32 +135,31 @@ void main() {
   });
 
   test('settings change from the browser; AI cannot be enabled when unavailable', () async {
-    final cam = await PairingClient.pairWithCode(
-        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'A', code: registry.hubCode);
+    final cam = await addCamera(registry, 'dev_a', 'A');
     await signIn();
     final path = '/api/v1/web/cameras/${cam.cameraId}/settings';
     final (status, body) = await browser.json('PUT', path, {'motion_enabled': false, 'sensitivity': 0.9, 'ai_enabled': true});
     expect(status, 200);
     expect(body['motion_enabled'], isFalse);
-    expect(events.settingsFor(cam.cameraId!).sensitivity, 0.9);
-    expect(events.settingsFor(cam.cameraId!).aiEnabled, isFalse);
+    expect(events.settingsFor(cam.cameraId).sensitivity, 0.9);
+    expect(events.settingsFor(cam.cameraId).aiEnabled, isFalse);
 
     server.web.aiAvailable = true;
     await browser.json('PUT', path, {'ai_enabled': true});
-    expect(events.settingsFor(cam.cameraId!).aiEnabled, isTrue);
+    expect(events.settingsFor(cam.cameraId).aiEnabled, isTrue);
     expect((await browser.json('PUT', '/api/v1/web/cameras/cam_nope/settings', {})).$1, 404);
   });
 
   test('live picture comes from the camera; Ask AI uses the app callback', () async {
     final hub = HubAddress('127.0.0.1', server.boundPort!);
-    final cam = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_a', deviceName: 'A', code: registry.hubCode);
-    final reporter = MotionReporter(hub: hub, deviceToken: cam.deviceToken!);
+    final cam = await addCamera(registry, 'dev_a', 'A');
+    final reporter = MotionReporter(hub: hub, deviceToken: cam.deviceToken);
     final control = ControlClient(
       hubIp: '127.0.0.1',
       hubPort: hub.port,
       deviceId: 'dev_a',
-      cameraId: cam.cameraId!,
-      deviceToken: cam.deviceToken!,
+      cameraId: cam.cameraId,
+      deviceToken: cam.deviceToken,
       onCommand: (cmd) {
         if (cmd['action'] == 'capture_snapshot') reporter.uploadSnapshot(requestId: cmd['request_id'] as String, jpeg: _jpeg);
       },
@@ -204,8 +204,7 @@ void main() {
   });
 
   test('cameras: add by code, rename and remove from the browser', () async {
-    final cam = await PairingClient.pairWithCode(
-        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'iPhone', code: registry.hubCode);
+    final cam = await addCamera(registry, 'dev_a', 'iPhone');
     final codes = <String>[];
     server.web.addCamera = (code) async {
       codes.add(code);
@@ -231,6 +230,35 @@ void main() {
     expect((await browser.json('DELETE', path)).$1, 404);
   });
 
+  test('oversized requests are refused without being read in full', () async {
+    Future<int> raw(String path, int size, {bool declareLength = true}) async {
+      final client = HttpClient();
+      final req = await client.post('127.0.0.1', server.boundPort!, path);
+      req.headers.contentType = ContentType.json;
+      final body = utf8.encode('{"code":"${'1' * size}"}');
+      if (declareLength) req.contentLength = body.length; // otherwise sent chunked, size unknown upfront
+      req.add(body);
+      final status = (await req.close()).statusCode;
+      client.close(force: true);
+      return status;
+    }
+
+    expect(await raw('/api/v1/web/login', 200 * 1024), 413, reason: 'declared size over the sign-in limit');
+    expect(await raw('/api/v1/web/login', 200 * 1024, declareLength: false), 413, reason: 'streamed body is cut off at the limit');
+    expect(registry.hubCodeLockedFor, isNull, reason: 'refused before any code check');
+    await signIn(); // normal-sized requests still work
+
+    final cam = await addCamera(registry, 'dev_a', 'A');
+    final client = HttpClient();
+    final put = await client.put('127.0.0.1', server.boundPort!, '/api/v1/web/cameras/${cam.cameraId}/settings');
+    put.cookies.addAll(browser.cookies);
+    put.headers.contentType = ContentType.json;
+    put.add(utf8.encode('{"motion_enabled":true,"pad":"${'x' * (64 * 1024)}"}'));
+    expect((await put.close()).statusCode, 413);
+    client.close(force: true);
+    expect((await browser.json('PUT', '/api/v1/web/cameras/${cam.cameraId}/settings', {'sensitivity': 0.3})).$1, 200);
+  });
+
   test('sign out ends the session', () async {
     await signIn();
     expect((await browser.json('POST', '/api/v1/web/logout')).$1, 200);
@@ -238,8 +266,7 @@ void main() {
   });
 
   test('AI tasks: create, list, act on and delete from the browser', () async {
-    final cam = await PairingClient.pairWithCode(
-        hub: HubAddress('127.0.0.1', server.boundPort!), deviceId: 'dev_a', deviceName: 'Laundry', code: registry.hubCode);
+    final cam = await addCamera(registry, 'dev_a', 'Laundry');
     final taskStore = TaskStore(dir);
     final watcher = TaskWatcher(
       store: taskStore,

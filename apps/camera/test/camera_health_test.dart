@@ -11,6 +11,8 @@ import 'package:smart_spectator_camera/hub/camera_health.dart';
 import 'package:smart_spectator_camera/hub/device_registry.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
 
+import 'support/cameras.dart';
+
 final _jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 3, 3, 3, 0xFF, 0xD9]);
 
 void main() {
@@ -123,14 +125,14 @@ void main() {
     tearDown(() => server.dispose());
 
     test('telemetry marks the camera seen; dropping records the time; snapshots keep a last picture', () async {
-      final cam = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_a', deviceName: 'Laundry', code: registry.hubCode);
-      final reporter = MotionReporter(hub: hub, deviceToken: cam.deviceToken!);
+      final cam = await addCamera(registry, 'dev_a', 'Laundry');
+      final reporter = MotionReporter(hub: hub, deviceToken: cam.deviceToken);
       final control = ControlClient(
         hubIp: '127.0.0.1',
         hubPort: hub.port,
         deviceId: 'dev_a',
-        cameraId: cam.cameraId!,
-        deviceToken: cam.deviceToken!,
+        cameraId: cam.cameraId,
+        deviceToken: cam.deviceToken,
         onCommand: (cmd) {
           if (cmd['action'] == 'capture_snapshot') reporter.uploadSnapshot(requestId: cmd['request_id'] as String, jpeg: _jpeg);
         },
@@ -143,7 +145,7 @@ void main() {
       expect(link.health(), CameraHealth.online);
       expect(link.lastSeenAt, isNotNull);
 
-      expect(await server.requestSnapshot(cam.cameraId!), _jpeg);
+      expect(await server.requestSnapshot(cam.cameraId), _jpeg);
       expect(link.lastPicture, _jpeg);
       expect(link.lastPictureAt, isNotNull);
 
@@ -156,7 +158,7 @@ void main() {
     });
 
     test('a camera can find its main phone again by checking its token', () async {
-      final cam = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_a', deviceName: 'Hall', code: registry.hubCode);
+      final cam = await addCamera(registry, 'dev_a', 'Hall');
       final ok = await http.get(hub.uri('/api/v1/devices/me'), headers: {'Authorization': 'Bearer ${cam.deviceToken}'});
       expect(ok.statusCode, 200);
       expect(jsonDecode(ok.body)['camera_id'], cam.cameraId);
@@ -170,11 +172,11 @@ void main() {
     });
 
     test('rename is saved on the main phone and validated', () async {
-      final cam = await PairingClient.pairWithCode(hub: hub, deviceId: 'dev_a', deviceName: 'iPhone', code: registry.hubCode);
-      expect(await server.renameCamera(cam.cameraId!, '  Front door  '), isTrue);
+      final cam = await addCamera(registry, 'dev_a', 'iPhone');
+      expect(await server.renameCamera(cam.cameraId, '  Front door  '), isTrue);
       expect(server.cameras.single.deviceName, 'Front door');
       expect(registry.devices.single.deviceName, 'Front door');
-      expect(await server.renameCamera(cam.cameraId!, '   '), isFalse);
+      expect(await server.renameCamera(cam.cameraId, '   '), isFalse);
       expect(await server.renameCamera('cam_nope', 'X'), isFalse);
     });
   });

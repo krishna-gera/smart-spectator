@@ -57,7 +57,24 @@ class WebApi {
 
   WebApi(this.server);
 
+  /// Largest request body the dashboard accepts; sign-in needs far less.
+  static const maxBodyBytes = 8 * 1024;
+  static const maxLoginBytes = 1024;
+
   Future<void> handle(HttpRequest req) async {
+    try {
+      return await _route(req);
+    } on _BodyTooLarge {
+      final res = req.response
+        ..persistentConnection = false
+        ..statusCode = HttpStatus.requestEntityTooLarge
+        ..headers.contentType = ContentType.json;
+      res.write(jsonEncode({'detail': 'Request too large'}));
+      return res.close();
+    }
+  }
+
+  Future<void> _route(HttpRequest req) async {
     final path = req.uri.path;
     final res = req.response;
     _securityHeaders(res);
@@ -150,11 +167,7 @@ class WebApi {
   // ---------------------------------------------------------------- auth
 
   Future<void> _login(HttpRequest req) async {
-    Map<String, dynamic>? body;
-    try {
-      final raw = await utf8.decoder.bind(req).join();
-      if (raw.length < 1024) body = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-    } catch (_) {}
+    final body = await _body(req, maxBytes: maxLoginBytes);
     final code = body?['code'];
     if (code is! String) return _json(req.response, 400, {'detail': 'Enter the 6-digit code.'});
     final check = server.registry.checkHubCode(code);
@@ -261,12 +274,8 @@ class WebApi {
     if (watcher == null || !aiAvailable) return _json(res, 503, {'detail': 'AI tasks are not available on this main phone.'});
 
     if (parts.length == 5 && req.method == 'POST') {
-      Map<String, dynamic> body;
-      try {
-        body = Map<String, dynamic>.from(jsonDecode(await utf8.decoder.bind(req).join()) as Map);
-      } catch (_) {
-        return _json(res, 400, {'detail': 'Invalid JSON'});
-      }
+      final body = await _body(req);
+      if (body == null) return _json(res, 400, {'detail': 'Invalid JSON'});
       final cam = server.cameras.where((c) => c.cameraId == body['camera_id']).firstOrNull;
       final text = (body['description'] as String? ?? '').trim();
       if (cam == null) return _json(res, 404, {'detail': 'Unknown camera'});
@@ -346,11 +355,18 @@ class WebApi {
     return res.close();
   }
 
-  Future<Map<String, dynamic>?> _body(HttpRequest req) async {
+  /// Reads a small JSON object body. Stops reading as soon as [maxBytes] is
+  /// passed (answered with 413 by [handle]); null for anything not a JSON object.
+  Future<Map<String, dynamic>?> _body(HttpRequest req, {int maxBytes = maxBodyBytes}) async {
+    if (req.headers.contentLength > maxBytes) throw const _BodyTooLarge();
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in req) {
+      bytes.add(chunk);
+      if (bytes.length > maxBytes) throw const _BodyTooLarge();
+    }
     try {
-      final raw = await utf8.decoder.bind(req).join();
-      if (raw.length > 4096) return null;
-      return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final decoded = jsonDecode(utf8.decode(bytes.takeBytes()));
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
     } catch (_) {
       return null;
     }
@@ -390,12 +406,8 @@ class WebApi {
   }
 
   Future<void> _settings(HttpRequest req, String cameraId) async {
-    Map<String, dynamic> body;
-    try {
-      body = Map<String, dynamic>.from(jsonDecode(await utf8.decoder.bind(req).join()) as Map);
-    } catch (_) {
-      return _json(req.response, 400, {'detail': 'Invalid JSON'});
-    }
+    final body = await _body(req);
+    if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON'});
     final current = server.events?.settingsFor(cameraId) ?? const CameraSettings();
     final next = current.copyWith(
       motionEnabled: body['motion_enabled'] is bool ? body['motion_enabled'] as bool : null,
@@ -441,4 +453,8 @@ class WebApi {
     res.write(jsonEncode(body));
     await res.close();
   }
+}
+
+class _BodyTooLarge implements Exception {
+  const _BodyTooLarge();
 }

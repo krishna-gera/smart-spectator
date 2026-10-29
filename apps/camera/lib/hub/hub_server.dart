@@ -138,10 +138,11 @@ class CameraPacket {
 
 /// Embedded LAN server that turns the main phone into the local hub.
 ///
-/// Endpoints (kept compatible with the existing camcorder client):
+/// Endpoints. Cameras are added only by their own code (CameraAdder calls the
+/// camera, which then connects here with the token it was given):
 ///   GET  /api/v1/health
-///   POST /api/v1/devices/pair/request
-///   POST /api/v1/devices/pair/verify
+///   GET  /api/v1/devices/me                       (token check)
+///   POST /api/v1/events/motion, /api/v1/snapshots (token)
 ///   WS   /api/v1/control/ws?token=...
 ///   WS   /api/v1/streams/ingest/{camera_id}?token=...
 class HubServer {
@@ -292,7 +293,7 @@ class HubServer {
           'role': 'main_phone',
           'protocol': 'ss_v1',
           'name': displayName,
-          'pairing': ['code', 'request_verify'],
+          'pairing': ['camera_code'],
         });
       }
       // A camera checks its token here to find this main phone again after
@@ -305,15 +306,6 @@ class HubServer {
           return await _json(req.response, 401, {'detail': 'Invalid or revoked token'});
         }
         return await _json(req.response, 200, {'camera_id': device.cameraId, 'hub_name': displayName});
-      }
-      if (path == '/api/v1/devices/pair/code' && req.method == 'POST') {
-        return await _pairWithCode(req);
-      }
-      if (path == '/api/v1/devices/pair/request' && req.method == 'POST') {
-        return await _pairRequest(req);
-      }
-      if (path == '/api/v1/devices/pair/verify' && req.method == 'POST') {
-        return await _pairVerify(req);
       }
       if (path == '/api/v1/events/motion' && req.method == 'POST') {
         return await _motionEvent(req);
@@ -333,79 +325,6 @@ class HubServer {
       try {
         return await _json(req.response, 500, {'detail': 'Internal error'});
       } catch (_) {}
-    }
-  }
-
-  Future<void> _pairRequest(HttpRequest req) async {
-    final body = await _readJson(req);
-    if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON body'});
-    final deviceId = body['device_id'];
-    final deviceName = body['device_name'];
-    if (deviceId is! String || !DeviceRegistry.isValidDeviceId(deviceId)) {
-      return _json(req.response, 422, {'detail': 'Invalid device_id'});
-    }
-    if (deviceName is! String || deviceName.isEmpty || deviceName.length > 128) {
-      return _json(req.response, 422, {'detail': 'Invalid device_name'});
-    }
-    final pending = registry.requestPairing(deviceId, deviceName);
-    if (pending == null) {
-      return _json(req.response, 429, {'detail': 'Too many pending pairing requests'});
-    }
-    _notify();
-    // The PIN is never returned; it is shown only on the main phone's screen.
-    return _json(req.response, 202, {
-      'status': 'pending_operator_approval',
-      'expires_in_seconds': pending.expiresAt.difference(DateTime.now()).inSeconds,
-    });
-  }
-
-  /// One-step pairing with the code shown on the main phone's screen.
-  Future<void> _pairWithCode(HttpRequest req) async {
-    final body = await _readJson(req);
-    if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON body'});
-    final deviceId = body['device_id'];
-    final deviceName = body['device_name'];
-    final code = body['code'];
-    if (deviceId is! String || !DeviceRegistry.isValidDeviceId(deviceId)) {
-      return _json(req.response, 422, {'detail': 'Invalid device_id'});
-    }
-    if (deviceName is! String || deviceName.isEmpty || deviceName.length > 128) {
-      return _json(req.response, 422, {'detail': 'Invalid device_name'});
-    }
-    if (code is! String || !RegExp(r'^[0-9]{6}$').hasMatch(code.trim())) {
-      return _json(req.response, 422, {'detail': 'The code has 6 digits'});
-    }
-    return _sendVerifyResult(req, await registry.pairWithHubCode(deviceId, deviceName, code));
-  }
-
-  Future<void> _pairVerify(HttpRequest req) async {
-    final body = await _readJson(req);
-    if (body == null) return _json(req.response, 400, {'detail': 'Invalid JSON body'});
-    final deviceId = body['device_id'];
-    final code = body['verification_code'];
-    if (deviceId is! String || !DeviceRegistry.isValidDeviceId(deviceId)) {
-      return _json(req.response, 422, {'detail': 'Invalid device_id'});
-    }
-    if (code is! String || !RegExp(r'^[0-9]{6}$').hasMatch(code.trim())) {
-      return _json(req.response, 422, {'detail': 'verification_code must be 6 digits'});
-    }
-    return _sendVerifyResult(req, await registry.verifyPairing(deviceId, code));
-  }
-
-  Future<void> _sendVerifyResult(HttpRequest req, VerifyResult result) async {
-    _notify();
-    switch (result) {
-      case VerifySuccess(:final device, :final rawToken):
-        _linkFor(device);
-        return _json(req.response, 200, {
-          'status': 'paired',
-          'device_id': device.deviceId,
-          'camera_id': device.cameraId,
-          'device_token': rawToken,
-          'token_type': 'Bearer',
-        });
-      case VerifyFailure(:final message):
-        return _json(req.response, 400, {'detail': message});
     }
   }
 

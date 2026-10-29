@@ -4,13 +4,14 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_spectator_camera/core/control/control_client.dart';
-import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
 import 'package:smart_spectator_camera/core/protocol/packet_decoder.dart';
 import 'package:smart_spectator_camera/core/protocol/packet_encoder.dart';
 import 'package:smart_spectator_camera/core/video/h264_nal.dart';
 import 'package:smart_spectator_camera/core/video/live_video_controller.dart';
 import 'package:smart_spectator_camera/hub/device_registry.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
+
+import 'support/cameras.dart';
 
 // Annex-B fragments: SPS(7), PPS(8), IDR slice(5), P slice(1).
 const _sps = [0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1f];
@@ -166,17 +167,15 @@ void main() {
       await server.start();
       final port = server.boundPort!;
 
-      await PairingClient.requestPairing(hubIp: '127.0.0.1', hubPort: port, deviceId: 'dev_cam_1', deviceName: 'Camera');
-      final paired = await PairingClient.verifyPairing(
-          hubIp: '127.0.0.1', hubPort: port, deviceId: 'dev_cam_1', pin: registry.pendingPairings.single.pin);
+      final paired = await addCamera(registry, 'dev_cam_1', 'Camera');
 
       final commands = StreamController<Map<String, dynamic>>();
       final client = ControlClient(
         hubIp: '127.0.0.1',
         hubPort: port,
         deviceId: 'dev_cam_1',
-        cameraId: paired.cameraId!,
-        deviceToken: paired.deviceToken!,
+        cameraId: paired.cameraId,
+        deviceToken: paired.deviceToken,
         sensorOrientation: 90,
         fpsProvider: () => 29.5,
         onCommand: commands.add,
@@ -185,7 +184,7 @@ void main() {
       expect(client.isConnected, isTrue);
       expect(server.cameras.single.controlConnected, isTrue);
 
-      expect(server.requestKeyframe(paired.cameraId!), isTrue);
+      expect(server.requestKeyframe(paired.cameraId), isTrue);
       final cmd = await commands.stream.firstWhere((c) => c['action'] == 'request_idr').timeout(const Duration(seconds: 2));
       expect(cmd['action'], 'request_idr');
 

@@ -4,11 +4,12 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_spectator_camera/core/pairing/pairing_client.dart';
 import 'package:smart_spectator_camera/core/protocol/packet_encoder.dart';
 import 'package:smart_spectator_camera/core/streaming/media_transport.dart';
 import 'package:smart_spectator_camera/hub/device_registry.dart';
 import 'package:smart_spectator_camera/hub/hub_server.dart';
+
+import 'support/cameras.dart';
 
 /// End-to-end over loopback: the real camcorder client code talks to the real
 /// main-phone server, exactly as two phones would over Wi-Fi.
@@ -28,12 +29,7 @@ void main() {
 
   tearDown(() async => server.dispose());
 
-  Future<PairingResponse> pairCamera(String deviceId) async {
-    final req = await PairingClient.requestPairing(hubIp: host, hubPort: port, deviceId: deviceId, deviceName: 'Camera');
-    expect(req.success, isTrue, reason: req.errorMessage);
-    final pin = registry.pendingPairings.singleWhere((p) => p.deviceId == deviceId).pin;
-    return PairingClient.verifyPairing(hubIp: host, hubPort: port, deviceId: deviceId, pin: pin);
-  }
+  Future<TestCamera> pairCamera(String deviceId) => addCamera(registry, deviceId, 'Camera');
 
   Uint8List videoPacket(int seq, {bool key = false}) => PacketEncoder.encodePacket(
         frameType: key ? PacketEncoder.frameTypeIdr : PacketEncoder.frameTypeP,
@@ -58,24 +54,20 @@ void main() {
     expect(body['role'], 'main_phone');
   });
 
-  test('the app flow pairs: request code, user reads it, request again, verify', () async {
-    // The old PC hub replaced the PIN on every request, so this always failed.
-    await PairingClient.requestPairing(hubIp: host, hubPort: port, deviceId: 'dev_cam_1', deviceName: 'Camera');
-    final pinShown = registry.pendingPairings.single.pin;
-    await PairingClient.requestPairing(hubIp: host, hubPort: port, deviceId: 'dev_cam_1', deviceName: 'Camera');
-    final res = await PairingClient.verifyPairing(hubIp: host, hubPort: port, deviceId: 'dev_cam_1', pin: pinShown);
-    expect(res.success, isTrue, reason: res.errorMessage);
-    expect(res.deviceToken, startsWith('ss_tok_v1_'));
-    expect(res.cameraId, startsWith('cam_'));
-  });
+  test('cameras can only be added by their own code: the old pairing routes are gone', () async {
+    final client = HttpClient();
+    Future<int> post(String path, Object body) async {
+      final req = await client.post(host, port, path);
+      req.headers.contentType = ContentType.json;
+      req.write(jsonEncode(body));
+      return (await req.close()).statusCode;
+    }
 
-  test('wrong code is rejected with a readable message', () async {
-    await PairingClient.requestPairing(hubIp: host, hubPort: port, deviceId: 'dev_cam_1', deviceName: 'Camera');
-    final pin = registry.pendingPairings.single.pin;
-    final res = await PairingClient.verifyPairing(
-        hubIp: host, hubPort: port, deviceId: 'dev_cam_1', pin: pin == '123456' ? '654321' : '123456');
-    expect(res.success, isFalse);
-    expect(res.errorMessage, contains('Invalid code'));
+    expect(await post('/api/v1/devices/pair/code', {'device_id': 'dev_x_1', 'device_name': 'X', 'code': registry.hubCode}), 404);
+    expect(await post('/api/v1/devices/pair/request', {'device_id': 'dev_x_1', 'device_name': 'X'}), 404);
+    expect(await post('/api/v1/devices/pair/verify', {'device_id': 'dev_x_1', 'verification_code': '123456'}), 404);
+    client.close();
+    expect(registry.devices, isEmpty, reason: 'nothing was paired');
   });
 
   test('camera streams video packets and the main phone counts them', () async {
@@ -83,7 +75,7 @@ void main() {
     final received = <int>[];
     final sub = server.packets.listen((p) => received.add(p.packet.header.sequenceNumber));
 
-    final transport = MediaTransport(hubIp: host, hubPort: port, cameraId: paired.cameraId!, deviceToken: paired.deviceToken!);
+    final transport = MediaTransport(hubIp: host, hubPort: port, cameraId: paired.cameraId, deviceToken: paired.deviceToken);
     await transport.connect();
     expect(transport.status, TransportStatus.connected);
     for (var i = 0; i < 10; i++) {
@@ -110,7 +102,7 @@ void main() {
       await control.close();
       await waitFor(() => !server.cameras.single.controlConnected);
 
-      final transport = MediaTransport(hubIp: host, hubPort: port, cameraId: paired.cameraId!, deviceToken: paired.deviceToken!);
+      final transport = MediaTransport(hubIp: host, hubPort: port, cameraId: paired.cameraId, deviceToken: paired.deviceToken);
       await transport.connect();
       expect(transport.status, TransportStatus.connected, reason: 'round $round');
       transport.dispose();
@@ -127,7 +119,7 @@ void main() {
     await waitFor(() => server.cameras.single.batteryLevel == 64.0);
     expect(server.cameras.single.isCharging, isTrue);
 
-    expect(server.requestKeyframe(paired.cameraId!), isTrue);
+    expect(server.requestKeyframe(paired.cameraId), isTrue);
     final cmd = jsonDecode(await inbox.stream.firstWhere((m) => (jsonDecode(m) as Map)['action'] == 'request_idr'));
     expect(cmd['action'], 'request_idr');
     await control.close();
@@ -177,20 +169,5 @@ void main() {
     await waitFor(() => server.cameras.single.packetsReceived == 1);
     expect(server.cameras.single.protocolErrors, 1);
     await ingest.close();
-  });
-
-  test('rejects invalid pairing input', () async {
-    final client = HttpClient();
-    Future<int> post(String path, Object body) async {
-      final req = await client.post(host, port, path);
-      req.headers.contentType = ContentType.json;
-      req.write(jsonEncode(body));
-      return (await req.close()).statusCode;
-    }
-
-    expect(await post('/api/v1/devices/pair/request', {'device_id': 'x', 'device_name': 'a'}), 422);
-    expect(await post('/api/v1/devices/pair/request', {'device_id': 'dev_ok_1'}), 422);
-    expect(await post('/api/v1/devices/pair/verify', {'device_id': 'dev_ok_1', 'verification_code': 'abc'}), 422);
-    client.close();
   });
 }

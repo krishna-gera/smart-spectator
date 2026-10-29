@@ -56,7 +56,8 @@ class _ViewerScreenState extends State<ViewerScreen> with WidgetsBindingObserver
     if (ip == null || port == null) return;
     _localIp = ip;
     final code = _registry.hubCode;
-    final ok = await _ai.registerHub(code: code, address: ip, port: port, name: _server.displayName, previousCode: _registeredCode);
+    final ok = await _ai.registerHub(
+        code: code, address: ip, port: port, name: _server.displayName, owner: await AppPrefs.directoryOwner(), previousCode: _registeredCode);
     if (ok) _registeredCode = code;
   }
   late final CameraHealthMonitor _health = CameraHealthMonitor(notify: SystemBridge.notify);
